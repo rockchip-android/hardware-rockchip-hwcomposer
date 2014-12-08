@@ -4500,10 +4500,10 @@ hwc_set(
                     struct rk_fb_win_cfg_data mix_fb_info;
                     memset(&mix_fb_info, 0, sizeof(fb_info));
                     unsigned int offset = handle->offset;
-                    mix_fb_info.win_par[0].data_format = context->fbhandle.format;
                     mix_fb_info.win_par[0].win_id = 0;
                     mix_fb_info.win_par[0].z_order = 0;
                     mix_fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
+                    mix_fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
 #if USE_HWC_FENCE
                     mix_fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
 #else

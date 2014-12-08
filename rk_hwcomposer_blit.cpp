@@ -1431,7 +1431,7 @@ hwcLayerToWin(
         info.activate |= FB_ACTIVATE_FORCE;
         LOGV(" lcdc info : info.nonstd=%x, info.grayscale=%x", info.nonstd, info.grayscale);
 
-        pFbInfo->win_par[Win].data_format = iFormat;
+        pFbInfo->win_par[Win].area_par[0].data_format = iFormat;
         pFbInfo->win_par[Win].win_id = Win;
         //pFbInfo->win_par[Win].alpha_mode = AB_SRC_OVER;
         //pFbInfo->win_par[Win].g_alpha_val =
@@ -1475,7 +1475,7 @@ hwcLayerToWin(
               pFbInfo->win_par[Win].area_par[0].ysize,
               pFbInfo->win_par[Win].area_par[0].xvir,
               pFbInfo->win_par[Win].area_par[0].yvir,
-              pFbInfo->win_par[Win].data_format,
+              pFbInfo->win_par[Win].area_par[0].data_format,
               pFbInfo->win_par[Win].area_par[0].acq_fence_fd,
               pFbInfo->win_par[Win].area_par[0].ion_fd,
               pFbInfo->win_par[Win].area_par[0].phy_addr);
