@@ -40,8 +40,8 @@ LOCAL_C_INCLUDES := \
 	$(AQROOT)/sdk/inc \
 	$(AQROOT)/hal/inc
 
-LOCAL_C_INCLUDES += hardware/rk29/libgralloc_ump
-LOCAL_C_INCLUDES += hardware/rk29/libgralloc
+LOCAL_C_INCLUDES += hardware/rockchip/libgralloc_ump
+LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/intel/libgralloc
 LOCAL_LDFLAGS := \
 	-Wl,-z,defs \
