@@ -31,7 +31,7 @@
 #include <linux/fb.h>
 #include <hardware/rk_fh.h>
 #include "hwc_ipp.h"
-#include "../libon2/vpu_global.h"
+#include "../librkvpu/vpu_global.h"
 
 
 #define hwcDEBUG                0
