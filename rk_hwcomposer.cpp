@@ -3810,6 +3810,14 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
 }
 
 #else
+
+struct rk_fb_win_config_data_g {
+	int ret_fence_fd;
+	int rel_fence_fd[8];
+	int acq_fence_fd[8];
+	bool wait_fs;
+	unsigned char fence_begin;
+};
 static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
 
 {
@@ -3828,6 +3836,8 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
         hwc_display_contents_1_t *list = displays[0];
         int numLayers = list->numHwLayers;
         hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
+        struct rk_fb_win_config_data_g fb_sync;
+        
         if (!fbLayer)
         {
             ALOGE("fbLayer=NULL");
@@ -3848,7 +3858,29 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
         ALOGV("hwc_fbPost2 num=%d,fd=%d,base=%p,offset=%d", numLayers, handle->share_fd, handle->base,info.yoffset);
 
         ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
-        ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+        //ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+        memset((void*)&fb_sync,0,sizeof(rk_fb_win_config_data_g));
+        fb_sync.fence_begin = 1;
+        for (int j=0; j<8; j++)
+        {
+            fb_sync.acq_fence_fd[j] = -1;
+        }
+        fb_sync.wait_fs = 0;
+       // ALOGD("fb config done enter");
+        ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &fb_sync);
+        for (int j=0; j<8; j++)
+        {
+            if(fb_sync.rel_fence_fd[j] > 0)
+                close(fb_sync.rel_fence_fd[j]);
+        }
+        /*
+        if(fb_sync.rel_fence_fd[0])
+            close(fb_sync.rel_fence_fd[0]);
+        if(fb_sync.rel_fence_fd[1])    
+            close(fb_sync.rel_fence_fd[1]);*/
+        if(fb_sync.ret_fence_fd > 0)    
+            close( fb_sync.ret_fence_fd);
+
         
 
     }
