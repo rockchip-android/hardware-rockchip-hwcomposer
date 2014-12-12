@@ -270,17 +270,17 @@ hwcBlit(
     {
         RGA_set_src_vir_info(&Rga_Request,srchnd->base, 0, 0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base,0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
-        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,DstHandle->offset);        
+        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,Context->fb_disp_ofset* Context->fbStride);        
     }
     else
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, dstWidth, dstHeight, &clip, dstFormat, 0);
-        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,DstHandle->offset);        
+        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,Context->fb_disp_ofset* Context->fbStride);        
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
-    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", DstHandle->share_fd,DstHandle->offset,DstHandle->base, \
+    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", DstHandle->share_fd,Context->fb_disp_ofset,DstHandle->base, \
          dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
 
     mmu_en = 0;

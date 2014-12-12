@@ -285,6 +285,7 @@ extern "C"
         float           fb_fps;
         unsigned int fbPhysical;
         unsigned int fbStride;
+        int          fb_disp_ofset;
         int          wfdOptimize;
         /* PMEM stuff. */
         unsigned int pmemPhysical;

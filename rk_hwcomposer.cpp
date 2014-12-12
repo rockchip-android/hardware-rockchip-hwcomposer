@@ -577,8 +577,8 @@ _CheckLayer(
        )
     {
         /* We are forbidden to handle this layer. */
-        //if(is_out_log() )
-        if(1)
+        if(is_out_log() )
+       // if(1)
         {
             LOGD("%s(%d):Will not handle layer %s: SKIP_LAYER,Layer->transform=%d,Layer->flags=%d",
                 __FUNCTION__, __LINE__, Layer->LayerName,Layer->transform,Layer->flags);
@@ -3349,7 +3349,7 @@ hwc_prepare(
 
     property_get("sys.hwc.compose_policy", value, "0");
     new_value = atoi(value);
-   // new_value = 6;
+    new_value = 6;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (new_value <= 0)
     {
@@ -3419,7 +3419,7 @@ hwc_prepare(
          * with FRAMEBUFFER in that case. */
         if (compositionType == HWC_FRAMEBUFFER)
         {
-            ALOGD("line=%d back to gpu", __LINE__);
+            //ALOGD("line=%d back to gpu", __LINE__);
             break;
         }
     }
@@ -3819,7 +3819,6 @@ struct rk_fb_win_config_data_g {
 	unsigned char fence_begin;
 };
 static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
-
 {
     hwcContext * context = _contextAnchor;
     unsigned int videodata[2];
@@ -3854,7 +3853,80 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
             return -1;
         }
         info.yoffset = handle->offset/context->fbStride;
+        ALOGV("hwc_fbPost2 num=%d,fd=%d,base=%p,offset=%d", numLayers, handle->share_fd, handle->base,info.yoffset);
 
+        ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
+        //ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &sync);
+        memset((void*)&fb_sync,0,sizeof(rk_fb_win_config_data_g));
+        fb_sync.fence_begin = 1;
+        for (int j=0; j<8; j++)
+        {
+            fb_sync.acq_fence_fd[j] = -1;
+        }
+        fb_sync.wait_fs = 0;
+       // ALOGD("fb config done enter");
+        ioctl(context->dpyAttr[0].fd, RK_FBIOSET_CONFIG_DONE, &fb_sync);
+        for (int j=0; j<8; j++)
+        {
+            if(fb_sync.rel_fence_fd[j] > 0)
+                close(fb_sync.rel_fence_fd[j]);
+        }
+        /*
+        if(fb_sync.rel_fence_fd[0])
+            close(fb_sync.rel_fence_fd[0]);
+        if(fb_sync.rel_fence_fd[1])    
+            close(fb_sync.rel_fence_fd[1]);*/
+        if(fb_sync.ret_fence_fd > 0)    
+            close( fb_sync.ret_fence_fd);
+
+        
+
+    }
+#else
+    ALOGD("hwc_fbPost test");
+#endif
+    return 0;
+}
+static int hwc_fbPost_Rga(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
+
+{
+    hwcContext * context = _contextAnchor;
+    unsigned int videodata[2];
+    int ret = 0;
+
+
+#if 1
+    //ALOGD("numDisplays=%d",numDisplays);
+
+    if (context->fbFd > 0 && !context->fb_blanked)
+    {
+        struct fb_var_screeninfo info;
+        int sync = 0;
+        hwc_display_contents_1_t *list = displays[0];
+        int numLayers = list->numHwLayers;
+        hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
+        struct rk_fb_win_config_data_g fb_sync;
+        
+        if (!fbLayer)
+        {
+            ALOGE("fbLayer=NULL");
+            return -1;
+        }
+        info = context->info;
+     
+        struct private_handle_t*  handle;
+        handle = (struct private_handle_t*)fbLayer->handle;
+        
+        if (!handle)
+        {
+            ALOGE("hanndle=NULL,fblayer=%p",fbLayer);
+            return -1;
+        }
+       // info.yoffset = handle->offset/context->fbStride;
+        info.yoffset = context->fb_disp_ofset;
+        context->fb_disp_ofset += info.yres;
+        if(context->fb_disp_ofset > (info.yres*2))
+            context->fb_disp_ofset = 0;
         ALOGV("hwc_fbPost2 num=%d,fd=%d,base=%p,offset=%d", numLayers, handle->share_fd, handle->base,info.yoffset);
 
         ioctl(context->dpyAttr[0].fd, FBIOPUT_VSCREENINFO, &info);
@@ -4042,6 +4114,9 @@ hwc_set(
         ALOGW("hwc skipflag!!!");
         return 0;
     }
+#if hwcUseTime
+    gettimeofday(&tpend1, NULL);
+#endif
 
     hwc_sync(list);
     LOGV("%s(%d):>>> Set start %d layers <<<",
@@ -4054,9 +4129,6 @@ hwc_set(
     _Dump(list);
 #endif
 
-#if hwcUseTime
-    gettimeofday(&tpend1, NULL);
-#endif
 
     if (0 != getFbInfo(dpy, surf, list))
     {
@@ -4194,7 +4266,7 @@ hwc_set(
         switch (list->hwLayers[i].compositionType)
         {
             case HWC_BLITTER:
-                LOGD("%s(%d):Layer %d is BLIITER", __FUNCTION__, __LINE__, i);
+                LOGV("%s(%d):Layer %d is BLIITER", __FUNCTION__, __LINE__, i);
                 /* Do the blit. */
 #ifdef USE_LCDC_COMPOSER
                 if (IsInputMethod()) break;
@@ -4638,7 +4710,6 @@ hwc_set(
 
     if (bNeedFlush)
     {
-        ALOGD("rga config flush");
         
         if (ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
         {
@@ -4651,15 +4722,15 @@ hwc_set(
 #if hwcUseTime
         gettimeofday(&tpend2, NULL);
         usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGD("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
+        LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
 #endif
 
-        gettimeofday(&tpend1, NULL);
+        //gettimeofday(&tpend1, NULL);
 
-        hwc_fbPost(dev, numDisplays, displays);
-        gettimeofday(&tpend2, NULL);
-        usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGD("hwcBlit hwc_fbPost use time=%ld ms", usec1);
+        hwc_fbPost_Rga(dev, numDisplays, displays);
+        //gettimeofday(&tpend2, NULL);
+       // usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+        //LOGD("hwcBlit hwc_fbPost use time=%ld ms", usec1);
         
     }
     else
