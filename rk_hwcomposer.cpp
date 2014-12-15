@@ -536,7 +536,7 @@ _CheckLayer(
     (void) Index;
 
     if (!videoflag)
-{
+    {
 
         hfactor = (float)(Layer->sourceCrop.right - Layer->sourceCrop.left)
                   / (Layer->displayFrame.right - Layer->displayFrame.left);
@@ -770,6 +770,9 @@ _CheckLayer(
                  ||strstr(list->hwLayers[Count - 1].LayerName,"com.asus.ephoto.app.MovieActivity")
             ||strstr(list->hwLayers[Count - 1].LayerName,"com.mxtech.videoplayer.ad"))
             {*/
+            Layer->compositionType = HWC_FRAMEBUFFER;
+            return HWC_FRAMEBUFFER;  //   video erro ,return to gpu for a short time
+            
             if (Layer->transform == 0 || (Context->ippDev != NULL && Layer->transform != 0 && Context->ippDev->ipp_is_enable() > 0))
             {
                 int video_state = hwc_get_int_property("sys.video.fullscreen", "0");
@@ -3294,7 +3297,6 @@ int hwc_prepare_virtual(hwc_composer_device_1_t * dev, hwc_display_contents_1_t 
     return 0;
 }
 
-static int videoIndex;
 videomix gvmix;
 int
 hwc_prepare(
@@ -3312,6 +3314,7 @@ hwc_prepare(
 #endif
     int iVideoCount = 0;
     hwcContext * context = _contextAnchor;
+    static int videoIndex = 0;
 
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
 
@@ -4719,11 +4722,6 @@ hwc_set(
         {
             success =  EGL_TRUE ;
         }
-#if hwcUseTime
-        gettimeofday(&tpend2, NULL);
-        usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
-#endif
 
         //gettimeofday(&tpend1, NULL);
 
@@ -4738,6 +4736,11 @@ hwc_set(
         hwc_fbPost(dev, numDisplays, displays);
     }
 
+#if hwcUseTime
+        gettimeofday(&tpend2, NULL);
+        usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+        LOGD("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
+#endif
 
 
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
@@ -5185,10 +5188,10 @@ int is_surport_wfd_optimize()
     }
 }
 
-static int copybit_video_index = 0;
 int hwc_copybit(struct hwc_composer_device_1 *dev, buffer_handle_t src_handle, buffer_handle_t dst_handle, int flag)
 {
     HWC_UNREFERENCED_PARAMETER(dev);
+    static int copybit_video_index = 0;
 
     if (src_handle == 0 || dst_handle == 0)
     {
