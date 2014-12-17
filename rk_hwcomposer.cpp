@@ -3352,7 +3352,7 @@ hwc_prepare(
 
     property_get("sys.hwc.compose_policy", value, "0");
     new_value = atoi(value);
-    new_value = 6;
+    //new_value = 6;
     /* Roll back to FRAMEBUFFER if any layer can not be handled. */
     if (new_value <= 0)
     {
@@ -3691,10 +3691,105 @@ int hwc_query(struct hwc_composer_device_1* dev, int what, int* value)
     }
     return 0;
 }
+#if !ONLY_USE_FB_BUFFERS
+static int display_commit(int dpy, private_handle_t*  handle, hwc_display_contents_1_t *list)
+{
+    hwcContext * context = _contextAnchor;
+    struct fb_var_screeninfo info;
+    struct rk_fb_win_cfg_data fb_info;
 
+    HWC_UNREFERENCED_PARAMETER(dpy);
 
+    info = context->info;
+    if (!handle)
+    {
+        return -1;
+    }
 
-#if 0
+    ALOGV("@display_commit dump : vir[%d,%d] [%d,%d,%d,%d] => [%d,%d,%d,%d]",
+          info.xres_virtual, info.yres_virtual,
+          info.xoffset,
+          info.yoffset,
+          info.xoffset + info.xres,
+          info.yoffset + info.yres,
+          (info.nonstd >> 8)&0xfff,
+          (info.nonstd >> 20)&0xfff,
+          ((info.grayscale >> 8)&0xfff) + ((info.nonstd >> 8)&0xfff),
+          ((info.grayscale >> 20)&0xfff) + ((info.nonstd >> 20)&0xfff));
+
+    memset(&fb_info, 0, sizeof(fb_info));
+    //unsigned int offset = handle->offset;
+    fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
+    fb_info.win_par[0].win_id = 0;
+    fb_info.win_par[0].z_order = 0;
+    fb_info.win_par[0].area_par[0].ion_fd = context->membk_fds[context->membk_index];
+#if USE_HWC_FENCE
+    fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
+#else
+    fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
+#endif
+    fb_info.win_par[0].area_par[0].x_offset = info.xoffset;
+    fb_info.win_par[0].area_par[0].y_offset = info.yoffset;
+    fb_info.win_par[0].area_par[0].xpos = (info.nonstd >> 8) & 0xfff;
+    fb_info.win_par[0].area_par[0].ypos = (info.nonstd >> 20) & 0xfff;
+    fb_info.win_par[0].area_par[0].xsize = (info.grayscale >> 8) & 0xfff;
+    fb_info.win_par[0].area_par[0].ysize = (info.grayscale >> 20) & 0xfff;
+    fb_info.win_par[0].area_par[0].xact = info.xres;
+    fb_info.win_par[0].area_par[0].yact = info.yres;
+    fb_info.win_par[0].area_par[0].xvir = info.xres_virtual;
+    fb_info.win_par[0].area_par[0].yvir = info.yres_virtual;
+#if USE_HWC_FENCE
+    fb_info.wait_fs = 0;
+#endif
+
+    ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+
+    //debug info
+    ALOGV("display_commit:z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+          fb_info.win_par[0].z_order,
+          fb_info.win_par[0].win_id,
+          fb_info.win_par[0].g_alpha_val,
+          fb_info.win_par[0].area_par[0].x_offset,
+          fb_info.win_par[0].area_par[0].y_offset,
+          fb_info.win_par[0].area_par[0].xact,
+          fb_info.win_par[0].area_par[0].yact,
+          fb_info.win_par[0].area_par[0].xpos,
+          fb_info.win_par[0].area_par[0].ypos,
+          fb_info.win_par[0].area_par[0].xsize,
+          fb_info.win_par[0].area_par[0].ysize,
+          fb_info.win_par[0].area_par[0].xvir,
+          fb_info.win_par[0].area_par[0].yvir,
+          fb_info.win_par[0].area_par[0].data_format,
+          fb_info.win_par[0].area_par[0].acq_fence_fd,
+          fb_info.win_par[0].area_par[0].ion_fd,
+          fb_info.win_par[0].area_par[0].phy_addr);
+
+#if USE_HWC_FENCE
+    for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+    {
+        if (fb_info.rel_fence_fd[k] != -1)
+            close(fb_info.rel_fence_fd[k]);
+    }
+
+    if (fb_info.ret_fence_fd != -1)
+        list->retireFenceFd = fb_info.ret_fence_fd;
+
+#endif
+
+    context->membk_last_index = context->membk_index;
+    if (context->membk_index >= (FB_BUFFERS_NUM - 1))
+    {
+        context->membk_index = 0;
+    }
+    else
+    {
+        context->membk_index++;
+    }
+
+    return 0;
+}
+#endif
+#if 1
 static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
 {
     hwcContext * context = _contextAnchor;
@@ -3712,9 +3807,6 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
             {
                 return -1;
             }
-
-            last_video_addr[0] = 0;
-            last_video_addr[1] = 0;
 
             if (context->fbFd > 0 && !context->fb_blanked)
             {
@@ -3741,12 +3833,12 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
                     return -1;
                 }
 
-                ALOGD("hwc_fbPost num=%d,fd=%d,base=%p", numLayers, handle->share_fd, handle->base);
 
                 unsigned int offset = handle->offset;
-                fb_info.win_par[0].data_format = context->fbhandle.format;
                 fb_info.win_par[0].win_id = 0;
                 fb_info.win_par[0].z_order = 0;
+                fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
+
                 fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
 #if USE_HWC_FENCE
                 fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
@@ -3773,7 +3865,9 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
                     if (fb_info.rel_fence_fd[k] != -1)
+                    {
                         fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+                    }    
                 }
 
                 list->retireFenceFd = fb_info.ret_fence_fd;
@@ -3785,7 +3879,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
                     for (int j = 0;j < 4;j++)
                     {
                         if (fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-                            ALOGV("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
+                            ALOGV("@hwc win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
                                   i, j,
                                   fb_info.win_par[i].z_order,
                                   fb_info.win_par[i].win_id,
@@ -3799,7 +3893,7 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
                                   fb_info.win_par[i].area_par[j].ysize,
                                   fb_info.win_par[i].area_par[j].xvir,
                                   fb_info.win_par[i].area_par[j].yvir,
-                                  fb_info.win_par[i].data_format,
+                                  fb_info.win_par[i].area_par[j].data_format,
                                   fb_info.win_par[i].area_par[j].ion_fd,
                                   fb_info.win_par[i].area_par[j].phy_addr);
                     }
@@ -3808,6 +3902,110 @@ static int hwc_fbPost(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_dis
             }
         }
     }
+
+    return 0;
+}
+
+static int hwc_fbPost_Rga(hwc_composer_device_1_t * dev, size_t numDisplays, hwc_display_contents_1_t** displays)
+
+{
+    hwcContext * context = _contextAnchor;
+    unsigned int videodata[2];
+    int ret = 0;
+
+    if (context->fbFd > 0 && !context->fb_blanked)
+    {
+        struct fb_var_screeninfo info;
+        struct rk_fb_win_cfg_data fb_info;
+        hwc_display_contents_1_t *list = displays[0];
+        
+        memset(&fb_info, 0, sizeof(fb_info));
+        int numLayers = list->numHwLayers;
+        hwc_layer_1_t *fbLayer = &list->hwLayers[numLayers - 1];
+
+        if (!fbLayer)
+        {
+            ALOGE("fbLayer=NULL");
+            return -1;
+        }
+
+        info = context->info;
+        struct private_handle_t*  handle;
+
+        handle = (struct private_handle_t*)fbLayer->handle;
+
+        if (!handle)
+        {
+            ALOGE("hanndle=NULL");
+            return -1;
+        }
+
+        fb_info.win_par[0].win_id = 0;
+        fb_info.win_par[0].z_order = 0;
+        fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
+
+        fb_info.win_par[0].area_par[0].ion_fd = handle->share_fd;
+#if USE_HWC_FENCE
+        fb_info.win_par[0].area_par[0].acq_fence_fd = -1;//fbLayer->acquireFenceFd;
+#else
+        fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
+#endif
+        fb_info.win_par[0].area_par[0].x_offset = 0;
+        fb_info.win_par[0].area_par[0].y_offset = context->fb_disp_ofset;
+        context->fb_disp_ofset += context->info.yres;
+        if(context->fb_disp_ofset > (context->info.yres*2))
+            context->fb_disp_ofset = 0;        
+        fb_info.win_par[0].area_par[0].xpos = 0;
+        fb_info.win_par[0].area_par[0].ypos = 0;
+        fb_info.win_par[0].area_par[0].xsize = handle->width;
+        fb_info.win_par[0].area_par[0].ysize = handle->height;
+        fb_info.win_par[0].area_par[0].xact = handle->width;
+        fb_info.win_par[0].area_par[0].yact = handle->height;
+        fb_info.win_par[0].area_par[0].xvir = handle->stride;
+        fb_info.win_par[0].area_par[0].yvir = handle->height;
+#if USE_HWC_FENCE
+        fb_info.wait_fs = 0;
+#endif
+        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+
+#if USE_HWC_FENCE
+
+        for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+        {
+            if (fb_info.rel_fence_fd[k] != -1)
+                fbLayer->releaseFenceFd = fb_info.rel_fence_fd[k];
+        }
+
+        list->retireFenceFd = fb_info.ret_fence_fd;
+        ALOGD("hwc_fbPost: releaseFd=%d,retireFd=%d", fbLayer->releaseFenceFd, list->retireFenceFd);
+#endif
+
+        for (int i = 0;i < 4;i++)
+        {
+            for (int j = 0;j < 4;j++)
+            {
+                if (fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
+                    ALOGV("win[%d],area[%d],z_win[%d,%d],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],fd=%d,addr=%x",
+                          i, j,
+                          fb_info.win_par[i].z_order,
+                          fb_info.win_par[i].win_id,
+                          fb_info.win_par[i].area_par[j].x_offset,
+                          fb_info.win_par[i].area_par[j].y_offset,
+                          fb_info.win_par[i].area_par[j].xact,
+                          fb_info.win_par[i].area_par[j].yact,
+                          fb_info.win_par[i].area_par[j].xpos,
+                          fb_info.win_par[i].area_par[j].ypos,
+                          fb_info.win_par[i].area_par[j].xsize,
+                          fb_info.win_par[i].area_par[j].ysize,
+                          fb_info.win_par[i].area_par[j].xvir,
+                          fb_info.win_par[i].area_par[j].yvir,
+                          fb_info.win_par[i].area_par[j].data_format,
+                          fb_info.win_par[i].area_par[j].ion_fd,
+                          fb_info.win_par[i].area_par[j].phy_addr);
+            }
+
+        }
+    }        
 
     return 0;
 }
@@ -4077,6 +4275,9 @@ hwc_set(
     hwc_surface_t surf = NULL;
     hwc_layer_1_t *fbLayer = NULL;
     struct private_handle_t * fbhandle = NULL;
+#if  !ONLY_USE_FB_BUFFERS
+    android_native_buffer_t * fbBuffer = NULL;
+#endif
     bool bNeedFlush = false;
     hwc_display_contents_1_t* list = displays[0];  // ignore displays beyond the first
     hwc_display_contents_1_t* list_wfd = displays[HWC_DISPLAY_VIRTUAL];
@@ -4723,13 +4924,14 @@ hwc_set(
             success =  EGL_TRUE ;
         }
 
-        //gettimeofday(&tpend1, NULL);
 
-        hwc_fbPost_Rga(dev, numDisplays, displays);
-        //gettimeofday(&tpend2, NULL);
-       // usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        //LOGD("hwcBlit hwc_fbPost use time=%ld ms", usec1);
-        
+#if  !(ONLY_USE_FB_BUFFERS)
+        display_commit(0, (struct private_handle_t *) fbhandle, displays[0]);
+#else
+        hwc_fbPost(dev, numDisplays, displays);
+#endif
+
+
     }
     else
     {
@@ -4739,7 +4941,7 @@ hwc_set(
 #if hwcUseTime
         gettimeofday(&tpend2, NULL);
         usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGD("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
+        LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
 #endif
 
 
@@ -4801,7 +5003,16 @@ hwc_set(
         if (list_wfd)
         {
             //  int mode = -1;
+#if  !ONLY_USE_FB_BUFFERS
+            unsigned int fb_fd = 0;
+            if (fbBuffer != NULL)
+            {
+                fb_fd = context->membk_fds[context->membk_last_index];
+            }
+            hwc_set_virtual(dev, displays, fb_fd);
+#else
             hwc_set_virtual(dev, displays, 0);
+#endif
         }
     }
     return 0; //? 0 : HWC_EGL_ERROR;
@@ -5247,6 +5458,9 @@ hwc_device_open(
     float ydpi;
     uint32_t vsync_period;
     char pro_value[PROPERTY_VALUE_MAX];
+#if !ONLY_USE_FB_BUFFERS
+    int stride_gr;
+#endif
 
     LOGD("%s(%d):Open hwc device in thread=%d",
          __FUNCTION__, __LINE__, gettid());
@@ -5456,7 +5670,46 @@ hwc_device_open(
     context->IsRk3126 = !strcmp(pro_value, "rk3126");
     context->fbSize = context->fbStride * info.yres * 3;//info.xres*info.yres*4*3;
     context->lcdSize = context->fbStride * info.yres;//info.xres*info.yres*4;
+    {
+#ifndef USE_LCDC_COMPOSER
 
+#if !ONLY_USE_FB_BUFFERS
+        hw_module_t const* module_gr;
+
+        err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
+        ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
+        if (err == 0)
+        {
+            gralloc_open(module_gr, &context->mAllocDev);
+
+            for (int  i = 0;i < FB_BUFFERS_NUM;i++)
+            {
+                err = context->mAllocDev->alloc(context->mAllocDev, context->fbStride, \
+                                                info.yres, context->fbhandle.format, \
+                                                GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_RENDER, \
+                                                (buffer_handle_t*)(&context->phd_bk), &stride_gr);
+                if (!err)
+                {
+                    struct private_handle_t*phandle_gr = (struct private_handle_t*)context->phd_bk;
+                    context->membk_fds[i] = phandle_gr->share_fd;
+                    context->membk_base[i] = phandle_gr->base;
+                    ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd);
+                }
+                else
+                {
+                    ALOGE("hwc alloc faild");
+                    goto OnError;
+                }
+            }
+        }
+        else
+        {
+            ALOGE(" GRALLOC_HARDWARE_MODULE_ID failed");
+        }
+#endif
+
+#endif
+    }
 
     /* Increment reference count. */
     context->reference++;

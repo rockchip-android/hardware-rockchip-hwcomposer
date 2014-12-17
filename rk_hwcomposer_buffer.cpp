@@ -125,7 +125,11 @@ hwcLockBuffer(
 #endif
 
 #ifndef USE_LCDC_COMPOSER
-            *Physical      = (unsigned int) (Context->fbPhysical + Handle->offset);//Context->mFbFd;
+#ifndef ONLY_USE_FB_BUFFERS
+            *Physical      = Context->membk_fds[Context->membk_index];
+#else
+            *Physical      = Context->mFbFd;
+#endif
 #else
             *Physical      = Context->mFbFd;/*(unsigned int) (Context->fbPhysical + Handle->offset)
                                      - Context->baseAddress;*/

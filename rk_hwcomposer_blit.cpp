@@ -264,23 +264,36 @@ hwcBlit(
         dstLogical = (void*)(dstPhysical + 0x60000000);
     }
 
+#if !ONLY_USE_FB_BUFFERS
+    if (srchnd->type == 1)
+        dstFd = 0;
+    else
+        dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
+    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
+#else
+    if (srchnd->type == 1)
+        dstFd = 0;      //fix rga switch buffer bug
+    else
+        dstFd = (unsigned int)(DstHandle->share_fd);
+    dstBase = (unsigned int)(DstHandle->base);
+#endif
 
    // ALOGD("mem_type=%d", srchnd->type);
     if (srchnd->type == 1)
     {
-        RGA_set_src_vir_info(&Rga_Request,srchnd->base, 0, 0, srcStride, srcHeight, srcFormat, 0);
-        RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base,0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
-        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,Context->fb_disp_ofset* Context->fbStride);        
+        RGA_set_src_vir_info(&Rga_Request, srchnd->base, 0, 0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base, 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     else
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, dstWidth, dstHeight, &clip, dstFormat, 0);
-        rga_set_fds_offsets(&Rga_Request,srchnd->share_fd,DstHandle->share_fd,0,Context->fb_disp_ofset* Context->fbStride);        
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
-    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", DstHandle->share_fd,Context->fb_disp_ofset,DstHandle->base, \
+    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", DstHandle->share_fd, DstHandle->offset, DstHandle->base, \
          dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
 
     mmu_en = 0;
@@ -800,11 +813,19 @@ hwcDim(
     clip.ymin = 0;
     clip.ymax = dstHeight - 1;
 
+#if !ONLY_USE_FB_BUFFERS
+    if (srchnd->type == 1)
+        dstFd = 0;
+    else
+        dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
+    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
+#else
     if (srchnd->type == 1)
         dstFd = 0;
     else
         dstFd = (unsigned int)(Context->mFbFd);
     dstBase = (unsigned int)(Context->mFbBase);
+#endif
 
     /* Setup target. */
     LOGI("RGA dst_vir_w = %d, dst_vir_h = %d", dstWidth, dstHeight);
@@ -999,11 +1020,19 @@ hwcClear(
     clip.ymin = 0;
     clip.ymax = dstHeight - 1;
 
+#if !ONLY_USE_FB_BUFFERS
+    if (srchnd->type == 1)
+        dstFd = 0;
+    else
+        dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
+    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
+#else
     if (srchnd->type == 1)
         dstFd = 0;
     else
         dstFd = (unsigned int)(Context->mFbFd);
     dstBase = (unsigned int)(Context->mFbBase);
+#endif
 
     /* Setup target. */
     LOGI("RGA dst_vir_w = %d, dst_vir_h = %d", dstWidth, dstHeight);
