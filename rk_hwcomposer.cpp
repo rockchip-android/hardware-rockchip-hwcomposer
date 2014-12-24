@@ -3736,8 +3736,8 @@ static int display_commit(int dpy, private_handle_t*  handle, hwc_display_conten
     fb_info.win_par[0].area_par[0].ysize = (info.grayscale >> 20) & 0xfff;
     fb_info.win_par[0].area_par[0].xact = info.xres;
     fb_info.win_par[0].area_par[0].yact = info.yres;
-    fb_info.win_par[0].area_par[0].xvir = info.xres_virtual;
-    fb_info.win_par[0].area_par[0].yvir = info.yres_virtual;
+    fb_info.win_par[0].area_par[0].xvir = handle->stride;
+    fb_info.win_par[0].area_par[0].yvir = handle->height;
 #if USE_HWC_FENCE
     fb_info.wait_fs = 0;
 #endif

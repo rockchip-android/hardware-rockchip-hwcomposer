@@ -282,13 +282,13 @@ hwcBlit(
     if (srchnd->type == 1)
     {
         RGA_set_src_vir_info(&Rga_Request, srchnd->base, 0, 0, srcStride, srcHeight, srcFormat, 0);
-        RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base, 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base, 0, 0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     else
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
-        RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \

@@ -134,7 +134,7 @@ hwcLockBuffer(
             *Physical      = Context->mFbFd;/*(unsigned int) (Context->fbPhysical + Handle->offset)
                                      - Context->baseAddress;*/
 #endif
-            *Width         =  gcmALIGN(Context->fbWidth, 32);
+            *Width         = Context->fbWidth;// // gcmALIGN(Context->fbWidth, 32);
             *Height        =  Context->fbHeight;
             *Stride        = Context->fbStride;
             ALOGV("hwcLockBuffer:phy_addr=%p,w=%d,h=%d,stride=%d", *Physical, *Width, *Height, *Stride);
