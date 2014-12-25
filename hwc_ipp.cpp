@@ -21,7 +21,7 @@ typedef struct ipp_buffer_t
     int ion_client;
     int shared_fd;
     unsigned long     ion_phy_addr;
-    struct ion_handle *ion_hnd;
+    ion_user_handle_t ion_hnd;
     int ipp_fd;
     //ion_buffer_t *pion;
     //ion_device_t *ion_device;
