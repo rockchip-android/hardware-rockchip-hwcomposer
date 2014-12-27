@@ -5684,7 +5684,7 @@ hwc_device_open(
 
             for (int  i = 0;i < FB_BUFFERS_NUM;i++)
             {
-                err = context->mAllocDev->alloc(context->mAllocDev, context->fbStride, \
+                err = context->mAllocDev->alloc(context->mAllocDev, gcmALIGN(info.xres,32), \
                                                 info.yres, context->fbhandle.format, \
                                                 GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_RENDER, \
                                                 (buffer_handle_t*)(&context->phd_bk), &stride_gr);

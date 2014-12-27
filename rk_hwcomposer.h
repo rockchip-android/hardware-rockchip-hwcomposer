@@ -68,6 +68,10 @@
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 
+#define gcmALIGN(n, align) \
+( \
+    ((n) + ((align) - 1)) & ~((align) - 1) \
+)
 #define GHWC_VERSION  "1.22"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
