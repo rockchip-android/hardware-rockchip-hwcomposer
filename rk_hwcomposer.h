@@ -311,6 +311,7 @@ extern "C"
         alloc_device_t  *mAllocDev;
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
+		int membk_type[FB_BUFFERS_NUM];
         int membk_index;
         int membk_last_index;
         buffer_handle_t phd_bk;

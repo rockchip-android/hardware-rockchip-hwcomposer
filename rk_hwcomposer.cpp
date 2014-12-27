@@ -5693,7 +5693,8 @@ hwc_device_open(
                     struct private_handle_t*phandle_gr = (struct private_handle_t*)context->phd_bk;
                     context->membk_fds[i] = phandle_gr->share_fd;
                     context->membk_base[i] = phandle_gr->base;
-                    ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd);
+					context->membk_type[i] = phandle_gr->type; 
+                    ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d,type=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd,context->membk_type[i]);
                 }
                 else
                 {

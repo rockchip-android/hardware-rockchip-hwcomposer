@@ -265,27 +265,18 @@ hwcBlit(
     }
 
 #if !ONLY_USE_FB_BUFFERS
-    if (srchnd->type == 1)
-        dstFd = 0;
-    else
         dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
-    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
 #else
-    if (srchnd->type == 1)
-        dstFd = 0;      //fix rga switch buffer bug
-    else
         dstFd = (unsigned int)(DstHandle->share_fd);
-    dstBase = (unsigned int)(DstHandle->base);
 #endif
-
-   // ALOGD("mem_type=%d", srchnd->type);
-    if (srchnd->type == 1)
+ 	//ALOGD("mem_type=%d", srchnd->type);
+    /*if (srchnd->type == 1)
     {
-        RGA_set_src_vir_info(&Rga_Request, srchnd->base, 0, 0, srcStride, srcHeight, srcFormat, 0);
-        RGA_set_dst_vir_info(&Rga_Request,  DstHandle->base, 0, 0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        RGA_set_src_vir_info(&Rga_Request, 0, 0, 0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request,  0, 0, 0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
-    else
+    else*/
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
@@ -715,10 +706,13 @@ hwcBlit(
             RGA_set_src_act_info(&Rga_Request, srcRects[i].right -  srcRects[i].left, srcRects[i].bottom - srcRects[i].top,  srcRects[i].left, srcRects[i].top);
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
 
-            if (srchnd->type == 1)
+			ALOGV("src_type=%d,dst_type=%d,index=%d",
+				srchnd->type,Context->membk_type[Context->membk_index],Context->membk_index);
+            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
                 RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (1 << 10) | (1 << 8);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
 
             if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
