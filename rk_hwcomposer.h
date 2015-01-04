@@ -37,7 +37,7 @@
 #define hwcDEBUG                0
 #define hwcUseTime              1
 #define hwcBlitUseTime          0
-#define hwcDumpSurface          0
+#define hwcDumpSurface          1
 #define  ENABLE_HWC_WORMHOLE    1
 #define  DUMP_SPLIT_AREA        0
 #define FB1_IOCTL_SET_YUV_ADDR 0x5002
@@ -49,7 +49,7 @@
 #define FB_BUFFERS_NUM          (4)
 #define EN_VIDEO_UI_MIX         0
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
-
+#define VOP_WIN_NUM             2
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #define GPU_BASE           handle->iBase
 #define GPU_WIDTH          handle->iWidth
@@ -64,7 +64,7 @@
 #define GPU_FORMAT         handle->format
 #define GPU_DST_FORMAT     DstHandle->format
 #endif
-
+#define RGA_POLICY_MAX_SIZE (2*1024*1024)
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 
@@ -97,10 +97,8 @@ extern "C"
 #endif
 
 
-#if PLATFORM_SDK_VERSION >= 17
 
-#define  hwc_layer_list_t   hwc_display_contents_1_t
-#endif
+    #define  hwc_layer_list_t   hwc_display_contents_1_t
     enum
     {
         /* NOTE: These enums are unknown to Android.
@@ -113,16 +111,30 @@ extern "C"
         HWC_CLEAR_HOLE
 
     };
+    typedef enum _cmpType
+    {
+        HWC_VOP = 0,
+        HWC_RGA,           
+        HWC_RGA_TRSM_VOP,
+        HWC_RGA_TRSM_GPU_VOP,
+        HWC_VOP_GPU,
+        HWC_NODRAW_GPU_VOP,
+        HWC_RGA_GPU_VOP,
+        HWC_CP_FB,
+        HWC_GPU,
+        HWC_POLICY_NUM
+    }cmpType;
 
 
     typedef enum _hwcSTATUS
     {
         hwcSTATUS_OK     =   0,
         hwcSTATUS_INVALID_ARGUMENT      =   -1,
-        hwcSTATUS_IO_ERR        =  -2,
+        hwcSTATUS_IO_ERR                =   -2,
         hwcRGA_OPEN_ERR                 =   -3,
         hwcTHREAD_ERR                   =   -4,
         hwcMutex_ERR                    =   -5,
+        hwcPamet_ER                   =   -6,
 
     }
     hwcSTATUS;
@@ -136,54 +148,17 @@ extern "C"
     }
     hwcRECT;
 
-    typedef struct _hwbkupinfo
-    {
-        buffer_handle_t phd_bk;
-        int membk_fd;
-        int buf_fd;
-        unsigned int pmem_bk;
-        unsigned int buf_addr;
-        void* pmem_bk_log;
-        void* buf_addr_log;
-        int xoffset;
-        int yoffset;
-        int w_vir;
-        int h_vir;
-        int w_act;
-        int h_act;
-        int format;
-    }
-    hwbkupinfo;
-    typedef struct _hwbkupmanage
-    {
-        int count;
-        buffer_handle_t phd_drt;
-        int          direct_fd;
-        unsigned int direct_addr;
-        void* direct_addr_log;
-        int invalid;
-        int needrev;
-        int dstwinNo;
-        int skipcnt;
-        unsigned int ckpstcnt;
-        unsigned int inputspcnt;
-        char LayerName[LayerNameLength + 1];
-        unsigned int crrent_dis_fd;
-        hwbkupinfo bkupinfo[bakupbufsize];
-        struct private_handle_t *handle_bk;
-    }
-    hwbkupmanage;
 
-#define MaxMixUICnt 6
-    typedef struct _videomix
+#define MaxMixUICnt 2
+    typedef struct _NodrawManager
     {
-        int mixflag;
+        cmpType composer_mode_pre;
+        int membk_index_pre;
         int uicnt;
         int addr[MaxMixUICnt];
         int alpha[MaxMixUICnt];
-
     }
-    videomix;
+    NoDrawManager;
 
 #define IN
 #define OUT
@@ -241,7 +216,7 @@ extern "C"
         uint32_t          FrameBusAddr[2];    // 0: Y address; 1: UV address;
         uint32_t         FrameWidth;         // 16 aligned frame width
         uint32_t         FrameHeight;        // 16 aligned frame height
-    };
+    }tVPU_FRAME_v2_t;
 
     typedef struct
     {
@@ -270,7 +245,7 @@ extern "C"
         /* Feature: 2D PE 2.0. */
         /* Base address. */
         unsigned int baseAddress;
-
+        int (*fun_policy[HWC_POLICY_NUM])(void * ,hwc_display_contents_1_t*);
         /* Framebuffer stuff. */
         int       fbFd;
         int       fbFd1;
@@ -287,10 +262,13 @@ extern "C"
         pthread_mutex_t lock;
         nsecs_t         mNextFakeVSync;
         float           fb_fps;
+        NoDrawManager   NoDrMger;
+        cmpType     composer_mode;
         unsigned int fbPhysical;
         unsigned int fbStride;
         int          fb_disp_ofset;
         int          wfdOptimize;
+        int         win_swap;  
         /* PMEM stuff. */
         unsigned int pmemPhysical;
         unsigned int pmemLength;
@@ -316,9 +294,8 @@ extern "C"
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
 		int membk_type[FB_BUFFERS_NUM];
+        buffer_handle_t phd_bk[FB_BUFFERS_NUM];		
         int membk_index;
-        int membk_last_index;
-        buffer_handle_t phd_bk;
         unsigned long phy_addr;
         struct private_handle_t fbhandle ;
     }
@@ -397,6 +374,7 @@ extern "C"
         IN hwc_region_t * Region
     );
 
+    int hwc_get_int_property (const char* pcProperty, const char* default_value);
 
     /******************************************************************************\
      ************************** Native buffer handling ****************************

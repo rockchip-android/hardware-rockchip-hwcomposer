@@ -116,22 +116,7 @@ _ComputeUVOffset(
 
 
 //return property value of pcProperty
-static int hwc_get_int_property(const char* pcProperty, const char* default_value)
-{
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
 
-    if (pcProperty == NULL || default_value == NULL)
-    {
-        ALOGE("hwc_get_int_property: invalid param");
-        return -1;
-    }
-
-    property_get(pcProperty, value, default_value);
-    new_value = atoi(value);
-
-    return new_value;
-}
 
 //static int blitcount = 0;
 hwcSTATUS
@@ -284,9 +269,9 @@ hwcBlit(
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
-    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", DstHandle->share_fd, DstHandle->offset, DstHandle->base, \
+    LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
          dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
-
+    ALOGD("rga blit fd=%d,index=%d",dstFd,Context->membk_index);
     mmu_en = 0;
 
     LOGV("%s(%d):  "
@@ -446,11 +431,22 @@ hwcBlit(
              * NOTE: Now we always set dstRect to clip area. */
 
             /* Intersect clip with dest. */
-            dstRects[m].left   = hwcMAX(dstRect.left,   rects[n].left);
-            dstRects[m].top    = hwcMAX(dstRect.top,    rects[n].top);
-            dstRects[m].right  = hwcMIN(dstRect.right,  rects[n].right);
-            dstRects[m].right  = hwcMIN(dstRects[m].right, dstWidth);
-            dstRects[m].bottom = hwcMIN(dstRect.bottom, rects[n].bottom);
+            if(Src->dospecialflag)
+            {
+                dstRects[m].left   = dstRect.left;   
+                dstRects[m].top    = dstRect.top;
+                dstRects[m].right  = dstRect.right;
+                dstRects[m].bottom = dstRect.bottom;    
+                ALOGD("@spicial [%d,%d,%d,%d]",dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
+            }
+            else
+            {
+                dstRects[m].left   = hwcMAX(dstRect.left,   rects[n].left);
+                dstRects[m].top    = hwcMAX(dstRect.top,    rects[n].top);
+                dstRects[m].right  = hwcMIN(dstRect.right,  rects[n].right);
+                dstRects[m].right  = hwcMIN(dstRects[m].right, dstWidth);
+                dstRects[m].bottom = hwcMIN(dstRect.bottom, rects[n].bottom);
+            }    
             if (dstRects[m].top < 0) // @ buyudaren grame dstRects[m].top < 0,bottom is height ,so do this
             {
                 dstRects[m].top = dstRects[m].top + dstHeight;
@@ -484,6 +480,10 @@ hwcBlit(
 
             /* Advance to next rectangle. */
             m++;
+            if(Src->dospecialflag)
+            {
+                 n = (unsigned int) Region->numRects;
+            }     
         }
 
         /* Try next group if no rects. */
@@ -808,29 +808,21 @@ hwcDim(
     clip.ymax = dstHeight - 1;
 
 #if !ONLY_USE_FB_BUFFERS
-    if (srchnd->type == 1)
-        dstFd = 0;
-    else
         dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
-    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
 #else
-    if (srchnd->type == 1)
-        dstFd = 0;
-    else
-        dstFd = (unsigned int)(Context->mFbFd);
-    dstBase = (unsigned int)(Context->mFbBase);
+        dstFd = (unsigned int)(DstHandle->share_fd);
 #endif
-
-    /* Setup target. */
-    LOGI("RGA dst_vir_w = %d, dst_vir_h = %d", dstWidth, dstHeight);
-
-    if (srchnd->type == 1)
+ 	//ALOGD("mem_type=%d", srchnd->type);
+    /*if (srchnd->type == 1)
     {
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, dstBase, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_src_vir_info(&Rga_Request, 0, 0, 0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request,  0, 0, 0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
-    else
+    else*/
     {
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
 
     /* Go through all visible regions (clip rectangles?). */
@@ -925,11 +917,12 @@ hwcDim(
 
             RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
 
-            if (srchnd->type == 1)
+            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (1 << 10) | (1 << 8);
+                RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
-
             if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
             {
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed", __FUNCTION__, __LINE__, i);
@@ -963,7 +956,6 @@ hwcClear(
 )
 {
     hwcSTATUS status = hwcSTATUS_OK;
-
 #if 1
     void *     dstLogical;
     unsigned int      dstFd = ~0, dstBase = ~0;
@@ -1015,29 +1007,21 @@ hwcClear(
     clip.ymax = dstHeight - 1;
 
 #if !ONLY_USE_FB_BUFFERS
-    if (srchnd->type == 1)
-        dstFd = 0;
-    else
-        dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
-    dstBase = (unsigned int)(Context->membk_base[Context->membk_index]);
+    dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
 #else
-    if (srchnd->type == 1)
-        dstFd = 0;
-    else
-        dstFd = (unsigned int)(Context->mFbFd);
-    dstBase = (unsigned int)(Context->mFbBase);
+    dstFd = (unsigned int)(DstHandle->share_fd);
 #endif
-
-    /* Setup target. */
-    LOGI("RGA dst_vir_w = %d, dst_vir_h = %d", dstWidth, dstHeight);
-
-    if (srchnd->type == 1)
+ 	//ALOGD("mem_type=%d", srchnd->type);
+    /*if (srchnd->type == 1)
     {
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, dstBase, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_src_vir_info(&Rga_Request, 0, 0, 0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request,  0, 0, 0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
-    else
+    else*/
     {
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, 0, 0, dstWidth, dstHeight, &clip, dstFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
 
     /* Go through all visible regions (clip rectangles?). */
@@ -1115,9 +1099,11 @@ hwcClear(
                 );
             RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
 
-            if (srchnd->type == 1)
+            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (1 << 10) | (1 << 8);
+                RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
 
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
