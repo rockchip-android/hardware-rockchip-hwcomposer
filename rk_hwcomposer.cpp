@@ -689,7 +689,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
 int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
 
-#if 0
+#if 1
     float hfactor = 1;
     float vfactor = 1;
     bool isYuvModtrfm = false;
@@ -760,7 +760,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 // video more three layers , 0->rga_trfm->buffer->win0, 1\2\3\..\->gpu->FB->win1
 int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
-#if 0
+#if 1
     float hfactor = 1;
     float vfactor = 1;
     bool isYuvMod = false;
