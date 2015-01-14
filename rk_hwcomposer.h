@@ -46,8 +46,9 @@
 #define USE_HW_VSYNC            1
 #define FBIOSET_OVERLAY_STATE   0x5018
 #define bakupbufsize            4
-#define FB_BUFFERS_NUM          (4)
+#define FB_BUFFERS_NUM          (3)
 #define EN_VIDEO_UI_MIX         0
+#define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
 #define VOP_WIN_NUM             2
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
@@ -290,10 +291,13 @@ extern "C"
         int     IsInput;
         int     mFbFd;
         int     mFbBase;
+        int     vui_fd;
+        int     vui_hide;        
         alloc_device_t  *mAllocDev;
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
 		int membk_type[FB_BUFFERS_NUM];
+        int membk_fence_fd[FB_BUFFERS_NUM];		
         buffer_handle_t phd_bk[FB_BUFFERS_NUM];		
         int membk_index;
         unsigned long phy_addr;

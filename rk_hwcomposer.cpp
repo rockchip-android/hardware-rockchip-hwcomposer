@@ -202,12 +202,12 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
     hwc_rect_t * SrcRect = &Layer->sourceCrop;
     hwc_rect_t * DstRect = &Layer->displayFrame;
     hwc_rect_t  rect_merge;
-    int left_min ; 
-    int top_min ;
-    int right_max ;
-    int bottom_max;
-    hwcRECT dstRects;
-    hwcRECT srcRects;
+    int left_min = 0; 
+    int top_min = 0;
+    int right_max = 0;
+    int bottom_max = 0;
+    hwcRECT dstRects ;
+    hwcRECT srcRects ;
     
     unsigned int i;
     for (i = 0; i < (unsigned int) Region->numRects ;i++)
@@ -500,10 +500,10 @@ int hwc_get_layer_area_info(hwc_layer_1_t * layer,hwcRECT *srcrect,hwcRECT *dstr
     hwc_rect_t * DstRect = &layer->displayFrame;
     hwc_rect_t const * rects = Region->rects;
     hwc_rect_t  rect_merge;
-    int left_min ; 
-    int top_min ;
-    int right_max ;
-    int bottom_max;
+    int left_min =0; 
+    int top_min =0;
+    int right_max =0;
+    int bottom_max=0;
 
     struct private_handle_t*  handle = (struct private_handle_t*)layer->handle;
 
@@ -620,7 +620,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             layer->compositionType = HWC_TOWIN1;
         
     }
-    ALOGV("hwc-prepare use HWC_VOP policy");
+    ALOGD("hwc-prepare use HWC_VOP policy");
     context->composer_mode = HWC_VOP;
     return 0;
 }
@@ -680,7 +680,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
         
     }
     context->composer_mode = HWC_RGA;
-    ALOGV("hwc-prepare use HWC_RGA policy");
+    ALOGD("hwc-prepare use HWC_RGA policy");
 
     return 0;
 }
@@ -1283,6 +1283,87 @@ int getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *l
     return 0;
 
 }
+static int CompareLines(int *da,int w)
+{
+    int i,j;
+    for(i = 0;i<4;i++) // compare 4 lins
+    {
+        for(j= 0;j<w;j++)  
+        {
+            if(*da != 0xff000000 && *da != 0x0)
+            {
+                ALOGD("[%d,%d]=%x",i,j,*da);
+                return 1;
+            }            
+            da ++;    
+        }
+    }    
+    return 0;
+}
+static int CompareVers(int *da,int w,int h)
+{
+    int i,j;
+    int *data ;
+    for(i = 0;i<4;i++) // compare 4 lins
+    {
+        data = da + i;
+        for(j= 0;j<h;j++)  
+        {
+            if(*data != 0xff000000 && *data != 0x0 )
+            {
+                ALOGD("vers [%d,%d]=%x",i,j,*da);
+
+                return 1;
+            }    
+            data +=w;    
+        }
+    }    
+    return 0;
+}
+
+static int DetectValidData(int *data,int w,int h)
+{
+    int i,j;
+    int *da;
+    int ret;
+    /*  detect model
+    -------------------------
+    |   |   |    |    |      |       
+    |   |   |    |    |      |
+    |------------------------|       
+    |   |   |    |    |      |
+    |   |   |    |    |      |       
+    |   |   |    |    |      |
+    |------------------------|       
+    |   |   |    |    |      |
+    |   |   |    |    |      |       
+    |------------------------|
+    |   |   |    |    |      |       
+    |   |   |    |    |      |       
+    |------------------------|       
+    |   |   |    |    |      |
+    --------------------------
+       
+    */
+    if(data == NULL)
+        return 1;
+    for(i = h/4;i<h;i+= h/4)
+    {
+        da = data +  i *w;
+        if(CompareLines(da,w))
+            return 1;
+    }    
+    for(i = w/4;i<w;i+= w/4)
+    {
+        da = data +  i ;
+        if(CompareVers(da,w,h))
+            return 1;
+    }
+   
+    return 0; 
+    
+}
+
 int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
@@ -1295,7 +1376,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     int dump = 0;
     struct timeval tpend1, tpend2;
     long usec1 = 0;
-
+    int bk_index = 0;
     struct rk_fb_win_cfg_data fb_info;
     struct fb_var_screeninfo info;
     if ((!context->dpyAttr[0].connected) 
@@ -1328,7 +1409,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             else if(mode == HWC_RGA_TRSM_VOP)
             {
                 start = 1;
-                end = 2;   
+                end = list->numHwLayers - 1;   
                 winIndex = 1;
             }
             else if(mode == HWC_RGA_TRSM_GPU_VOP
@@ -1366,7 +1447,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             fb_info.wait_fs = 0;    
             if(mode != HWC_NODRAW_GPU_VOP)
             {
-                context->NoDrMger.membk_index_pre = context->membk_index;
+                bk_index = context->NoDrMger.membk_index_pre = context->membk_index;
                 if (context->membk_index >= (FB_BUFFERS_NUM - 1))
                 {
                     context->membk_index = 0;
@@ -1406,10 +1487,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         hwc_rect_t * DstRect = &layer->displayFrame;
         hwc_rect_t const * rects = Region->rects;
         hwc_rect_t  rect_merge;
-        int left_min ; 
-        int top_min ;
-        int right_max ;
-        int bottom_max;
+        int left_min =0; 
+        int top_min =0;
+        int right_max=0 ;
+        int bottom_max=0;
         hwcRECT dstRects;
         hwcRECT srcRects;
 
@@ -1540,6 +1621,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].z_order = winIndex;
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
+        if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+            fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
         fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
@@ -1564,6 +1647,46 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     }
     //fb_info.wait_fs = 1;
     //gettimeofday(&tpend1, NULL);
+
+    #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
+    if(
+        /*fb_info.win_par[0].area_par[0].data_format == 0x20
+        && */list->numHwLayers == 3)  // @ video & 2 layers
+    {
+        bool IsDiff = true;
+        int ret;
+        hwc_layer_1_t * layer = &list->hwLayers[1];
+        struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
+        IsDiff = uiHnd->share_fd != context->vui_fd;
+        if(IsDiff)
+        {
+            context->vui_hide = 0;  
+        }
+        else if(!context->vui_hide)
+        {
+            ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
+            if(!ret)
+            {                               
+                context->vui_hide = 1;
+                ALOGD(" @video UI close");
+            }    
+        }
+        // close UI win
+        if(context->vui_hide == 1)
+        {
+            for(i = 1;i<4;i++)
+            {
+                for(j=0;j<4;j++)
+                {
+                    fb_info.win_par[i].area_par[j].ion_fd = 0;
+                    fb_info.win_par[i].area_par[j].phy_addr = 0;
+                }
+            }    
+        }    
+        context->vui_fd = uiHnd->share_fd;
+       
+    }
+    #endif
     
     ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
@@ -1633,6 +1756,16 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 list->retireFenceFd = fb_info.ret_fence_fd;
             break;
         case HWC_RGA:
+            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+            {
+                if (fb_info.rel_fence_fd[k] > 0)
+                {
+                    context->membk_fence_fd[bk_index] = fb_info.rel_fence_fd[k];
+                }                 
+            }
+            if(fb_info.ret_fence_fd > 0)
+                close(fb_info.ret_fence_fd);
+            break;
         case HWC_RGA_TRSM_VOP:           
             for (int k = 0;k < RK_MAX_BUF_NUM;k++)
             {
@@ -1738,6 +1871,25 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
         /* Check whether this composition can be handled by hwcomposer. */
         if (list->hwLayers[i].compositionType >= HWC_BLITTER)
         {
+#if FENCE_TIME_USE
+            struct timeval tstart, tend;
+            gettimeofday(&tstart, NULL);
+#endif
+            if (context->membk_fence_fd[context->membk_index] > 0)
+            {
+                sync_wait(context->membk_fence_fd[context->membk_index], 500);
+                ALOGV("fenceFd=%d,name=%s", context->membk_fence_fd[context->membk_index],list->hwLayers[i].LayerName);
+                close(context->membk_fence_fd[context->membk_index]);
+                context->membk_fence_fd[context->membk_index] = -1;
+            }
+#if FENCE_TIME_USE	
+            gettimeofday(&tend, NULL);
+            if(((tend.tv_sec - tstart.tv_sec)*1000 + (tend.tv_usec - tstart.tv_usec)/1000) > 16)
+            {
+                ALOGW("wait for LCDC fence too long ,spent t = %ld ms",((tend.tv_sec - tstart.tv_sec)*1000 + (tend.tv_usec - tstart.tv_usec)/1000));
+            }
+#endif    
+
 #if ENABLE_HWC_WORMHOLE
             hwcRECT FbRect;
             hwcArea * area;
@@ -1782,10 +1934,10 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                                        0U);
 
             /* Split areas: go through all regions. */
-            for (int i = 0; i < list->numHwLayers - 1; i++)
+            for (unsigned int k = 0; k < list->numHwLayers - 1; k++)
             {
-                int owner = 1U << i;
-                hwc_layer_1_t *  hwLayer = &list->hwLayers[i];
+                int owner = 1U << k;
+                hwc_layer_1_t *  hwLayer = &list->hwLayers[k];
                 hwc_region_t * region  = &hwLayer->visibleRegionScreen;
 
                 //zxl:ignore PointerLocation
