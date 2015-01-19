@@ -73,15 +73,15 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "1.22"
+#define GHWC_VERSION  "2.00"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
 #define HWC_VERSION "HWC_VERSION  \
-Author:zxl \
-Previous-Time:Wed Sep 10 15:12:40 2014 +0800 \
-Version:1.22 \
+Author:huangds \
+Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
+Version:2.00 \
 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
 
 /* Set it to 1 to enable swap rectangle optimization;
