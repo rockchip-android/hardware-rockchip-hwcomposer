@@ -1064,7 +1064,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         try_hwc_gpu_policy((void*)context,list);
     }
     context->NoDrMger.composer_mode_pre = context->composer_mode;
-
+    //ALOGD("cmp_mode=%s",compositionModeName[context->composer_mode]);
     if(!(context->composer_mode == HWC_NODRAW_GPU_VOP
         || context->composer_mode == HWC_RGA_GPU_VOP) )
     {
@@ -1074,6 +1074,18 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
             context->NoDrMger.alpha[i] = 0;
         }
     }
+    
+    if(context->composer_mode == HWC_RGA || context->composer_mode == HWC_GPU )
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];   
+        layer->bufferCount = 1;
+    }
+    else   // win 0 & win 1 enable ,surfaceflinger change to one layer when 5s donot updata
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];   
+        layer->bufferCount = 2;
+    }
+
     //if(context->composer_mode == HWC_NODRAW_GPU_VOP)
     //hwc_sync(list);
 
@@ -1142,7 +1154,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
         case HWC_DISPLAY_PRIMARY:
             {
                 int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
-                int err = ioctl(context->fbFd, FBIOBLANK, fb_blank);
+                int err = 0;//ioctl(context->fbFd, FBIOBLANK, fb_blank);
                 ALOGV("call fb blank =%d",fb_blank);
                 if (err < 0)
                 {
@@ -1746,7 +1758,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if (fb_info.rel_fence_fd[k] > 0)
         {
             close(fb_info.rel_fence_fd[k]);
-    }                 
+        }                 
     }
     if(fb_info.ret_fence_fd > 0)
         close(fb_info.ret_fence_fd);
