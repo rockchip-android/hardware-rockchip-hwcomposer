@@ -1077,12 +1077,12 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     
     if(context->composer_mode == HWC_RGA || context->composer_mode == HWC_GPU )
     {
-        hwc_layer_1_t * layer = &list->hwLayers[i];   
+        hwc_layer_1_t * layer = &list->hwLayers[0];   
         layer->bufferCount = 1;
     }
     else   // win 0 & win 1 enable ,surfaceflinger change to one layer when 5s donot updata
     {
-        hwc_layer_1_t * layer = &list->hwLayers[i];   
+        hwc_layer_1_t * layer = &list->hwLayers[0];   
         layer->bufferCount = 2;
     }
 
