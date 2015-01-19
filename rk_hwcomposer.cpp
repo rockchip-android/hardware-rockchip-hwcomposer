@@ -608,10 +608,12 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             if(i>0)
             {
                 context->win_swap = 1;
+                ALOGV("i=%d,swap",i);
             }
         }
         if(scale_cnt > 1) // vop has only one win support scale
         {
+            context->win_swap = 0;
             return -1;
         }
         if(i == 0)
@@ -620,7 +622,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             layer->compositionType = HWC_TOWIN1;
         
     }
-    ALOGD("hwc-prepare use HWC_VOP policy");
+    ALOGV("hwc-prepare use HWC_VOP policy");
     context->composer_mode = HWC_VOP;
     return 0;
 }
@@ -680,7 +682,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
         
     }
     context->composer_mode = HWC_RGA;
-    ALOGD("hwc-prepare use HWC_RGA policy");
+    ALOGV("hwc-prepare use HWC_RGA policy");
 
     return 0;
 }
@@ -749,7 +751,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             layer->compositionType = HWC_LCDC;
     }
     context->composer_mode = HWC_RGA_TRSM_VOP;
-    ALOGD("hwc-prepare use HWC_RGA_TRSM_VOP policy");
+    ALOGV("hwc-prepare use HWC_RGA_TRSM_VOP policy");
 
     return 0;
 #else
@@ -786,7 +788,7 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         layer->compositionType = HWC_FRAMEBUFFER;
     }
     context->composer_mode = HWC_RGA_TRSM_GPU_VOP;
-    ALOGD("hwc-prepare use HHWC_RGA_TRSM_GPU_VOP policy");
+    ALOGV("hwc-prepare use HHWC_RGA_TRSM_GPU_VOP policy");
 
     return 0;
 #else
@@ -841,6 +843,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 // if 0\1 address and displayzone dont change, buffer->win0,2\3\4\..\->gpu->FB->win1
 int try_hwc_nodraw_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
+#if 0
     unsigned int i;
     hwcContext * context = (hwcContext *)ctx;
 
@@ -906,11 +909,15 @@ int try_hwc_nodraw_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     ALOGV("hwc-prepare use HWC_NODRAW_GPU_VOP policy");
     
     return 0;
+#else
+    return -1;
+#endif
 }
 
 // > 5 layers, 0\1 ->rga->buffer->win0, 2\3\4\..\->gpu->FB->win1
 int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
+#if 0
     float hfactor = 1;
     float vfactor = 1;
     bool isYuvMod = false;
@@ -974,6 +981,9 @@ int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     ALOGV("hwc-prepare use HWC_RGA_GPU_VOP policy");
     
     return 0;
+#else
+    return -1;
+#endif
 }
 
 
@@ -1132,7 +1142,8 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
         case HWC_DISPLAY_PRIMARY:
             {
                 int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
-                int err =0;//= ioctl(context->fbFd, FBIOBLANK, fb_blank);
+                int err = ioctl(context->fbFd, FBIOBLANK, fb_blank);
+                ALOGV("call fb blank =%d",fb_blank);
                 if (err < 0)
                 {
                     if (errno == EBUSY)
@@ -1292,7 +1303,7 @@ static int CompareLines(int *da,int w)
         {
             if(*da != 0xff000000 && *da != 0x0)
             {
-                ALOGD("[%d,%d]=%x",i,j,*da);
+                ALOGV("[%d,%d]=%x",i,j,*da);
                 return 1;
             }            
             da ++;    
@@ -1311,7 +1322,7 @@ static int CompareVers(int *da,int w,int h)
         {
             if(*data != 0xff000000 && *data != 0x0 )
             {
-                ALOGD("vers [%d,%d]=%x",i,j,*da);
+                ALOGV("vers [%d,%d]=%x",i,j,*da);
 
                 return 1;
             }    
@@ -1616,7 +1627,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
            DstRect->left,DstRect->top,DstRect->right, DstRect->bottom,
            dstRects.left,dstRects.top,dstRects.right,dstRects.bottom
            );
-           
+
         fb_info.win_par[winIndex].win_id = context->win_swap ?(1-winIndex):winIndex;
         fb_info.win_par[winIndex].z_order = winIndex;
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
@@ -1668,7 +1679,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             if(!ret)
             {                               
                 context->vui_hide = 1;
-                ALOGD(" @video UI close");
+                ALOGV(" @video UI close");
             }    
         }
         // close UI win
@@ -1689,10 +1700,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     #endif
     
     ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-
+    
+    
     ///gettimeofday(&tpend2, NULL);
     //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
     //LOGD("config use time=%ld ms",  usec1); 
+
     
     
     //debug info
@@ -1939,14 +1952,19 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                 int owner = 1U << k;
                 hwc_layer_1_t *  hwLayer = &list->hwLayers[k];
                 hwc_region_t * region  = &hwLayer->visibleRegionScreen;
+                //struct private_handle_t* srchnd = (struct private_handle_t *) hwLayer->handle;
 
                 //zxl:ignore PointerLocation
-                if (!strcmp(hwLayer->LayerName, "PointerLocation"))
+               // if (!strcmp(hwLayer->LayerName, "PointerLocation"))
+               // {
+                  //  ALOGV("ignore PointerLocation,or it will overlay the whole area");
+                   // continue;
+               // }
+                if((hwLayer->blending & 0xFFFF) != HWC_BLENDING_NONE)
                 {
-                    ALOGV("ignore PointerLocation,or it will overlay the whole area");
+                    ALOGV("ignore alpha layer");
                     continue;
                 }
-
                 /* Now go through all rectangles to split areas. */
                 for (int j = 0; j < region->numRects; j++)
                 {
@@ -2093,7 +2111,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
 #if hwcUseTime
         gettimeofday(&tpend2, NULL);
         usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGD("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
+        LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
 #endif
 
     return 0; //? 0 : HWC_EGL_ERROR;
@@ -2813,7 +2831,7 @@ hwc_device_open(
                     ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd);
                 }
                 else
-                {
+                { 
                     ALOGE("hwc alloc faild");
                     goto OnError;
                 }

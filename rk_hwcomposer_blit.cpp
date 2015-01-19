@@ -620,6 +620,7 @@ hwcBlit(
                     break;
 
                 case HWC_TRANSFORM_ROT_180:
+
                     RotateMode      = 1;
                     Rotation    = 180;
                     Xoffset = dstRects[i].right - 1;
@@ -645,6 +646,7 @@ hwcBlit(
                     break;
 
                 case HWC_TRANSFORM_ROT_270:
+                
                     RotateMode      = 1;
                     Rotation        = 270;
                     Xoffset = dstRects[i].left;

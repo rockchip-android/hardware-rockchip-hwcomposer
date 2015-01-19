@@ -46,7 +46,7 @@
 #define USE_HW_VSYNC            1
 #define FBIOSET_OVERLAY_STATE   0x5018
 #define bakupbufsize            4
-#define FB_BUFFERS_NUM          (3)
+#define FB_BUFFERS_NUM          (4)
 #define EN_VIDEO_UI_MIX         0
 #define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
