@@ -1154,7 +1154,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
         case HWC_DISPLAY_PRIMARY:
             {
                 int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
-                int err = 0;//ioctl(context->fbFd, FBIOBLANK, fb_blank);
+                int err = ioctl(context->fbFd, FBIOBLANK, fb_blank);
                 ALOGV("call fb blank =%d",fb_blank);
                 if (err < 0)
                 {
@@ -1710,155 +1710,158 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
        
     }
     #endif
-    
-    ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-    
-    
-    ///gettimeofday(&tpend2, NULL);
-    //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-    //LOGD("config use time=%ld ms",  usec1); 
 
-    
-    
-    //debug info
-    for(i = 0;i<4;i++)
+    if(!context->fb_blanked)
     {
-        for(j=0;j<4;j++)
-        {
-            if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
-            {
-               
-                ALOGV("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
-                        i,j,
-                        fb_info.win_par[i].z_order,
-                        fb_info.win_par[i].win_id,
-                        fb_info.win_par[i].g_alpha_val,
-                        fb_info.win_par[i].area_par[j].x_offset,
-                        fb_info.win_par[i].area_par[j].y_offset,
-                        fb_info.win_par[i].area_par[j].xact,
-                        fb_info.win_par[i].area_par[j].yact,
-                        fb_info.win_par[i].area_par[j].xpos,
-                        fb_info.win_par[i].area_par[j].ypos,
-                        fb_info.win_par[i].area_par[j].xsize,
-                        fb_info.win_par[i].area_par[j].ysize,
-                        fb_info.win_par[i].area_par[j].xvir,
-                        fb_info.win_par[i].area_par[j].yvir,
-                        fb_info.win_par[i].area_par[j].data_format,
-                        fb_info.win_par[i].area_par[j].acq_fence_fd,
-                        fb_info.win_par[i].area_par[j].ion_fd,
-                        fb_info.win_par[i].area_par[j].phy_addr);
-              }
-        }
+        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
+    
+    
+        ///gettimeofday(&tpend2, NULL);
+        //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+        //LOGD("config use time=%ld ms",  usec1); 
+
         
-    }  
+        
+        //debug info
+        for(i = 0;i<4;i++)
+        {
+            for(j=0;j<4;j++)
+            {
+                if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
+                {
+                   
+                    ALOGV("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                            i,j,
+                            fb_info.win_par[i].z_order,
+                            fb_info.win_par[i].win_id,
+                            fb_info.win_par[i].g_alpha_val,
+                            fb_info.win_par[i].area_par[j].x_offset,
+                            fb_info.win_par[i].area_par[j].y_offset,
+                            fb_info.win_par[i].area_par[j].xact,
+                            fb_info.win_par[i].area_par[j].yact,
+                            fb_info.win_par[i].area_par[j].xpos,
+                            fb_info.win_par[i].area_par[j].ypos,
+                            fb_info.win_par[i].area_par[j].xsize,
+                            fb_info.win_par[i].area_par[j].ysize,
+                            fb_info.win_par[i].area_par[j].xvir,
+                            fb_info.win_par[i].area_par[j].yvir,
+                            fb_info.win_par[i].area_par[j].data_format,
+                            fb_info.win_par[i].area_par[j].acq_fence_fd,
+                            fb_info.win_par[i].area_par[j].ion_fd,
+                            fb_info.win_par[i].area_par[j].phy_addr);
+                  }
+            }
+            
+        }  
 
 #if 0
-    for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-    {
-        if (fb_info.rel_fence_fd[k] > 0)
+        for (int k = 0;k < RK_MAX_BUF_NUM;k++)
         {
-            close(fb_info.rel_fence_fd[k]);
-        }                 
-    }
-    if(fb_info.ret_fence_fd > 0)
-        close(fb_info.ret_fence_fd);
+            if (fb_info.rel_fence_fd[k] > 0)
+            {
+                close(fb_info.rel_fence_fd[k]);
+            }                 
+        }
+        if(fb_info.ret_fence_fd > 0)
+            close(fb_info.ret_fence_fd);
 
 #else
-    switch (mode)
-    {
-        case HWC_VOP:       
-            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-            {
-                if (fb_info.rel_fence_fd[k] > 0)
+        switch (mode)
+        {
+            case HWC_VOP:       
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if( k < list->numHwLayers - 1)
-                        list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
-                    else 
+                    if (fb_info.rel_fence_fd[k] > 0)
+                    {
+                        if( k < list->numHwLayers - 1)
+                            list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
+                        else 
+                            close(fb_info.rel_fence_fd[k]);
+                    }                 
+                }
+                if(fb_info.ret_fence_fd > 0)
+                    list->retireFenceFd = fb_info.ret_fence_fd;
+                break;
+            case HWC_RGA:
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                {
+                    if (fb_info.rel_fence_fd[k] > 0)
+                    {
+                        context->membk_fence_fd[bk_index] = fb_info.rel_fence_fd[k];
+                    }                 
+                }
+                if(fb_info.ret_fence_fd > 0)
+                    close(fb_info.ret_fence_fd);
+                break;
+            case HWC_RGA_TRSM_VOP:           
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                {
+                    if (fb_info.rel_fence_fd[k] > 0)
+                    {
                         close(fb_info.rel_fence_fd[k]);
-                }                 
-            }
-            if(fb_info.ret_fence_fd > 0)
-                list->retireFenceFd = fb_info.ret_fence_fd;
-            break;
-        case HWC_RGA:
-            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-            {
-                if (fb_info.rel_fence_fd[k] > 0)
-                {
-                    context->membk_fence_fd[bk_index] = fb_info.rel_fence_fd[k];
-                }                 
-            }
-            if(fb_info.ret_fence_fd > 0)
-                close(fb_info.ret_fence_fd);
-            break;
-        case HWC_RGA_TRSM_VOP:           
-            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-            {
-                if (fb_info.rel_fence_fd[k] > 0)
-                {
-                    close(fb_info.rel_fence_fd[k]);
-                }                 
-            }
-            if(fb_info.ret_fence_fd > 0)
-                close(fb_info.ret_fence_fd);
-            break;
-        case HWC_RGA_TRSM_GPU_VOP:   
-        case HWC_NODRAW_GPU_VOP:
-        case HWC_RGA_GPU_VOP:
-        case HWC_GPU:   
-        //case HWC_VOP_GPU:
+                    }                 
+                }
+                if(fb_info.ret_fence_fd > 0)
+                    close(fb_info.ret_fence_fd);
+                break;
+            case HWC_RGA_TRSM_GPU_VOP:   
+            case HWC_NODRAW_GPU_VOP:
+            case HWC_RGA_GPU_VOP:
+            case HWC_GPU:   
+            //case HWC_VOP_GPU:
 
-            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-            {
-                if (fb_info.rel_fence_fd[k] > 0)
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if( k < list->numHwLayers && !fb_flag )
+                    if (fb_info.rel_fence_fd[k] > 0)
                     {
-                        fb_flag = true;
-                        list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
-                    }    
-                    else 
-                        close(fb_info.rel_fence_fd[k]);
-                }                 
-            }
-            if(fb_info.ret_fence_fd > 0)
-                list->retireFenceFd = fb_info.ret_fence_fd;        
-            break;
-            
-        case HWC_VOP_GPU:
-            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
-            {
-                if (fb_info.rel_fence_fd[k] > 0 )
+                        if( k < list->numHwLayers && !fb_flag )
+                        {
+                            fb_flag = true;
+                            list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
+                        }    
+                        else 
+                            close(fb_info.rel_fence_fd[k]);
+                    }                 
+                }
+                if(fb_info.ret_fence_fd > 0)
+                    list->retireFenceFd = fb_info.ret_fence_fd;        
+                break;
+                
+            case HWC_VOP_GPU:
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if( k == 0 )
+                    if (fb_info.rel_fence_fd[k] > 0 )
                     {
-                        list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
-                        //list->hwLayers[k].releaseFenceFd = -1;
-                        //close(fb_info.rel_fence_fd[k]);
-                    }                        
-                    else if(k == 1)
-                    {
-                        list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
-                        //list->hwLayers[list->numHwLayers - 1].releaseFenceFd = -1;
-                        //close(fb_info.rel_fence_fd[k]);
-                    }
-                    else 
-                        close(fb_info.rel_fence_fd[k]);
-                }           
-            }
-            if(fb_info.ret_fence_fd > 0)
-            {
-                list->retireFenceFd = fb_info.ret_fence_fd;
-                //list->retireFenceFd = -1;
-               // close(fb_info.ret_fence_fd);
-            }
-            break;
-        case HWC_CP_FB:
-            break;
-        default:
-            return -EINVAL;
+                        if( k == 0 )
+                        {
+                            list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
+                            //list->hwLayers[k].releaseFenceFd = -1;
+                            //close(fb_info.rel_fence_fd[k]);
+                        }                        
+                        else if(k == 1)
+                        {
+                            list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
+                            //list->hwLayers[list->numHwLayers - 1].releaseFenceFd = -1;
+                            //close(fb_info.rel_fence_fd[k]);
+                        }
+                        else 
+                            close(fb_info.rel_fence_fd[k]);
+                    }           
+                }
+                if(fb_info.ret_fence_fd > 0)
+                {
+                    list->retireFenceFd = fb_info.ret_fence_fd;
+                    //list->retireFenceFd = -1;
+                   // close(fb_info.ret_fence_fd);
+                }
+                break;
+            case HWC_CP_FB:
+                break;
+            default:
+                return -EINVAL;
+        }
+#endif  
     }
-#endif    
     return 0;
 }
 
