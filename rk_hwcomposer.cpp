@@ -1407,7 +1407,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     {
         return -1;
     }
-    dump = hwc_get_int_property("sys.hwc.vopdump","0");
     
     ALOGV("hwc_vop_config mode=%s",compositionModeName[mode]);    
     info = context->info;    
@@ -1526,6 +1525,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             continue;
         }
         #if 0   // debug ,Dont remove
+        dump = hwc_get_int_property("sys.hwc.vopdump","0");        
         if(dump && (i == (list->numHwLayers -1)) && mode == HWC_VOP_GPU)
         {
 
@@ -1673,41 +1673,46 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
-        /*fb_info.win_par[0].area_par[0].data_format == 0x20
-        && */list->numHwLayers == 3)  // @ video & 2 layers
+        fb_info.win_par[0].area_par[0].data_format == 0x20
+        && list->numHwLayers == 3)  // @ video & 2 layers
     {
         bool IsDiff = true;
         int ret;
         hwc_layer_1_t * layer = &list->hwLayers[1];
-        struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
-        IsDiff = uiHnd->share_fd != context->vui_fd;
-        if(IsDiff)
+        if(layer)
         {
-            context->vui_hide = 0;  
-        }
-        else if(!context->vui_hide)
-        {
-            ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
-            if(!ret)
-            {                               
-                context->vui_hide = 1;
-                ALOGV(" @video UI close");
-            }    
-        }
-        // close UI win
-        if(context->vui_hide == 1)
-        {
-            for(i = 1;i<4;i++)
+            struct private_handle_t* uiHnd = (struct private_handle_t *) layer->handle;
+            if(uiHnd)
             {
-                for(j=0;j<4;j++)
+                IsDiff = uiHnd->share_fd != context->vui_fd;
+                if(IsDiff)
                 {
-                    fb_info.win_par[i].area_par[j].ion_fd = 0;
-                    fb_info.win_par[i].area_par[j].phy_addr = 0;
+                    context->vui_hide = 0;  
                 }
+                else if(!context->vui_hide)
+                {
+                    ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
+                    if(!ret)
+                    {                               
+                        context->vui_hide = 1;
+                        ALOGD(" @video UI close");
+                    }    
+                }
+                // close UI win
+                if(context->vui_hide == 1)
+                {
+                    for(i = 1;i<4;i++)
+                    {
+                        for(j=0;j<4;j++)
+                        {
+                            fb_info.win_par[i].area_par[j].ion_fd = 0;
+                            fb_info.win_par[i].area_par[j].phy_addr = 0;
+                        }
+                    }    
+                }    
+                context->vui_fd = uiHnd->share_fd;
             }    
-        }    
-        context->vui_fd = uiHnd->share_fd;
-       
+        }
     }
     #endif
 
