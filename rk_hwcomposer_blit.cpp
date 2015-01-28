@@ -271,7 +271,7 @@ hwcBlit(
          srcStride, srcHeight, srcLogical, srcFormat);
     LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
          dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
-    ALOGD("rga blit fd=%d,index=%d",dstFd,Context->membk_index);
+    LOGV("rga blit fd=%d,index=%d",dstFd,Context->membk_index);
     mmu_en = 0;
 
     LOGV("%s(%d):  "

@@ -86,6 +86,7 @@ hwc_blank(
     struct hwc_composer_device_1 *dev,
     int dpy,
     int blank);
+
 static int
 hwc_query(
     struct hwc_composer_device_1* dev,
@@ -2050,7 +2051,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
         switch (list->hwLayers[i].compositionType)
         {
             case HWC_BLITTER:
-                LOGD("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
+                LOGV("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
                 /* Do the blit. */
 #if hwcBlitUseTime
                 gettimeofday(&tpendblit1, NULL);
