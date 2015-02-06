@@ -1651,11 +1651,13 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
         {
-            fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;        
+            fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;    
+            fb_info.win_par[winIndex].area_par[0].yvir = handle->height*NUM_FB_BUFFERS;
         }
         else
         {        
-            fb_info.win_par[winIndex].area_par[0].y_offset = hwcMAX(srcRects.top, 0);        
+            fb_info.win_par[winIndex].area_par[0].y_offset = hwcMAX(srcRects.top, 0);    
+            fb_info.win_par[winIndex].area_par[0].yvir = handle->height;
         }        
         fb_info.win_par[winIndex].area_par[0].xpos =  hwcMAX(dstRects.left, 0);
         fb_info.win_par[winIndex].area_par[0].ypos = hwcMAX(dstRects.top , 0);
@@ -1664,7 +1666,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].xact = srcRects.right- srcRects.left;
         fb_info.win_par[winIndex].area_par[0].yact = srcRects.bottom - srcRects.top;
         fb_info.win_par[winIndex].area_par[0].xvir = handle->stride;
-        fb_info.win_par[winIndex].area_par[0].yvir = handle->height;
         winIndex ++;
         i += step;
         
