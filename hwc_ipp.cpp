@@ -1,4 +1,13 @@
-//create by qiuen 2013/7/5
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #include "hwc_ipp.h"
 
 

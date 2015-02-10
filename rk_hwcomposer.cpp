@@ -1,18 +1,12 @@
-/****************************************************************************
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-*    Copyright (c) 2005 - 2011 by Vivante Corp.  All rights reserved.
-*
-*    The material in this file is confidential and contains trade secrets
-*    of Vivante Corporation. This is proprietary information owned by
-*    Vivante Corporation. No part of this work may be disclosed,
-*    reproduced, copied, transmitted, or used in any way for any purpose,
-*    without the express written permission of Vivante Corporation.
-*
-*****************************************************************************
-*
-*    Auto-generated file on 12/13/2011. Do not edit!!!
-*
-*****************************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 
 
 
@@ -125,6 +119,7 @@ hwc_device_open(
     const char * name,
     struct hw_device_t ** device
 );
+static int DetectValidData(int *data,int w,int h);
 
 int getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *list);
 
@@ -148,7 +143,7 @@ id:
         HWC_HARDWARE_MODULE_ID,
 name:          "Hardware Composer Module"
         ,
-author:        "Vivante Corporation"
+author:        "Rockchip Corporation"
         ,
 methods:
         &hwc_module_methods,
@@ -612,11 +607,11 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 ALOGV("i=%d,swap",i);
             }
         }
-        if(scale_cnt > 1) // vop has only one win support scale
+        if(scale_cnt > 1 || (context->vop_mbshake && vfactor > 1.0)) // vop has only one win support scale,or vop sacle donwe need more BW lead to vop shake
         {
             context->win_swap = 0;
             return -1;
-        }
+        }   
         if(i == 0)
             layer->compositionType = HWC_TOWIN0;
         else
@@ -716,11 +711,13 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         {
             return -1;  
         }
-        if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 && layer->transform != 0)  // video use other policy
+        if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+            &&(context->vop_mbshake || layer->transform != 0))  // video use other policy
         {
             isYuvModtrfm = true;
         }    
     }    
+    ALOGD("isYuvModtrfm=%d",isYuvModtrfm);
     if(!isYuvModtrfm)
         return -1;
         
@@ -745,6 +742,16 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             {
                 return -1;
             }
+            #if VIDEO_WIN1_UI_DISABLE
+            if(context->vop_mbshake)
+            {
+                int ret = DetectValidData((int *)handle->base,handle->width,handle->height); 
+                if(ret) // ui need display
+                {
+                    return -1;
+                }  
+            }    
+            #endif
         }
         if(i == 0)
             layer->compositionType = HWC_BLITTER;  
@@ -774,6 +781,13 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+
+    #if VIDEO_WIN1_UI_DISABLE
+    if(context->vop_mbshake)
+    {
+        return -1;  
+    }
+    #endif
     if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
     {
         return -1;  
@@ -825,6 +839,16 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
         if(i == 0)
         {
+            if(context->vop_mbshake)
+            {
+                float vfactor = 1.0;
+                vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+                  / (layer->displayFrame.bottom - layer->displayFrame.top);
+                if(vfactor > 1.0f  )   //   vop sacle donwe need more BW lead to vop shake      
+                {
+                    return -1;
+                }
+            }    
             if(LayerZoneCheck(layer,context) != 0)
                 return -1;
             else
@@ -1065,7 +1089,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         try_hwc_gpu_policy((void*)context,list);
     }
     context->NoDrMger.composer_mode_pre = context->composer_mode;
-    //ALOGD("cmp_mode=%s",compositionModeName[context->composer_mode]);
+    ALOGV("cmp_mode=%s",compositionModeName[context->composer_mode]);
     if(!(context->composer_mode == HWC_NODRAW_GPU_VOP
         || context->composer_mode == HWC_RGA_GPU_VOP) )
     {
@@ -1431,9 +1455,21 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             }
             else if(mode == HWC_RGA_TRSM_VOP)
             {
-                start = 1;
-                end = list->numHwLayers - 1;   
-                winIndex = 1;
+                #if VIDEO_WIN1_UI_DISABLE               
+                if(context->vop_mbshake)
+                {
+                    start = 0;
+                    end = 0;   
+                    winIndex = 0;
+                }    
+                else
+                #endif
+                {
+                    start = 1;
+                    end = list->numHwLayers - 1;   
+                    winIndex = 1;
+                }    
+               
             }
             else if(mode == HWC_RGA_TRSM_GPU_VOP
                     || mode == HWC_NODRAW_GPU_VOP 
@@ -1450,7 +1486,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             if(mode == HWC_NODRAW_GPU_VOP)
             {
                 fb_info.win_par[0].area_par[0].ion_fd = context->membk_fds[context->NoDrMger.membk_index_pre];                        
-
             }
             else
             {
@@ -1950,7 +1985,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
             /* Reset allocated areas. */
             if (context->compositionArea != NULL)
             {
-                _FreeArea(context, context->compositionArea);
+                ZoneFree(context, context->compositionArea);
 
                 context->compositionArea = NULL;
             }
@@ -1963,7 +1998,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
             /* Generate new areas. */
             /* Put a no-owner area with screen size, this is for worm hole,
              * and is needed for clipping. */
-            context->compositionArea = _AllocateArea(context,
+            context->compositionArea = zone_alloc(context,
                                        NULL,
                                        &FbRect,
                                        0U);
@@ -1991,7 +2026,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                 for (int j = 0; j < region->numRects; j++)
                 {
                     /* Assume the region will never go out of dest surface. */
-                    _SplitArea(context,
+                    DivArea(context,
                                context->compositionArea,
                                (hwcRECT *) &region->rects[j],
                                owner);
@@ -2316,8 +2351,11 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
     }
 }
 
+//struct timeval tpend1, tpend2;
+
 static void handle_vsync_event(hwcContext * context)
 {
+    long usec1 = 0;
 
     if (!context->procs)
         return;
@@ -2358,6 +2396,12 @@ static void handle_vsync_event(hwcContext * context)
     if (err == 0)
     {
         context->procs->vsync(context->procs, 0, mNextFakeVSync);
+       // gettimeofday(&tpend2, NULL);
+       // usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+       // LOGD("vysnc interval use time=%ld ms",  usec1); 
+
+       // tpend1 = tpend2;
+
         //ALOGD(" timestamp=%lld ms,preid=%lld us",mNextFakeVSync/1000000,(uint64_t)(1e6 / context->fb_fps) );
     }
     else
@@ -2649,31 +2693,7 @@ hwc_device_open(
         *device = &context->device.common;
         return 0;
     }
-
-    /* TODO: Find a better way instead of EGL_ANDROID_get_render_buffer. */
-    _eglGetRenderBufferANDROID = (PFNEGLGETRENDERBUFFERANDROIDPROC)
-                                 eglGetProcAddress("eglGetRenderBufferANDROID");
-
-#ifndef TARGET_BOARD_PLATFORM_RK30XXB
-
-    _eglRenderBufferModifiedANDROID = (PFNEGLRENDERBUFFERMODIFYEDANDROIDPROC)
-                                      eglGetProcAddress("eglRenderBufferModifiedANDROID");
-#endif
-
-    if (_eglGetRenderBufferANDROID == NULL)
-    {
-        LOGE("EGL_ANDROID_get_render_buffer extension "
-             "Not Found for hwcomposer");
-
-        return HWC_EGL_ERROR;
-    }
-    if (_eglRenderBufferModifiedANDROID == NULL)
-    {
-        LOGE("EGL_ANDROID_buffer_modifyed extension "
-             "Not Found for hwcomposer");
-
-        return HWC_EGL_ERROR;
-    }
+   
     /* Allocate memory. */
     context = (hwcContext *) malloc(sizeof(hwcContext));
 
@@ -2760,7 +2780,6 @@ hwc_device_open(
 
     context->membk_index = 0;
 
-    /* Get gco2D object pointer. */
     context->engine_fd = open("/dev/rga", O_RDWR, 0);
     if (context->engine_fd < 0)
     {
@@ -2840,7 +2859,7 @@ hwc_device_open(
 
             for (int  i = 0;i < FB_BUFFERS_NUM;i++)
             {
-                err = context->mAllocDev->alloc(context->mAllocDev,gcmALIGN(info.xres,32), \
+                err = context->mAllocDev->alloc(context->mAllocDev,rkmALIGN(info.xres,32), \
                                                 info.yres, context->fbhandle.format, \
                                                 GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_RENDER, \
                                                 (buffer_handle_t*)(&context->phd_bk[i]), &stride_gr);
@@ -2878,7 +2897,8 @@ hwc_device_open(
     context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_rga_gpu_vop_policy;
     context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
-
+    if(context->fbWidth * context->fbHeight >= 1920*1080 )
+        context->vop_mbshake = true;
     gcontextAnchor[HWC_DISPLAY_PRIMARY] = context;
     if (context->fbWidth > context->fbHeight)
     {

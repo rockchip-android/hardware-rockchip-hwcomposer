@@ -1,3 +1,13 @@
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #include "hwc_rga.h"
 
 inline int WIDTH(const hwc_rect &rect)

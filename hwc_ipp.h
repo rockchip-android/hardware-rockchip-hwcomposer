@@ -1,11 +1,12 @@
-/****************************************************************
-* FILE: hwc_ipp.h
-* FUNCTION:
-*  In order to meet the needs of power optimization when playing
-*  the video
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-* AUTHOR:  qiuen     2013/8/20
- ***************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 
 #ifndef __rk_hwc_ipp
 #define __rk_hwc_ipp

@@ -1,18 +1,12 @@
-/****************************************************************************
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-*    Copyright (c) 2005 - 2011 by Vivante Corp.  All rights reserved.
-*
-*    The material in this file is confidential and contains trade secrets
-*    of Vivante Corporation. This is proprietary information owned by
-*    Vivante Corporation. No part of this work may be disclosed,
-*    reproduced, copied, transmitted, or used in any way for any purpose,
-*    without the express written permission of Vivante Corporation.
-*
-*****************************************************************************
-*
-*    Auto-generated file on 12/13/2011. Do not edit!!!
-*
-*****************************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 
 
 
@@ -182,7 +176,7 @@ hwcBlit(
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
     /* >>> Begin surface information. */
     hwcONERROR(
-        hwcLockBuffer(Context,
+        hwcGetBufferInfo(Context,
                       srchnd,
                       &srcLogical,
                       &srcPhysical,
@@ -192,7 +186,7 @@ hwcBlit(
                       &srcInfo));
 
     hwcONERROR(
-        hwcLockBuffer(Context,
+        hwcGetBufferInfo(Context,
                       DstHandle,
                       &dstLogical,
                       &dstPhysical,
@@ -202,7 +196,7 @@ hwcBlit(
                       &dstInfo));
 
     hwcONERROR(
-        hwcGetFormat(srchnd,
+        hwcGetBufFormat(srchnd,
                      &srcFormat
                     ));
 
@@ -214,7 +208,7 @@ hwcBlit(
     }
 
     hwcONERROR(
-        hwcGetFormat(DstHandle,
+        hwcGetBufFormat(DstHandle,
                      &dstFormat
                     ));
 
@@ -720,6 +714,42 @@ hwcBlit(
             if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
             {
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
+                LOGE("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
+                     srcStride, srcHeight, srcLogical, srcFormat);
+                LOGE("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
+                     dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
+                
+                LOGE("%s(%d): Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
+                     __FUNCTION__,
+                     __LINE__,
+                     i,
+                     srcRects[i].left,
+                     srcRects[i].top,
+                     srcRects[i].right,
+                     srcRects[i].bottom,
+                     dstRects[i].left,
+                     dstRects[i].top,
+                     dstRects[i].right,
+                     dstRects[i].bottom
+                    );
+
+                LOGE("RGA src[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct= %d",
+                     i,
+                     srcRects[i].left,
+                     srcRects[i].top,
+                     srcRects[i].right -  srcRects[i].left,
+                     srcRects[i].bottom - srcRects[i].top);
+                LOGE("RGA dst[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct=%d,transform =%d,RotateMode=%d,Rotation=%d",
+                     i,
+                     Xoffset,
+                     Yoffset,
+                     WidthAct,
+                     HeightAct,
+                     Src->transform,
+                     RotateMode,
+                     Rotation);
+				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
+
             }
 
 
@@ -785,7 +815,7 @@ hwcDim(
     /* >>> Begin dest surface information. */
     LOGV("hwcDim start--->");
     hwcONERROR(
-        hwcLockBuffer(Context,
+        hwcGetBufferInfo(Context,
                       DstHandle,
                       &dstLogical,
                       &dstFd,
@@ -794,7 +824,7 @@ hwcDim(
                       &dstStride,
                       &dstInfo));
     hwcONERROR(
-        hwcGetFormat(DstHandle,
+        hwcGetBufFormat(DstHandle,
                      &dstFormat
                     ));
     /* <<< End surface information. */
@@ -986,7 +1016,7 @@ hwcClear(
     /* >>> Begin dest surface information. */
 
     hwcONERROR(
-        hwcLockBuffer(Context,
+        hwcGetBufferInfo(Context,
                       DstHandle,
                       &dstLogical,
                       &dstFd,
@@ -995,7 +1025,7 @@ hwcClear(
                       &dstStride,
                       &dstInfo));
     hwcONERROR(
-        hwcGetFormat(DstHandle,
+        hwcGetBufFormat(DstHandle,
                      &dstFormat
                     ));
     /* <<< End surface information. */
@@ -1185,7 +1215,7 @@ hwcLayerToWin(
 
     /* >>> Begin surface information. */
     hwcONERROR(
-        hwcLockBuffer(Context,
+        hwcGetBufferInfo(Context,
                       srchnd,
                       &srcLogical,
                       &srcPhysical,

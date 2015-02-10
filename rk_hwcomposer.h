@@ -1,24 +1,18 @@
-/****************************************************************************
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-*    Copyright (c) 2005 - 2011 by Vivante Corp.  All rights reserved.
-*
-*    The material in this file is confidential and contains trade secrets
-*    of Vivante Corporation. This is proprietary information owned by
-*    Vivante Corporation. No part of this work may be disclosed,
-*    reproduced, copied, transmitted, or used in any way for any purpose,
-*    without the express written permission of Vivante Corporation.
-*
-*****************************************************************************
-*
-*    Auto-generated file on 12/13/2011. Do not edit!!!
-*
-*****************************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
 
 
 
 
-#ifndef __gc_hwcomposer_h_
-#define __gc_hwcomposer_h_
+#ifndef __rk_hwcomposer_h_
+#define __rk_hwcomposer_h_
 
 /* Set 0 to enable LOGV message. See cutils/log.h */
 #include <cutils/log.h>
@@ -68,8 +62,8 @@
 #define RGA_POLICY_MAX_SIZE (2*1024*1024)
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
-
-#define gcmALIGN(n, align) \
+#define VIDEO_WIN1_UI_DISABLE     1
+#define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
@@ -239,7 +233,6 @@ extern "C"
         /* Reference count. Normally: 1. */
         unsigned int reference;
 
-        /* GC state goes below here */
 
         /* Raster engine */
         int   engine_fd;
@@ -282,7 +275,7 @@ extern "C"
         hwcArea *                        compositionArea;
 
         /* Pre-allocated area pool. */
-        hwcAreaPool                      areaPool;
+    hwcAreaPool                      areaMem;
 #endif
         int     flag;
         int     fb_blanked;
@@ -292,7 +285,8 @@ extern "C"
         int     mFbFd;
         int     mFbBase;
         int     vui_fd;
-        int     vui_hide;        
+        int     vui_hide;    
+        bool     vop_mbshake;
         alloc_device_t  *mAllocDev;
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
@@ -385,13 +379,13 @@ extern "C"
     \******************************************************************************/
 
     hwcSTATUS
-    hwcGetFormat(
+    hwcGetBufFormat(
         IN  struct private_handle_t * Handle,
         OUT RgaSURF_FORMAT * Format
     );
 
     hwcSTATUS
-    hwcLockBuffer(
+    hwcGetBufferInfo(
         IN  hwcContext *  Context,
         IN  struct private_handle_t * Handle,
         OUT void * *  Logical,
@@ -438,13 +432,13 @@ extern "C"
     );
 
     void
-    _FreeArea(
+    ZoneFree(
         IN hwcContext * Context,
         IN hwcArea* Head
     );
 
     void
-    _SplitArea(
+    DivArea(
         IN hwcContext * Context,
         IN hwcArea * Area,
         IN hwcRECT * Rect,
@@ -452,7 +446,7 @@ extern "C"
     );
 
     hwcArea *
-    _AllocateArea(
+    zone_alloc(
         IN hwcContext * Context,
         IN hwcArea * Slibing,
         IN hwcRECT * Rect,
@@ -469,5 +463,5 @@ extern "C"
 }
 #endif
 
-#endif /* __gc_hwcomposer_h_ */
+#endif 
 

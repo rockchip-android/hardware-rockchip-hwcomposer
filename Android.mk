@@ -1,18 +1,13 @@
-##############################################################################
 #
-#    Copyright (c) 2005 - 2011 by Vivante Corp.  All rights reserved.
+
+# rockchip hwcomposer( 2D graphic acceleration unit) .
+
 #
-#    The material in this file is confidential and contains trade secrets
-#    of Vivante Corporation. This is proprietary information owned by
-#    Vivante Corporation. No part of this work may be disclosed,
-#    reproduced, copied, transmitted, or used in any way for any purpose,
-#    without the express written permission of Vivante Corporation.
+
+#Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
 #
-##############################################################################
-#
-#    Auto-generated file on 12/13/2011. Do not edit!!!
-#
-##############################################################################
+
 LOCAL_PATH := $(call my-dir)
 #include $(LOCAL_PATH)/../../Android.mk.def
 
@@ -24,7 +19,7 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	rk_hwcomposer.cpp \
 	rk_hwcomposer_blit.cpp \
-	rk_hwcomposer_buffer.cpp \
+	rk_hwc_com.cpp \
 	rga_api.cpp \
 	rk_hwcomposer_hdmi.cpp \
 	hwc_ipp.cpp \
@@ -44,8 +39,7 @@ LOCAL_C_INCLUDES += hardware/rockchip/libgralloc_ump
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/intel/libgralloc
 LOCAL_LDFLAGS := \
-	-Wl,-z,defs \
-	-Wl,--version-script=$(LOCAL_PATH)/hwcomposer.map
+	-Wl,-z,defs 
 
 LOCAL_SHARED_LIBRARIES := \
 	libhardware \

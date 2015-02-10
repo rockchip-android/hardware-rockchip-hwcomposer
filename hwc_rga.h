@@ -1,11 +1,13 @@
-/****************************************************************
-* FILE: hwc_rga.h
-* FUNCTION:
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
 *
-*  The graphics buffer is to be transformed or scaled by the rga device.
-*  It is a public rga api (scale or transform).
-* AUTHOR:  qiuen     2014/1/6
- ***************************************************************/
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #ifndef __rk_hwc_rga
 #define __rk_hwc_rga
 #include <hardware/hwcomposer.h>

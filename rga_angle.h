@@ -1,3 +1,13 @@
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #ifndef __RGA_ANGLE_H__
 #define __RGA_ANGLE_H__
 

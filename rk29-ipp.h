@@ -1,3 +1,14 @@
+
+/*
+
+* rockchip hwcomposer( 2D graphic acceleration unit) .
+
+*
+
+* Copyright (C) 2015 Rockchip Electronics Co., Ltd.
+
+*/
+
 #ifndef _RK29_IPP_DRIVER_H_
 #define _RK29_IPP_DRIVER_H_
 
