@@ -287,7 +287,9 @@ extern "C"
         int     vui_fd;
         int     vui_hide;    
         bool     vop_mbshake;
+        bool     Is_video;
         alloc_device_t  *mAllocDev;
+        int     *video_ui;
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
 		int membk_type[FB_BUFFERS_NUM];

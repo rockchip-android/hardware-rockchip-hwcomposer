@@ -119,7 +119,7 @@ hwc_device_open(
     const char * name,
     struct hw_device_t ** device
 );
-static int DetectValidData(int *data,int w,int h);
+static int DetectValidData( hwcContext * context,int *data,int w,int h);
 
 int getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *list);
 
@@ -549,14 +549,25 @@ int hwc_get_layer_area_info(hwc_layer_1_t * layer,hwcRECT *srcrect,hwcRECT *dstr
 int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
 {
     int hwc_en; 
-
+    
+    ctx->Is_video = false;
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = NULL;
+        
         if(layer)
+        {
             layer->dospecialflag = 0;
+            handle = (struct private_handle_t *)layer->handle;
+            if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
+            {
+              ctx->Is_video = true; 
+            }
+        }
+                 
     }    
-
+    
     if((list->numHwLayers - 1) <= 0)  // vop not support
     {
         return -1;
@@ -566,7 +577,8 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     {
         return -1;
     }
-    
+    //hwc_sync(list);  // video must sync,since UI will be used to detected
+
     return 0;
 }
 
@@ -583,7 +595,9 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
         float hfactor = 1.0;
-        float vfactor = 1.0;
+        float vfactor = 1.0; 
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        
         if (layer->flags & HWC_SKIP_LAYER
             || layer->transform != 0
             || layer->handle == NULL
@@ -615,7 +629,19 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         if(i == 0)
             layer->compositionType = HWC_TOWIN0;
         else
-            layer->compositionType = HWC_TOWIN1;
+        {
+            #if VIDEO_WIN1_UI_DISABLE
+            if(context->vop_mbshake && context->Is_video)
+            {
+                int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
+                if(ret) // ui need display
+                {
+                    return -1;
+                }  
+            }    
+            #endif
+
+            layer->compositionType = HWC_TOWIN1;        }    
         
     }
     ALOGV("hwc-prepare use HWC_VOP policy");
@@ -744,9 +770,9 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 return -1;
             }
             #if VIDEO_WIN1_UI_DISABLE
-            if(context->vop_mbshake)
+            if(context->vop_mbshake && context->Is_video)
             {
-                int ret = DetectValidData((int *)handle->base,handle->width,handle->height); 
+                int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
                 {
                     return -1;
@@ -829,7 +855,8 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     if ((layer->flags & HWC_SKIP_LAYER) 
         || handle == NULL
         || layer->transform != 0
-        ||(list->numHwLayers - 1)>4)
+        ||(list->numHwLayers - 1)>4
+        ||(list->numHwLayers - 1)<3)
     {
         return -1;  
     }
@@ -1370,7 +1397,7 @@ static int CompareVers(int *da,int w,int h)
     return 0;
 }
 
-static int DetectValidData(int *data,int w,int h)
+static int DetectValidData( hwcContext * context,int *data,int w,int h)
 {
     int i,j;
     int *da;
@@ -1394,6 +1421,11 @@ static int DetectValidData(int *data,int w,int h)
     --------------------------
        
     */
+    if(context->video_ui != data)
+    {
+        context->video_ui = data;
+        return 1;
+    }    
     if(data == NULL)
         return 1;
     for(i = h/4;i<h;i+= h/4)
@@ -1729,7 +1761,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 }
                 else if(!context->vui_hide)
                 {
-                    ret = DetectValidData((int *)uiHnd->base,uiHnd->width,uiHnd->height);
+                    ret = DetectValidData(context,(int *)uiHnd->base,uiHnd->width,uiHnd->height);
                     if(!ret)
                     {                               
                         context->vui_hide = 1;
