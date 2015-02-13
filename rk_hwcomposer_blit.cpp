@@ -165,7 +165,7 @@ hwcBlit(
     unsigned int      WidthAct;
     unsigned int      HeightAct;
     unsigned char       mmu_en;
-    unsigned char   scale_mode = 1;
+    unsigned char   scale_mode = 2;
     unsigned char   dither_en = 0;
 
     struct private_handle_t* handle = srchnd;
@@ -264,7 +264,7 @@ hwcBlit(
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
     LOGV("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
-         dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
+         DstHandle->stride, dstHeight, dstLogical, dstPhysical, dstFormat);
     LOGV("rga blit fd=%d,index=%d",dstFd,Context->membk_index);
     mmu_en = 0;
 

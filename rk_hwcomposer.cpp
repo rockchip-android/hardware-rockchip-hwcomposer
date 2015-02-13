@@ -717,7 +717,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             isYuvModtrfm = true;
         }    
     }    
-    ALOGD("isYuvModtrfm=%d",isYuvModtrfm);
+    ALOGV("isYuvModtrfm=%d",isYuvModtrfm);
     if(!isYuvModtrfm)
         return -1;
         
@@ -740,6 +740,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 || layer->transform != 0
             )   // wop has only one support scale        
             {
+                ALOGV("[%f,%f,%d],nmae=%s",hfactor,vfactor,layer->transform,layer->LayerName);
                 return -1;
             }
             #if VIDEO_WIN1_UI_DISABLE
