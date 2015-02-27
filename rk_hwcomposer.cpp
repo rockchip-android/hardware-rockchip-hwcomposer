@@ -1460,11 +1460,17 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     int bk_index = 0;
     struct rk_fb_win_cfg_data fb_info;
     struct fb_var_screeninfo info;
+    hwc_layer_1_t * fbayer = &list->hwLayers[list->numHwLayers -1];
+    struct private_handle_t*  fbhandle = NULL;
+
     if ((!context->dpyAttr[0].connected) 
-            || (context->dpyAttr[0].fd <= 0))
+            || (context->dpyAttr[0].fd <= 0)
+            || (!fbayer)
+            || !(fbayer->handle))
     {
         return -1;
     }
+    fbhandle = (struct private_handle_t*)fbayer->handle;
     
     ALOGV("hwc_vop_config mode=%s",compositionModeName[mode]);    
     info = context->info;    
@@ -1533,8 +1539,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             fb_info.win_par[0].area_par[0].ysize = (info.grayscale >> 20) & 0xfff;
             fb_info.win_par[0].area_par[0].xact = info.xres;
             fb_info.win_par[0].area_par[0].yact = info.yres;
-            fb_info.win_par[0].area_par[0].xvir = info.xres_virtual;
-            fb_info.win_par[0].area_par[0].yvir = info.yres_virtual;
+            fb_info.win_par[0].area_par[0].xvir = fbhandle->stride;
+            fb_info.win_par[0].area_par[0].yvir = info.yres;
             fb_info.wait_fs = 0;    
             if(mode != HWC_NODRAW_GPU_VOP)
             {
@@ -1719,6 +1725,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
         {
+           
             fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;    
             fb_info.win_par[winIndex].area_par[0].yvir = handle->height*NUM_FB_BUFFERS;
         }
