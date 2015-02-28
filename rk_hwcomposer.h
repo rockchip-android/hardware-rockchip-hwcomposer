@@ -59,7 +59,7 @@
 #define GPU_FORMAT         handle->format
 #define GPU_DST_FORMAT     DstHandle->format
 #endif
-#define RGA_POLICY_MAX_SIZE (2*1024*1024)
+#define RGA_POLICY_MAX_SIZE (5*1024*1024/2)
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 #define VIDEO_WIN1_UI_DISABLE     1
