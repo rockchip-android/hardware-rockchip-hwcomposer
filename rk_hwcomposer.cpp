@@ -2248,7 +2248,7 @@ int hwc_policy_set(hwcContext * context,hwc_display_contents_1_t *list)
 static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
-
+    static int black_cnt = 0;
 #if hwcUseTime
     struct timeval tpend1, tpend2;
     long usec1 = 0;
@@ -2265,13 +2265,14 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     }
 
     /* Check layer list. */
-    if (list == NULL
-            || list->numHwLayers == 0)
+    if (list->skipflag || black_cnt < 5)
     {
-        /* Reset swap rectangles. */
+      
+        hwc_sync_release(list);
+        black_cnt ++;
+        ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
         return 0;
     }
-
     if (list->skipflag)
     {
         hwc_sync_release(list);
