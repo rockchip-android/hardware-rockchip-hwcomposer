@@ -1750,7 +1750,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
-        fb_info.win_par[0].area_par[0].data_format == 0x20
+        /*fb_info.win_par[0].area_par[0].data_format == 0x20*/
+        context->Is_video
         && list->numHwLayers == 3)  // @ video & 2 layers
     {
         bool IsDiff = true;
