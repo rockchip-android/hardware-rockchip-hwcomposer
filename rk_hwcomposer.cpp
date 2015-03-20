@@ -564,6 +564,11 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             {
               ctx->Is_video = true; 
             }
+            if(handle && handle->format == HAL_PIXEL_FORMAT_YV12 )
+            {               
+                return -1;
+            }
+
         }
                  
     }    
