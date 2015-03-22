@@ -827,11 +827,16 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     if(handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12 || layer->transform == 0)  // video use other policy
     {
         return -1;
-    }    
+    }   
+    if(layer->sourceCrop.left % 4  || (layer->sourceCrop.right - layer->sourceCrop.left) % 4)
+    {
+        return -1; // yuv rga do  must 4 align
+    }
     layer->compositionType = HWC_BLITTER;
     
     for ( i = 1; i < (list->numHwLayers - 1); i++)
     {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
         layer->compositionType = HWC_FRAMEBUFFER;
     }
     context->composer_mode = HWC_RGA_TRSM_GPU_VOP;
@@ -1122,13 +1127,13 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         try_hwc_gpu_policy((void*)context,list);
     }
     context->NoDrMger.composer_mode_pre = context->composer_mode;
-    ALOGV("cmp_mode=%s",compositionModeName[context->composer_mode]);
+    ALOGV("cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
     if(!(context->composer_mode == HWC_NODRAW_GPU_VOP
         || context->composer_mode == HWC_RGA_GPU_VOP) )
     {
         for ( i = 0; i < 2 ; i++)
         {
-            context->NoDrMger.addr[i] = 0;
+            context->NoDrMger.addr[i] = 0; 
             context->NoDrMger.alpha[i] = 0;
         }
     }
