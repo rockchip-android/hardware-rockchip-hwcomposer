@@ -1730,7 +1730,13 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+        {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
+            if(handle->usage & GRALLOC_USAGE_PROTECTED)
+            {
+                fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
+            }
+        }    
         fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
