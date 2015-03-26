@@ -41,6 +41,7 @@
 #define FBIOSET_OVERLAY_STATE   0x5018
 #define bakupbufsize            4
 #define FB_BUFFERS_NUM          (4)
+#define RGA_REL_FENCE_NUM       10
 #define EN_VIDEO_UI_MIX         0
 #define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
@@ -59,10 +60,11 @@
 #define GPU_FORMAT         handle->format
 #define GPU_DST_FORMAT     DstHandle->format
 #endif
-#define RGA_POLICY_MAX_SIZE (2*1024*1024)//(5*1024*1024/2)
+#define RGA_POLICY_MAX_SIZE (5*1024*1024/2 ) //(2*1024*1024)//
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 #define VIDEO_WIN1_UI_DISABLE     1
+#define RGA_USE_FENCE     0 
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
@@ -145,15 +147,23 @@ extern "C"
 
 
 #define MaxMixUICnt 2
-    typedef struct _NodrawManager
-    {
-        cmpType composer_mode_pre;
-        int membk_index_pre;
-        int uicnt;
-        int addr[MaxMixUICnt];
-        int alpha[MaxMixUICnt];
-    }
-    NoDrawManager;
+typedef struct _NodrawManager
+{
+    cmpType composer_mode_pre;
+    int membk_index_pre;
+    int uicnt;
+    int addr[MaxMixUICnt];
+    int alpha[MaxMixUICnt];
+}
+NoDrawManager;
+
+typedef struct _FenceMangrRga
+{
+    bool is_last;
+    int  rel_fd;  
+    bool use_fence;
+}
+FenceMangrRga;
 
 #define IN
 #define OUT
@@ -290,9 +300,11 @@ extern "C"
         bool     Is_video;
         alloc_device_t  *mAllocDev;
         int     *video_ui;
+        int rga_fence_relfd[RGA_REL_FENCE_NUM];
         int membk_fds[FB_BUFFERS_NUM];
         int membk_base[FB_BUFFERS_NUM];
 		int membk_type[FB_BUFFERS_NUM];
+        int membk_fence_acqfd[FB_BUFFERS_NUM];	  // RGA do ,output fence	
         int membk_fence_fd[FB_BUFFERS_NUM];		
         buffer_handle_t phd_bk[FB_BUFFERS_NUM];		
         int membk_index;
@@ -339,7 +351,8 @@ extern "C"
         IN struct private_handle_t * DstHandle,
         IN hwc_rect_t * SrcRect,
         IN hwc_rect_t * DstRect,
-        IN hwc_region_t * Region
+        IN hwc_region_t * Region,
+        IN FenceMangrRga *FceMrga
     );
 
 

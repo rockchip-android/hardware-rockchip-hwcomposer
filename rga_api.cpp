@@ -440,6 +440,38 @@ RGA_set_update_patten_buff_mode(
 
 
 int
+RGA_set_src_fence_flag(
+    struct rga_req *msg,
+    int acq_fence,
+    int src_flag
+)
+{
+
+    msg->line_draw_info.start_point.x = (short)acq_fence;
+    msg->line_draw_info.start_point.y = (short)src_flag;
+                              
+    return 1;
+}
+
+int
+RGA_set_dst_fence_flag(
+    struct rga_req *msg,
+    int dst_flag
+)
+{
+
+    msg->line_draw_info.end_point.y  = (short)dst_flag;                          
+    return 1;
+}
+
+int
+RGA_get_dst_fence(
+    struct rga_req *msg)
+{
+
+    return (int)(msg->line_draw_info.end_point.x);                          
+}
+int
 RGA_set_mmu_info(
     struct rga_req *msg,
     unsigned char  mmu_en,

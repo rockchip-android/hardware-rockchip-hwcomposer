@@ -267,11 +267,13 @@ void hwc_sync(hwc_display_contents_1_t  *list)
     {
         return ;
     }
-
     for (unsigned int i = 0; i < list->numHwLayers; i++)
     {
         if (list->hwLayers[i].acquireFenceFd > 0)
         {
+           // if( i == 1)
+             //   ALOGD("hwc_sync,name=%s",list->hwLayers[i].LayerName);
+
             sync_wait(list->hwLayers[i].acquireFenceFd, 500);
             ALOGV("fenceFd=%d,name=%s", list->hwLayers[i].acquireFenceFd, list->hwLayers[i].LayerName);
         }
@@ -671,7 +673,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
         if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
         {
-            ALOGV("rga policy skip");
+            ALOGD("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
             return -1;  
         }
         if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)  // video use other policy
@@ -694,7 +696,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
            || layer->transform != 0
           )   // because rga scale & transform  too slowly,so return to opengl        
         {
-            ALOGV("RGA_policy not support [%f,%f,%d]",hfactor,vfactor,layer->transform );
+            ALOGD("RGA_policy not support [%f,%f,%d]",hfactor,vfactor,layer->transform );
             return -1;
         }
         pixelSize += ((layer->sourceCrop.bottom - layer->sourceCrop.top) * \
@@ -859,7 +861,6 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
-    
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -1150,7 +1151,6 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     }
 
     //if(context->composer_mode == HWC_NODRAW_GPU_VOP)
-    //hwc_sync(list);
 
     return 0;
 }
@@ -1472,7 +1472,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     struct fb_var_screeninfo info;
     hwc_layer_1_t * fbayer = &list->hwLayers[list->numHwLayers -1];
     struct private_handle_t*  fbhandle = NULL;
-
     if ((!context->dpyAttr[0].connected) 
             || (context->dpyAttr[0].fd <= 0)
             || (!fbayer)
@@ -1540,7 +1539,9 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             {
                 fb_info.win_par[0].area_par[0].ion_fd = context->membk_fds[context->membk_index];            
             }
-            fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
+           // fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
+            fb_info.win_par[0].area_par[0].acq_fence_fd = context->membk_fence_acqfd[context->membk_index];
+            ALOGV("set vop acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
             fb_info.win_par[0].area_par[0].x_offset = 0;//info.xoffset;
             fb_info.win_par[0].area_par[0].y_offset = 0;//info.yoffset;
             fb_info.win_par[0].area_par[0].xpos = (info.nonstd >> 8) & 0xfff;
@@ -1655,7 +1656,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
              right_max  = rects[0].right;
              bottom_max = rects[0].bottom;
         }
-        for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+        for (unsigned int r = 0; r < (unsigned int) Region->numRects ; r++)
         {
             int r_left;
             int r_top;
@@ -1729,19 +1730,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].z_order = winIndex;
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
-        if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
-        {
-            fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
-            if(handle->usage & GRALLOC_USAGE_PROTECTED)
-            {
-                fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
-            }
-        }    
         fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
-        {
-           
+        {           
             fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;    
             fb_info.win_par[winIndex].area_par[0].yvir = handle->height*NUM_FB_BUFFERS;
         }
@@ -1757,6 +1749,21 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].xact = srcRects.right- srcRects.left;
         fb_info.win_par[winIndex].area_par[0].yact = srcRects.bottom - srcRects.top;
         fb_info.win_par[winIndex].area_par[0].xvir = handle->stride;
+        if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+        {
+            fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
+            /**/
+            fb_info.win_par[winIndex].area_par[0].x_offset -= fb_info.win_par[winIndex].area_par[0].x_offset%2;
+            fb_info.win_par[winIndex].area_par[0].y_offset -= fb_info.win_par[winIndex].area_par[0].y_offset%2;            
+            fb_info.win_par[winIndex].area_par[0].xact -= fb_info.win_par[winIndex].area_par[0].xact%2;
+            fb_info.win_par[winIndex].area_par[0].yact -= fb_info.win_par[winIndex].area_par[0].yact%2;
+			 //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
+            if(handle->usage & GRALLOC_USAGE_PROTECTED)
+            {
+                 fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
+                 //ALOGD("video @protect phy=%x",handle->phy_addr);
+            }     
+        }
         winIndex ++;
         i += step;
         
@@ -1812,6 +1819,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
     if(!context->fb_blanked)
     {
+
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
     
     
@@ -1882,6 +1890,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                     list->retireFenceFd = fb_info.ret_fence_fd;
                 break;
             case HWC_RGA:
+                
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
                     if (fb_info.rel_fence_fd[k] > 0)
@@ -1889,8 +1898,29 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                         context->membk_fence_fd[bk_index] = fb_info.rel_fence_fd[k];
                     }                 
                 }
+
+                #if RGA_USE_FENCE
+            	for(int k = 0; k<RGA_REL_FENCE_NUM; k++)
+            	{
+                    if(context->rga_fence_relfd[k] != -1)
+                    {
+                        
+                        if(k < (list->numHwLayers -2))
+                        {
+                            list->hwLayers[k].releaseFenceFd = context->rga_fence_relfd[k];
+                            ALOGV("rga_fence_fd[%d] = %d,index=%d", k, context->rga_fence_relfd[k],bk_index);
+                        }    
+                        else
+                            close(context->rga_fence_relfd[k]);
+                     }
+            	}
+                #endif
+                
                 if(fb_info.ret_fence_fd > 0)
                     close(fb_info.ret_fence_fd);
+                // if(fb_info.ret_fence_fd > 0)
+                   // list->retireFenceFd = fb_info.ret_fence_fd;      
+                
                 break;
             case HWC_RGA_TRSM_VOP:           
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
@@ -1902,6 +1932,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 }
                 if(fb_info.ret_fence_fd > 0)
                     close(fb_info.ret_fence_fd);
+               
+                    
                 break;
             case HWC_RGA_TRSM_GPU_VOP:   
             case HWC_NODRAW_GPU_VOP:
@@ -1917,13 +1949,16 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                         {
                             fb_flag = true;
                             list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
+                            ALOGV("set gpu_fb_fd=%d",list->hwLayers[list->numHwLayers - 1].releaseFenceFd);
                         }    
                         else 
                             close(fb_info.rel_fence_fd[k]);
                     }                 
                 }
                 if(fb_info.ret_fence_fd > 0)
-                    list->retireFenceFd = fb_info.ret_fence_fd;        
+                    list->retireFenceFd = fb_info.ret_fence_fd;      
+
+                    
                 break;
                 
             case HWC_VOP_GPU:
@@ -1936,12 +1971,14 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                             list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
                             //list->hwLayers[k].releaseFenceFd = -1;
                             //close(fb_info.rel_fence_fd[k]);
+                            ALOGV("vo_gpu [%d]=%d",k,fb_info.rel_fence_fd[k]);
                         }                        
                         else if(k == 1)
                         {
                             list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
                             //list->hwLayers[list->numHwLayers - 1].releaseFenceFd = -1;
                             //close(fb_info.rel_fence_fd[k]);
+                            ALOGV("vo_gpu [%d]=%d",k,fb_info.rel_fence_fd[k]);
                         }
                         else 
                             close(fb_info.rel_fence_fd[k]);
@@ -1951,7 +1988,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 {
                     list->retireFenceFd = fb_info.ret_fence_fd;
                     //list->retireFenceFd = -1;
-                   // close(fb_info.ret_fence_fd);
+                    //close(fb_info.ret_fence_fd);
                 }
                 break;
             case HWC_CP_FB:
@@ -1963,7 +2000,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     }
     return 0;
 }
-
 
 int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
 {
@@ -1982,16 +2018,17 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
     hwc_layer_1_t *fbLayer = NULL;
     struct private_handle_t * fbhandle = NULL;
     bool bNeedFlush = false;
+    FenceMangrRga RgaFenceMg;
 
 #if hwcUseTime
     gettimeofday(&tpend1, NULL);
 #endif
+    memset(&RgaFenceMg,0,sizeof(FenceMangrRga));
 
     LOGV("%s(%d):>>> Set  %d layers <<<",
          __FUNCTION__,
          __LINE__,
          list->numHwLayers);
-
     /* Prepare. */
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -2002,13 +2039,25 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
             struct timeval tstart, tend;
             gettimeofday(&tstart, NULL);
 #endif
+            #if 1
             if (context->membk_fence_fd[context->membk_index] > 0)
             {
-                sync_wait(context->membk_fence_fd[context->membk_index], 500);
+                sync_wait(context->membk_fence_fd[context->membk_index], 2000);
                 ALOGV("fenceFd=%d,name=%s", context->membk_fence_fd[context->membk_index],list->hwLayers[i].LayerName);
                 close(context->membk_fence_fd[context->membk_index]);
                 context->membk_fence_fd[context->membk_index] = -1;
             }
+            #endif
+
+            #if 0
+            if(context->membk_fence_acqfd[context->membk_index] > 0)  
+            {
+                sync_wait(context->membk_fence_acqfd[context->membk_index], 500);
+                close(context->membk_fence_acqfd[context->membk_index]);
+                context->membk_fence_acqfd[context->membk_index] = -1;
+                //ALOGD("close0 rga acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
+            }                    
+            #endif
 #if FENCE_TIME_USE	
             gettimeofday(&tend, NULL);
             if(((tend.tv_sec - tstart.tv_sec)*1000 + (tend.tv_usec - tstart.tv_usec)/1000) > 16)
@@ -2138,14 +2187,36 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
         }
     }
     /* Go through the layer list one-by-one blitting each onto the FB */
+    {
+       // ALOGD("foece set"); 
+        //memset((void*)(context->membk_base[context->membk_index] + 1280*200*4),0x80,1280*50*4);
+    }
 
-    for (i = 0; i < list->numHwLayers; i++)
+#if RGA_USE_FENCE
+    for(i = 0;i< RGA_REL_FENCE_NUM;i++)
+    {
+        context->rga_fence_relfd[i] = -1;
+    }
+    if(context->composer_mode == HWC_RGA)
+        RgaFenceMg.use_fence = true;
+#endif    
+
+    
+    for (i = 0; i < list->numHwLayers -1; i++)
     {
         switch (list->hwLayers[i].compositionType)
         {
             case HWC_BLITTER:
                 LOGV("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
                 /* Do the blit. */
+                /*
+                if(strstr(list->hwLayers[i].LayerName,"launcher3"))
+                {
+                    //hwc_layer_1_t * layer1 = &list->hwLayers[i];
+                    //struct private_handle_t * handle1 = (struct private_handle_t *)layer1->handle;
+                    //memset((void*)(handle1->base + 1280 * 180 *4),0xff,1280 * 25*4);
+
+                }*/
 #if hwcBlitUseTime
                 gettimeofday(&tpendblit1, NULL);
 #endif
@@ -2155,7 +2226,20 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                             fbhandle,
                             &list->hwLayers[i].sourceCrop,
                             &list->hwLayers[i].displayFrame,
-                            &list->hwLayers[i].visibleRegionScreen));
+                            &list->hwLayers[i].visibleRegionScreen,
+                            &RgaFenceMg));
+               
+                context->rga_fence_relfd[i] =  RgaFenceMg.rel_fd;   
+                
+        #if RGA_USE_FENCE
+                if(context->rga_fence_relfd[i] > 0 && i < 1)  
+                {
+                    sync_wait(context->rga_fence_relfd[i], 500);
+                    close(context->rga_fence_relfd[i]);
+                    context->rga_fence_relfd[i] = -1;
+                    //ALOGD("close0 rga acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
+                }                    
+        #endif
 #if hwcBlitUseTime
                 gettimeofday(&tpendblit2, NULL);
                 usec2 = 1000 * (tpendblit2.tv_sec - tpendblit1.tv_sec) + (tpendblit2.tv_usec - tpendblit1.tv_usec) / 1000;
@@ -2213,19 +2297,26 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                 
     }
 
+    if(RgaFenceMg.use_fence)
+    {
+        context->membk_fence_acqfd[context->membk_index] = context->rga_fence_relfd[i-1];
 
-    if (bNeedFlush)
-    {        
-        if (ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
-        {
-            LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
-        }
     }
-    
+    else
+    {
+        context->membk_fence_acqfd[context->membk_index] = -1;
+        if (bNeedFlush)
+        {        
+            if (ioctl(context->engine_fd, RGA_FLUSH, NULL) != 0)
+            {
+                LOGE("%s(%d):RGA_FLUSH Failed!", __FUNCTION__, __LINE__);
+            }
+        }
+    }    
 #if hwcUseTime
-        gettimeofday(&tpend2, NULL);
-        usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-        LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
+    gettimeofday(&tpend2, NULL);
+    usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+    LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
 #endif
 
     return 0; //? 0 : HWC_EGL_ERROR;
@@ -2290,16 +2381,11 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
         return 0;
     }
-    if (list->skipflag)
-    {
-        hwc_sync_release(list);
-        ALOGW("hwc skipflag!!!");
-        return 0;
-    }
 #if hwcUseTime
     gettimeofday(&tpend1, NULL);
 #endif
-    //hwc_sync(list);      
+   // hwc_sync(list);        
+
     switch (context->composer_mode)
     {
         case HWC_VOP: 
@@ -2928,6 +3014,11 @@ hwc_device_open(
                     context->membk_base[i] = phandle_gr->base;
                     context->membk_type[i] = phandle_gr->type;
                     ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd);
+                    if(i == FB_BUFFERS_NUM -1)
+                    {
+                        memset((void*)(context->membk_base[i]),0,1280*4*50);
+                        memset((void*)(context->membk_base[i] + 1280*4*50),0xff,1280*4*500);
+                    }
                 }
                 else
                 { 

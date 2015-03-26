@@ -113,6 +113,8 @@ _ComputeUVOffset(
 
 
 //static int blitcount = 0;
+extern int hwc_get_int_property(const char* pcProperty, const char* default_value);
+
 hwcSTATUS
 hwcBlit(
     IN hwcContext * Context,
@@ -120,7 +122,8 @@ hwcBlit(
     IN struct private_handle_t * DstHandle,
     IN hwc_rect_t * SrcRect,
     IN hwc_rect_t * DstRect,
-    IN hwc_region_t * Region
+    IN hwc_region_t * Region,
+    IN FenceMangrRga *FceMrga
 )
 {
     hwcSTATUS status = hwcSTATUS_OK;
@@ -167,7 +170,7 @@ hwcBlit(
     unsigned char       mmu_en;
     unsigned char   scale_mode = 2;
     unsigned char   dither_en = 0;
-
+    int retv  = 0;
     struct private_handle_t* handle = srchnd;
     dither_en = android::bytesPerPixel(GPU_FORMAT) == android::bytesPerPixel(GPU_DST_FORMAT) ? 0 : 1;
     LOGV(" hwcBlit start--->");
@@ -259,7 +262,7 @@ hwcBlit(
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
-        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
+        rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);        
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
@@ -290,8 +293,7 @@ hwcBlit(
     /* Get plane alpha. */
     planeAlpha = Src->blending >> 16;
 
-    LOGI(" planeAlpha=%x,Src->blending=%x", planeAlpha, Src->blending);
-
+     //  LOGD(" planeAlpha=%x,Src->blending=%x,name=%s", planeAlpha, Src->blending,Src->LayerName);
 
 #if 1
     /* Setup blending. */
@@ -669,6 +671,10 @@ hwcBlit(
                     hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
                     break;
             }
+
+            srcRects[i].left = hwcMAX(srcRects[i].left,0);
+            srcRects[i].top = hwcMAX(srcRects[i].top,0); 
+
             LOGV("%s(%d): Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
                  __FUNCTION__,
                  __LINE__,
@@ -710,7 +716,20 @@ hwcBlit(
                 Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
 				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
+            if(FceMrga->use_fence)
+            {
+                //RGA_set_src_fence_flag(&Rga_Request,Src->acquireFenceFd,true);
+                RGA_set_src_fence_flag(&Rga_Request,-1,false);
+                ALOGV("set src_fd=%d,name=%s,is_last=%d",Src->acquireFenceFd,Src->LayerName,FceMrga->is_last);
+                // ALOGD("[%d,%d,%d,%d]",n,Region->numRects,i,m);
+                if((n >= (unsigned int) Region->numRects)
+                    && (i== m-1))
+                {
+                    ALOGV("set dstoutfence flag=true");
+                    RGA_set_dst_fence_flag(&Rga_Request,true);
+                }
 
+            }
             if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
             {
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
@@ -751,8 +770,8 @@ hwcBlit(
 				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
 
             }
-
-
+            if(FceMrga->use_fence)
+                FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
         }
     }
     while (n < (unsigned int) Region->numRects);
