@@ -64,7 +64,7 @@
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 #define VIDEO_WIN1_UI_DISABLE     1
-#define RGA_USE_FENCE     0 
+#define RGA_USE_FENCE     1 
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
