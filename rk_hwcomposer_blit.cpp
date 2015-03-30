@@ -171,6 +171,7 @@ hwcBlit(
     unsigned char   scale_mode = 2;
     unsigned char   dither_en = 0;
     int retv  = 0;
+    
     struct private_handle_t* handle = srchnd;
     dither_en = android::bytesPerPixel(GPU_FORMAT) == android::bytesPerPixel(GPU_DST_FORMAT) ? 0 : 1;
     LOGV(" hwcBlit start--->");
@@ -730,8 +731,10 @@ hwcBlit(
                 }
 
             }
-            if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
+            retv = ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request);
+            if ( retv != 0)
             {
+                LOGE("RGA ASYNC err=%d,name=%s",retv, Src->LayerName);
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
                 LOGE("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
                      srcStride, srcHeight, srcLogical, srcFormat);
@@ -768,7 +771,8 @@ hwcBlit(
                      RotateMode,
                      Rotation);
 				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
-
+                if(FceMrga->use_fence)
+                    FceMrga->rel_fd = -1;				
             }
             if(FceMrga->use_fence)
                 FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
