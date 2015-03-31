@@ -732,7 +732,7 @@ hwcBlit(
 
             }
             retv = ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request);
-            if ( retv != 0)
+            if( retv != 0)
             {
                 LOGE("RGA ASYNC err=%d,name=%s",retv, Src->LayerName);
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
@@ -772,7 +772,15 @@ hwcBlit(
                      Rotation);
 				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
                 if(FceMrga->use_fence)
-                    FceMrga->rel_fd = -1;				
+                {
+                    FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
+                    if(FceMrga->rel_fd >= 0)
+                    {
+                        ALOGE("RGA err force close[%d]",FceMrga->rel_fd);
+                        close( FceMrga->rel_fd);
+                    }    
+                    FceMrga->rel_fd = -1;			
+                }    
             }
             if(FceMrga->use_fence)
                 FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
