@@ -38,6 +38,7 @@ LOCAL_C_INCLUDES := \
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc_ump
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/intel/libgralloc
+LOCAL_C_INCLUDES += hardware/rockchip/librkvpu
 LOCAL_LDFLAGS := \
 	-Wl,-z,defs 
 
@@ -49,7 +50,8 @@ LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	libion \
 	libhardware_legacy \
-	libsync
+	libsync \
+	libvpu
 
 
 

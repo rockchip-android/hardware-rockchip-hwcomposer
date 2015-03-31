@@ -22,6 +22,10 @@
 #endif
 #include <ui/PixelFormat.h>
 
+#include <cutils/properties.h>
+
+#include "ppOp.h"
+#include "vpu.h"
 //#include "struct.h"
 
 #undef LOGV
@@ -106,12 +110,138 @@ _ComputeUVOffset(
     return hwcSTATUS_OK;
 }
 
-#include <cutils/properties.h>
+#if VIDEO_USE_PPROT
 
+// pp can do check 0 :ok ,-1 cannot support
+int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *src,hwcRECT *dst)
+{
+    if( mode != HWC_RGA_TRSM_VOP || !isyuv || !rot)
+        return -1;
+
+    if(src->left%8 || dst->left%8) 
+        return -1;
+      
+
+    if(src->left%8 || dst->left%8) 
+        return -1;
+        
+    if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
+        return -1;
+
+    return 0;
+}
 
 //return property value of pcProperty
+int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
+{
+    int ret;
+    static int vpuFd = -1;
+    android::PP_OP_HANDLE hnd;
+    int src = rga_p->line_draw_info.color & 0xffff;
+    int dst = (rga_p->line_draw_info.color & 0xffff0000)>> 16;
+    
+    if(vpuFd < 0)
+    {
+        vpuFd= VPUClientInit(VPU_PP);
+        ALOGV("vpu init fd=%d",vpuFd);
+    }
+    android::PP_OPERATION opt;
+    memset(&opt, 0, sizeof(opt));
+    opt.srcAddr     = src;
+    opt.srcFormat   = PP_IN_FORMAT_YUV420SEMI;
+    opt.srcHStride  = rga_p->src.vir_w;
+    opt.srcVStride  = rga_p->src.vir_h;
+    opt.srcWidth    = rga_p->src.act_w;
+    opt.srcHeight   = rga_p->src.act_h;
+    opt.srcX        = rga_p->src.x_offset;
+    opt.srcY        = rga_p->src.y_offset;
 
+    opt.dstAddr     = dst;
+    opt.dstFormat   = PP_OUT_FORMAT_YUV420INTERLAVE;
+    
+    opt.dstHStride   = rga_p->dst.vir_w;
+    opt.dstVStride   = rga_p->dst.vir_h;
+    
+    opt.dstWidth    = rkmALIGN(rga_p->dst.act_h,8);
+    opt.dstHeight   = rkmALIGN(rga_p->dst.act_w,2);
+    opt.dstX        = rkmALIGN(x,8);
+    opt.dstY        = y;
 
+    opt.deinterlace = 0;
+    
+   // if(wid_alig16 != SRC_WIDTH)
+       // opt.srcCrop8R = 1;
+  //  if(hei_alig16 != SRC_HEIGHT)
+    //opt.srcCrop8D= 1;
+        
+       
+    switch (tra)
+    {
+        case 0:
+            break;
+      
+        case HWC_TRANSFORM_ROT_90:
+            opt.rotation    = PP_ROTATION_RIGHT_90;
+            break;
+
+        case HWC_TRANSFORM_ROT_180:
+            //opt.dstHStride   = rga_p->dst.vir_h ;
+           // opt.dstVStride   = rga_p->dst.vir_w;
+            
+            opt.dstWidth    = rga_p->dst.act_w;
+            opt.dstHeight   = rga_p->dst.act_h ;
+        
+            opt.rotation    = PP_ROTATION_180;
+            break;
+
+        case HWC_TRANSFORM_ROT_270:
+            opt.rotation =  PP_ROTATION_LEFT_90;
+            break;
+        default:
+            break;
+    }
+
+    ALOGV("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d,%d",
+    opt.srcAddr,opt.srcX,opt.srcY,opt.srcWidth,opt.srcHeight,opt.srcHStride,opt.srcVStride,
+    opt.dstAddr,opt.dstX,opt.dstY,opt.dstWidth,opt.dstHeight,opt.dstHStride,opt.dstVStride,tra,HWC_TRANSFORM_ROT_180);
+
+ 
+    opt.vpuFd       = vpuFd;
+    ret |= android::ppOpInit(&hnd, &opt);
+    if (ret) {
+        ALOGE("ppOpInit failed,vpuFd=%d",vpuFd);
+        hnd = NULL;
+        goto vpuerr;
+    }
+    ret = android::ppOpPerform(hnd);
+    if (ret) {
+        ALOGE("ppOpPerform failed");
+        goto vpuerr;
+
+    }
+    ret = android::ppOpSync(hnd);
+    if (ret) {
+        ALOGE("ppOpSync failed");
+        goto vpuerr;
+        
+    }
+    ret = android::ppOpRelease(hnd);
+    if (ret) {    
+        ALOGE("ppOpPerform failed");
+        goto vpuerr;
+        
+    }
+    
+    return 0;
+vpuerr:
+
+    ALOGE("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d",
+    opt.srcAddr,opt.srcX,opt.srcY,opt.srcWidth,opt.srcHeight,opt.srcHStride,opt.srcVStride,
+    opt.dstAddr,opt.dstX,opt.dstY,opt.dstWidth,opt.dstHeight,opt.dstHStride,opt.dstVStride,tra);
+    return -1;
+
+}
+#endif
 //static int blitcount = 0;
 extern int hwc_get_int_property(const char* pcProperty, const char* default_value);
 
@@ -216,7 +346,12 @@ hwcBlit(
                      &dstFormat
                     ));
 
-
+    if(Context->composer_mode  == HWC_RGA_TRSM_VOP)
+    {
+        //ALOGD("force dst yuv");
+        dstFormat = RK_FORMAT_YCbCr_420_SP;
+    }    
+   // ALOGD("fmt = %d",dstFormat);        
     /* <<< End surface information. */
 
     /* Setup transform */
@@ -241,11 +376,6 @@ hwcBlit(
     clip.ymax = dstHeight - 1;
 
 
-    if (GPU_FORMAT ==  HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO)
-    {
-        srcLogical = (void*)(srcPhysical + 0x60000000);
-        dstLogical = (void*)(dstPhysical + 0x60000000);
-    }
 
 #if !ONLY_USE_FB_BUFFERS
         dstFd = (unsigned int)(Context->membk_fds[Context->membk_index]);
@@ -466,6 +596,15 @@ hwcBlit(
 
                 continue;
             }
+            if(yuvFormat)  
+            {
+                dstRects[m].left -= dstRects[m].left%2;
+                dstRects[m].top -= dstRects[m].top%2;            
+                dstRects[m].right -= dstRects[m].right%2;
+                dstRects[m].bottom -= dstRects[m].bottom%2;
+
+            }
+            
             LOGI("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
                  __FUNCTION__,
                  __LINE__,
@@ -731,6 +870,33 @@ hwcBlit(
                 }
 
             }
+            #if VIDEO_USE_PPROT
+            if(!hwcppCheck(&Rga_Request,Context->composer_mode,yuvFormat,Src->transform, \
+                &srcRect,&dstRects[i]))
+            {
+                Rga_Request.src.x_offset = srcRect.left;
+                Rga_Request.src.y_offset = srcRect.top;
+                retv = hwcDobypp(&Rga_Request,dstRects[i].left, dstRects[i].top,Src->transform);
+                //memset((void*)(Context->membk_base[Context->membk_index]),0x80,1280*800*2);
+                if( retv != 0)
+                {
+                    LOGE("%s: Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
+                         Src->LayerName,
+                         i,
+                         srcRects[i].left,
+                         srcRects[i].top,
+                         srcRects[i].right,
+                         srcRects[i].bottom,
+                         dstRects[i].left,
+                         dstRects[i].top,
+                         dstRects[i].right,
+                         dstRects[i].bottom
+                        );
+                
+                }
+                return hwcSTATUS_OK;
+            }
+            #endif
             retv = ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request);
             if( retv != 0)
             {
@@ -1170,7 +1336,7 @@ hwcClear(
             }
 
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
-            if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
+            if (ioctl(Context->engine_fd, RGA_BLIT_SYNC, &Rga_Request) != 0)
             {
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed", __FUNCTION__, __LINE__, i);
             }
