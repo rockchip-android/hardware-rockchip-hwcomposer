@@ -24,7 +24,7 @@
 
 #include <cutils/properties.h>
 
-#include "ppOp.h"
+#include "common/include/ppOp.h"
 #include "vpu.h"
 //#include "struct.h"
 
