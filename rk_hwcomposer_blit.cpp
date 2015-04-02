@@ -1207,6 +1207,11 @@ hwcClear(
     memset(&FillColor , 0x0, sizeof(COLOR_FILL));
 
     LOGV("%s(%d):  color=0x%.8x", __FUNCTION__, __LINE__, Color);
+    if(Context->composer_mode  == HWC_RGA_TRSM_VOP)
+    {
+       return hwcSTATUS_OK;
+       //ALOGD("force dst yuv");
+    }
 
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
