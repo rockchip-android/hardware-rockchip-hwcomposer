@@ -390,6 +390,14 @@ hwcBlit(
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     else*/
+    if(handle->usage & GRALLOC_USAGE_PROTECTED)
+    {
+        RGA_set_src_vir_info(&Rga_Request, handle->phy_addr, handle->phy_addr +(handle->width * handle->height ),  \
+                                 handle->phy_addr +(handle->width * handle->height ), srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, 0, dstFd, 0, 0);
+    }
+    else
     {
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
@@ -1341,7 +1349,7 @@ hwcClear(
             }
 
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
-            if (ioctl(Context->engine_fd, RGA_BLIT_SYNC, &Rga_Request) != 0)
+            if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
             {
                 LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed", __FUNCTION__, __LINE__, i);
             }

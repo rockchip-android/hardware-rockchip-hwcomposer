@@ -830,10 +830,12 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     {
         return -1;
     }   
-    if(layer->sourceCrop.left % 4  || (layer->sourceCrop.right - layer->sourceCrop.left) % 4)
+    
+    if(layer->sourceCrop.left % 4  /*|| (layer->sourceCrop.right - layer->sourceCrop.left) % 4*/)
     {
         return -1; // yuv rga do  must 4 align
     }
+    
     layer->compositionType = HWC_BLITTER;
     
     for ( i = 1; i < (list->numHwLayers - 1); i++)
@@ -866,7 +868,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     if ((layer->flags & HWC_SKIP_LAYER) 
         || handle == NULL
         || layer->transform != 0
-        ||(list->numHwLayers - 1)>4
+       // ||(list->numHwLayers - 1)>4
         ||(list->numHwLayers - 1)<3)
     {
         return -1;  
