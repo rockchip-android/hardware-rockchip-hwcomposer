@@ -115,6 +115,9 @@ _ComputeUVOffset(
 // pp can do check 0 :ok ,-1 cannot support
 int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *src,hwcRECT *dst)
 {
+    float hfactor = 1.0;
+    float vfactor = 1.0; 
+    
     if( mode != HWC_RGA_TRSM_VOP || !isyuv || !rot)
         return -1;
 
@@ -128,6 +131,22 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
     if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
         return -1;
 
+    if(rot == HWC_TRANSFORM_ROT_180)
+    {
+        hfactor = rkmALIGN(rga_p->dst.act_w,8)/ rga_p->src.act_w;
+        vfactor = rkmALIGN(rga_p->dst.act_h,2) / rga_p->src.act_h;
+    }
+    else
+    {
+        hfactor = rkmALIGN(rga_p->dst.act_h,8)/ rga_p->src.act_w;
+        vfactor = rkmALIGN(rga_p->dst.act_w,2) / rga_p->src.act_h;
+        
+    }
+
+    if(hfactor != vfactor)
+    {
+        return -1;
+    }
     return 0;
 }
 
@@ -188,8 +207,8 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
             //opt.dstHStride   = rga_p->dst.vir_h ;
            // opt.dstVStride   = rga_p->dst.vir_w;
             
-            opt.dstWidth    = rga_p->dst.act_w;
-            opt.dstHeight   = rga_p->dst.act_h ;
+            opt.dstWidth    = rkmALIGN(rga_p->dst.act_w,8);
+            opt.dstHeight   = rkmALIGN(rga_p->dst.act_h,2);
         
             opt.rotation    = PP_ROTATION_180;
             break;
