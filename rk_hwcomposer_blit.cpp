@@ -886,7 +886,7 @@ hwcBlit(
             if(FceMrga->use_fence)
             {
                 //RGA_set_src_fence_flag(&Rga_Request,Src->acquireFenceFd,true);
-                RGA_set_src_fence_flag(&Rga_Request,-1,false);
+                RGA_set_src_fence_flag(&Rga_Request,0,false);
                 ALOGV("set src_fd=%d,name=%s,is_last=%d",Src->acquireFenceFd,Src->LayerName,FceMrga->is_last);
                 // ALOGD("[%d,%d,%d,%d]",n,Region->numRects,i,m);
                 if((n >= (unsigned int) Region->numRects)
@@ -976,7 +976,10 @@ hwcBlit(
                 }    
             }
             if(FceMrga->use_fence)
+            {
                 FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
+                Context->engine_err_cnt = Rga_Request.line_draw_info.start_point.x; // RGA  err count,
+            }    
         }
     }
     while (n < (unsigned int) Region->numRects);

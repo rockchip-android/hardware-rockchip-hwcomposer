@@ -42,6 +42,7 @@
 #define bakupbufsize            4
 #define FB_BUFFERS_NUM          (4)
 #define RGA_REL_FENCE_NUM       10
+#define RGA_ALLOW_MAX_ERR       10
 #define EN_VIDEO_UI_MIX         0
 #define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
@@ -64,7 +65,7 @@
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
 #define VIDEO_WIN1_UI_DISABLE     1
-#define RGA_USE_FENCE     1 
+#define RGA_USE_FENCE     1
 #define VIDEO_USE_PPROT   0
 #define rkmALIGN(n, align) \
 ( \
@@ -246,7 +247,8 @@ FenceMangrRga;
 
 
         /* Raster engine */
-        int   engine_fd;
+        int     engine_fd;
+        int     engine_err_cnt;
         /* Feature: 2D PE 2.0. */
         /* Base address. */
         unsigned int baseAddress;

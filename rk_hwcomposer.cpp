@@ -593,6 +593,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
     hwcContext * context = (hwcContext *)ctx;
+    
     if((list->numHwLayers - 1) > VOP_WIN_NUM)  // vop not support
     {
         return -1;
@@ -667,6 +668,12 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
     
    // RGA_POLICY_MAX_SIZE
+    if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA err_cnt =%d,return to other policy",context->engine_err_cnt);
+        return -1;
+    }    
     for (  i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -731,7 +738,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
 
 
-    if((list->numHwLayers - 1) > VOP_WIN_NUM)  // vop not support
+    if((list->numHwLayers - 1) > VOP_WIN_NUM || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)  // vop not support
     {
         return -1;
     }
@@ -815,6 +822,9 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+
+    if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
+        return -1;
 
     #if VIDEO_WIN1_UI_DISABLE
     if(context->vop_mbshake)
