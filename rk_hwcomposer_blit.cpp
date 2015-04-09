@@ -131,22 +131,17 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
     if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
         return -1;
 
-    if(rot == HWC_TRANSFORM_ROT_180)
-    {
-        hfactor = rkmALIGN(rga_p->dst.act_w,8)/ rga_p->src.act_w;
-        vfactor = rkmALIGN(rga_p->dst.act_h,2) / rga_p->src.act_h;
-    }
-    else
-    {
-        hfactor = rkmALIGN(rga_p->dst.act_h,8)/ rga_p->src.act_w;
-        vfactor = rkmALIGN(rga_p->dst.act_w,2) / rga_p->src.act_h;
-        
-    }
-
-    if(hfactor != vfactor)
+    hfactor = (float)(rkmALIGN(rga_p->dst.act_w,8))/(float) (rga_p->src.act_w);
+    vfactor = (float)(rkmALIGN(rga_p->dst.act_h,2))/(float)(rga_p->src.act_h);
+    if(!(hfactor >= 1.0 && vfactor >= 1.0))
     {
         return -1;
     }
+    if(!(hfactor <= 1.0 && vfactor <= 1.0))
+    {
+        return -1;
+    }
+
     return 0;
 }
 
