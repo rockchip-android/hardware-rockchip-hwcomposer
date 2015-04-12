@@ -1384,7 +1384,7 @@ int getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *l
 static int CompareLines(int *da,int w)
 {
     int i,j;
-    for(i = 0;i<4;i++) // compare 4 lins
+    for(i = 0;i<1;i++) // compare 1 lins
     {
         for(j= 0;j<w;j++)  
         {
@@ -1402,7 +1402,7 @@ static int CompareVers(int *da,int w,int h)
 {
     int i,j;
     int *data ;
-    for(i = 0;i<4;i++) // compare 4 lins
+    for(i = 0;i<1;i++) // compare 1 lins
     {
         data = da + i;
         for(j= 0;j<h;j++)  
