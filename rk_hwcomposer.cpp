@@ -570,6 +570,18 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             {               
                 return -1;
             }
+            if(strstr(layer->LayerName,"android.tests.devicesetup"))
+            {
+                return -1;
+            }
+            if(strstr(layer->LayerName,"android.app.cts.uiautomation"))
+            {
+                return -1;
+            }
+            if(strstr(layer->LayerName,"com.android.cts.view/android.view.cts"))
+            {
+                return -1;
+            }
 
         }
                  
@@ -2490,7 +2502,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 #if hwcUseTime
     gettimeofday(&tpend2, NULL);
     usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-    LOGV("hwcBlit compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
+    LOGV("set compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
 #endif
     hwc_sync_release(list);
     return 0; //? 0 : HWC_EGL_ERROR;

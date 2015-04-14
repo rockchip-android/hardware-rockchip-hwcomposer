@@ -71,7 +71,7 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "2.09"
+#define GHWC_VERSION  "2.11"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
