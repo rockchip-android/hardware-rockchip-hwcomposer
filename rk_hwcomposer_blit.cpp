@@ -123,11 +123,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
 
     if(src->left%8 || dst->left%8) 
         return -1;
-      
-
-    if(src->left%8 || dst->left%8) 
-        return -1;
-        
+              
     if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
         return -1;
 
