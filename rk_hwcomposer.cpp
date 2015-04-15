@@ -578,7 +578,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             {
                 return -1;
             }
-            if(strstr(layer->LayerName,"com.android.cts.view/android.view.cts"))
+            if(strstr(layer->LayerName,"com.android.cts.view"))
             {
                 return -1;
             }
