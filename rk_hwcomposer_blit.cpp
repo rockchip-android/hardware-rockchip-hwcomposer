@@ -119,18 +119,25 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
     float vfactor = 1.0; 
     
     if( mode != HWC_RGA_TRSM_VOP || !isyuv || !rot)
+    {
+        ALOGV("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
         return -1;
-
+    }
     if(src->left%8 || dst->left%8) 
+    {
+        ALOGV("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
-              
+    }         
     if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
+    {
+        ALOGV("exit line=%d,[%d,%d]",__LINE__,src->right- src->left, dst->right- dst->left);
         return -1;
-
+    }
     hfactor = (float)(rkmALIGN(rga_p->dst.act_w,8))/(float) (rga_p->src.act_w);
     vfactor = (float)(rkmALIGN(rga_p->dst.act_h,2))/(float)(rga_p->src.act_h);
     if(!((hfactor >= 1.0 && vfactor >= 1.0) || (hfactor <= 1.0 && vfactor <= 1.0)))
     {
+        ALOGV("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
         return -1;
     }
 
@@ -642,30 +649,7 @@ hwcBlit(
             hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
         }
 
-        if (yuvFormat)
-        {
-            /* Video filter blit
-             * Only FilterBlit support yuv format covertion. */
-            unsigned int uLogical;
-            unsigned int vLogical;
-            unsigned int uStride;
-            unsigned int vStride;
-
-            hwcONERROR(
-                _ComputeUVOffset(srcFormat,
-                                 (unsigned int)srcLogical,
-                                 srcHeight,
-                                 srcStride,
-                                 &uLogical,
-                                 &uStride,
-                                 &vLogical,
-                                 &vStride));
-
-            // Rga_Request.src.uv_addr  = uLogical;
-            // Rga_Request.src.v_addr   = vLogical;
-            //scale_mode = 2;
-            LOGI("yuvformat y_addr=%x,uv_addr=%x,v_addr=%x", srcLogical, uLogical, vLogical);
-        }
+        
         for (unsigned int i = 0; i < m; i++)
         {
             switch (Src->transform)
@@ -692,21 +676,6 @@ hwcBlit(
                     srcRects[i].bottom = srcRect.bottom
                                          - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
 
-                    if (yuvFormat && vfactor != 1)
-                    {
-                        srcRects[i].left  =  srcRects[i].left  +   srcRects[i].left % 2;
-                        srcRects[i].top  =  srcRects[i].top + srcRects[i].top % 2;
-                        srcRects[i].right  =  srcRects[i].right  - srcRects[i].right % 2;
-                        srcRects[i].bottom  =  srcRects[i].bottom  - srcRects[i].bottom % 2;
-                    }
-
-                    if (yuvFormat && vfactor == 1)
-                    {
-                        srcRects[i].left  =  srcRects[i].left & (~1);
-                        srcRects[i].top  =  srcRects[i].top & (~1);
-                        srcRects[i].right  =  srcRects[i].right & (~1);
-                        srcRects[i].bottom  =  srcRects[i].bottom & (~1);
-                    }
                     break;
                 case HWC_TRANSFORM_FLIP_H:
                     RotateMode      = 2;
@@ -828,6 +797,13 @@ hwcBlit(
 
             srcRects[i].left = hwcMAX(srcRects[i].left,0);
             srcRects[i].top = hwcMAX(srcRects[i].top,0); 
+            if (yuvFormat)
+            {
+                srcRects[i].left -=   srcRects[i].left % 2;
+                srcRects[i].top  -=  srcRects[i].top % 2;
+                srcRects[i].right  -=  srcRects[i].right % 2;
+                srcRects[i].bottom -=  srcRects[i].bottom % 2;
+            }
 
             LOGV("%s(%d): Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
                  __FUNCTION__,
