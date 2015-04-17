@@ -140,7 +140,11 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
         ALOGV("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
         return -1;
     }
-
+    if(hfactor >= 3 || vfactor >= 3 )
+    {
+        ALOGV("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
+        return -1;
+    }
     return 0;
 }
 
