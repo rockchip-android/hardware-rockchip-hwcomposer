@@ -398,14 +398,20 @@ _DumpSurface(
             {
                 struct private_handle_t * handle_pre = (struct private_handle_t *) l->handle;
                 int32_t SrcStride ;
+                int div = 1;
                 FILE * pfile = NULL;
                 char layername[100] ;
 
 
                 if (handle_pre == NULL)
                     continue;
-
-                SrcStride = android::bytesPerPixel(handle_pre->format);
+                if(handle_pre->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
+                {
+                    SrcStride = 3;
+                    div = 2;
+                }
+                else
+                    SrcStride = android::bytesPerPixel(handle_pre->format);
                 memset(layername, 0, sizeof(layername));
                 system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
                 //mkdir( "/data/dump/",777);
@@ -420,9 +426,9 @@ _DumpSurface(
                 if (pfile)
                 {
 #ifndef TARGET_BOARD_PLATFORM_RK30XXB
-                    fwrite((const void *)handle_pre->base, (size_t)(SrcStride * handle_pre->stride*handle_pre->height), 1, pfile);
+                    fwrite((const void *)handle_pre->base, (size_t)(SrcStride * handle_pre->stride*handle_pre->height/div), 1, pfile);
 #else
-                    fwrite((const void *)handle_pre->iBase, (size_t)(SrcStride * handle_pre->width*handle_pre->height), 1, pfile);
+                    fwrite((const void *)handle_pre->iBase, (size_t)(SrcStride * handle_pre->width*handle_pre->height/div), 1, pfile);
 
 #endif
                     fclose(pfile);
