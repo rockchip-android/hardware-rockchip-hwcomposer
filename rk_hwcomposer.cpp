@@ -657,7 +657,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         else
         {
             #if VIDEO_WIN1_UI_DISABLE
-            if(context->vop_mbshake && context->Is_video)
+            if(/*context->vop_mbshake && */context->Is_video)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
@@ -908,7 +908,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
         if(i == 0)
         {
-            if(context->vop_mbshake)
+            if(context->vop_mbshake || context->Is_video)
             {
                 float vfactor = 1.0;
                 vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
