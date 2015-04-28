@@ -369,18 +369,6 @@ FenceMangrRga;
     );
 
     hwcSTATUS
-    hwcLayerToWin(
-        IN hwcContext * Context,
-        IN hwc_layer_1_t * Src,
-        IN struct private_handle_t * DstHandle,
-        IN hwc_rect_t * SrcRect,
-        IN hwc_rect_t * DstRect,
-        IN hwc_region_t * Region,
-        IN int Index,
-        IN int Win,
-        OUT struct rk_fb_win_cfg_data* pFbInfo
-    );
-    hwcSTATUS
     hwcClear(
         IN hwcContext * Context,
         IN unsigned int Color,
