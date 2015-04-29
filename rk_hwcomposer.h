@@ -71,7 +71,7 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "2.15"
+#define GHWC_VERSION  "2.16"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
@@ -238,6 +238,11 @@ FenceMangrRga;
         unsigned int  offset;
         unsigned int  last_offset;
     } hwc_ion_t;
+    typedef struct
+    {
+        uint32_t xres;
+        uint32_t yres;
+    } hdmi_info_t;
     typedef struct _hwcContext
     {
         hwc_composer_device_1_t device;
@@ -283,6 +288,8 @@ FenceMangrRga;
         unsigned int fbSize;
         unsigned int lcdSize;
         char *pbakupbuf[bakupbufsize];
+        /*hdmi info*/
+        hdmi_info_t mHdmi;
 #if ENABLE_HWC_WORMHOLE
         /* Splited composition area queue. */
         hwcArea *                        compositionArea;

@@ -611,7 +611,12 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
     hwcContext * context = (hwcContext *)ctx;
-    
+
+    if(getHdmiMode() == 1 && list->numHwLayers - 1 > 1 && !context->Is_video)
+    {
+        return -1;
+    }
+
     if((list->numHwLayers - 1) > VOP_WIN_NUM)  // vop not support
     {
         return -1;
@@ -755,6 +760,8 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     
    // RGA_POLICY_MAX_SIZE
 
+    if(getHdmiMode() == 1)
+        return -1;
 
     if((list->numHwLayers - 1) > VOP_WIN_NUM || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)  // vop not support
     {
@@ -838,6 +845,9 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+    if(getHdmiMode() == 1)
+        return -1;
+
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
 
@@ -891,6 +901,9 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+    if(getHdmiMode() == 1)
+        return -1;
+
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -940,6 +953,9 @@ int try_hwc_nodraw_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 #if 0
     unsigned int i;
     hwcContext * context = (hwcContext *)ctx;
+
+    if(getHdmiMode() == 1)
+        return -1;
 
     if(!(context->NoDrMger.composer_mode_pre == HWC_RGA_GPU_VOP
             ||context->NoDrMger.composer_mode_pre == HWC_NODRAW_GPU_VOP)
@@ -1019,6 +1035,8 @@ int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+    if(getHdmiMode() == 1)
+        return -1;
 
     if((list->numHwLayers - 1) < 5)  // too less
     {
@@ -1538,6 +1556,127 @@ int Get_layer_disp_area( hwc_layer_1_t * layer, hwcRECT* dstRects)
     dstRects->bottom = hwcMIN(DstRect->bottom, rect_merge.bottom);
     return 0;
 }
+
+int hdmi_get_config()
+{
+    unsigned int w_res;
+    unsigned int h_res;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    int fd = open("/sys/class/display/HDMI/mode", O_RDONLY);
+
+    if (fd > 0)
+    {
+        char statebuf[100];
+        memset(statebuf, 0, sizeof(statebuf));
+        int err = read(fd, statebuf, sizeof(statebuf));
+        if (err < 0)
+        {
+            ALOGE("error reading hdmi mode: %s", strerror(errno));
+            return -1;
+        }
+        //ALOGD("statebuf=%s",statebuf);
+        close(fd);
+        char xres[10];
+        char yres[10];
+        int temp = 0;
+        memset(xres, 0, sizeof(xres));
+        memset(yres, 0, sizeof(yres));
+        for (unsigned int i=0; i<strlen(statebuf); i++)
+        {
+            if (statebuf[i] >= '0' && statebuf[i] <= '9')
+            {
+                xres[i] = statebuf[i];
+            }
+            else
+            {
+                temp = i;
+                break;
+            }
+        }
+        int m = 0;
+        for (unsigned int j=temp+1; j<strlen(statebuf);j++)
+        {
+            if (statebuf[j] >= '0' && statebuf[j] <= '9')
+            {
+                yres[m] = statebuf[j];
+                m++;
+            }
+            else
+            {
+                break;
+            }
+        }
+        w_res = atoi(xres);
+        h_res = atoi(yres);
+        close(fd);
+        ALOGI("hdmi width=%d,height=%d",w_res,h_res);
+        context->mHdmi.xres = w_res;
+        context->mHdmi.yres = h_res;
+        return 0;
+    }
+    else
+    {
+        close(fd);
+        ALOGE("Get HDMI mode fail");
+        return -1;
+    }
+    return 0;
+}
+
+int hdmi_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
+{
+    unsigned int w_source = 0;
+    unsigned int h_source = 0;
+    unsigned int w_dstpos = 0;
+    unsigned int h_dstpos = 0;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    switch(flag){
+    case 0:
+        w_dstpos = context->mHdmi.xres;
+        h_dstpos = context->mHdmi.yres;
+        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        break;
+
+    case 1:
+        break;
+
+    default:
+        break;
+    }
+
+    float w_scale = (float)w_dstpos / w_source;
+    float h_scale = (float)h_dstpos / h_source;
+
+    if(h_source != h_dstpos)
+    {
+        for(int i = 0;i<4;i++)
+        {
+            for(int j=0;j<4;j++)
+            {
+                if(fb_info->win_par[i].area_par[j].ion_fd || fb_info->win_par[i].area_par[j].phy_addr)
+                {
+                    fb_info->win_par[i].area_par[j].xpos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xpos * w_scale);
+                    fb_info->win_par[i].area_par[j].ypos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ypos * h_scale);
+                    fb_info->win_par[i].area_par[j].xsize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
+                    fb_info->win_par[i].area_par[j].ysize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
+
+                    ALOGV("Adjust dst to => [%d,%d,%d,%d]",
+                        fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
+                        fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
@@ -1919,15 +2058,15 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     if(!context->fb_blanked)
     {
 
+        if(getHdmiMode() == 1 && context == gcontextAnchor[HWC_DISPLAY_PRIMARY])
+            hdmi_reset_dstpos(&fb_info,0);
+
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-    
-    
+
         ///gettimeofday(&tpend2, NULL);
         //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
         //LOGD("config use time=%ld ms",  usec1); 
 
-        
-        
         //debug info
         for(i = 0;i<4;i++)
         {
@@ -2585,6 +2724,22 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 }
 
 //struct timeval tpend1, tpend2;
+void handle_hotplug_event(int hdmi_mode ,int flag )
+{
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    switch(flag){
+    case 0:
+        if(hdmi_mode)
+        {
+            hdmi_get_config();
+        }
+        break;
+
+    default:
+        break;
+    }
+}
 
 static void handle_vsync_event(hwcContext * context)
 {
@@ -3042,7 +3197,6 @@ hwc_device_open(
     // context->fbStride     = 0;
 
 
-
     if (info.pixclock > 0)
     {
         refreshRate = 1000000000000000LLU /
@@ -3282,6 +3436,9 @@ void init_hdmi_mode()
         }
         close(fd);
         g_hdmi_mode = atoi(statebuf);
+        if(g_hdmi_mode)
+            hdmi_get_config();
+        //ALOGD("g_hdmi_mode is %d",g_hdmi_mode);
 
     }
     else

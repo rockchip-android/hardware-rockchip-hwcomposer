@@ -30,7 +30,9 @@ int         g_hdmi_mode;
 //0,1,2
 void rk_check_hdmi_uevents(const char *buf)
 {
-    if (!strcmp(buf, "change@/devices/virtual/switch/hdmi"))
+    //ALOGI("fun[%s],line[%d],buf is [%s]",__FUNCTION__,__LINE__,buf);
+    if (!strcmp(buf, "change@/devices/virtual/switch/hdmi") ||
+            !strcmp(buf, "change@/devices/virtual/display/HDMI"))
     {
         int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
 
@@ -56,6 +58,7 @@ void rk_check_hdmi_uevents(const char *buf)
             property_set("sys.hdmi.mode", "1");
             }*/
 
+            handle_hotplug_event(g_hdmi_mode,0);
         }
         else
         {
