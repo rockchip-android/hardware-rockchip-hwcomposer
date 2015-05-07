@@ -125,7 +125,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
         ALOGV("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
         return -1;
     }
-    if(src->left%8 || dst->left%8) 
+    if(src->left%8 /*|| dst->left%8*/) 
     {
         ALOGV("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
