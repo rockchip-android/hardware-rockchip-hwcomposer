@@ -71,7 +71,7 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "2.16"
+#define GHWC_VERSION  "2.19"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
@@ -308,6 +308,7 @@ FenceMangrRga;
         int     vui_hide;    
         bool     vop_mbshake;
         bool     Is_video;
+        bool     Is_bypp;
         alloc_device_t  *mAllocDev;
         int     *video_ui;
         int rga_fence_relfd[RGA_REL_FENCE_NUM];

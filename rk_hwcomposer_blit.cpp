@@ -117,13 +117,15 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
 {
     float hfactor = 1.0;
     float vfactor = 1.0; 
-    
-    if( mode != HWC_RGA_TRSM_VOP || !isyuv || !rot)
+
+    if( !(mode == HWC_RGA_TRSM_GPU_VOP || mode == HWC_RGA_TRSM_VOP)
+        ||  !isyuv 
+        || !rot)
     {
         ALOGV("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
         return -1;
     }
-    if(src->left%8 || dst->left%8) 
+    if(src->left%8 /*|| dst->left%8*/) 
     {
         ALOGV("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
@@ -363,7 +365,8 @@ hwcBlit(
                      &dstFormat
                     ));
 
-    if(Context->composer_mode  == HWC_RGA_TRSM_VOP)
+    if(Context->composer_mode  == HWC_RGA_TRSM_VOP
+        || Context->composer_mode  == HWC_RGA_TRSM_GPU_VOP)
     {
         //ALOGD("force dst yuv");
         dstFormat = RK_FORMAT_YCbCr_420_SP;
@@ -868,6 +871,7 @@ hwcBlit(
             if(!hwcppCheck(&Rga_Request,Context->composer_mode,yuvFormat,Src->transform, \
                 &srcRect,&dstRects[i]))
             {
+                Context->Is_bypp = true;
                 Rga_Request.src.x_offset = srcRect.left;
                 Rga_Request.src.y_offset = srcRect.top;
                 retv = hwcDobypp(&Rga_Request,dstRects[i].left, dstRects[i].top,Src->transform);
@@ -1204,7 +1208,8 @@ hwcClear(
     memset(&FillColor , 0x0, sizeof(COLOR_FILL));
 
     LOGV("%s(%d):  color=0x%.8x", __FUNCTION__, __LINE__, Color);
-    if(Context->composer_mode  == HWC_RGA_TRSM_VOP)
+    if(Context->composer_mode  == HWC_RGA_TRSM_VOP
+        || Context->composer_mode  == HWC_RGA_TRSM_GPU_VOP)
     {
        return hwcSTATUS_OK;
        //ALOGD("force dst yuv");

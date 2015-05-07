@@ -1748,7 +1748,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 end = 0; 
                 winIndex = 0;
             }
-            else if(mode == HWC_RGA_TRSM_VOP)
+            else if(mode == HWC_RGA_TRSM_VOP
+                    || mode == HWC_RGA_TRSM_GPU_VOP)
             {
                 #if VIDEO_WIN1_UI_DISABLE               
                 if(context->vop_mbshake)
@@ -1760,15 +1761,27 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 else
                 #endif
                 {
-                    start = 1;
-                    end = list->numHwLayers - 1;   
-                    winIndex = 1;
+                    if( HWC_RGA_TRSM_GPU_VOP == mode)
+                    {
+                        start = list->numHwLayers - 1;
+                        end = list->numHwLayers;   
+                        winIndex = 1;
+                    }
+                    else
+                    {
+                        start = 1;
+                        end = list->numHwLayers - 1;   
+                        winIndex = 1;
+                    }    
                 }    
                 hwc_layer_1_t * layer = &list->hwLayers[0];
                 hwcRECT disp_rect;                
                 Get_layer_disp_area(layer,&disp_rect);               
                 fb_info.win_par[0].area_par[0].data_format = 0x20;//dump_fmt;
-                fb_info.win_par[0].area_par[0].x_offset = disp_rect.left - disp_rect.left%2;//info.xoffset;
+                if(context->Is_bypp)
+                    fb_info.win_par[0].area_par[0].x_offset = rkmALIGN(disp_rect.left,8);//info.xoffset
+                else
+                    fb_info.win_par[0].area_par[0].x_offset = disp_rect.left - disp_rect.left%2;//info.xoffset
                 fb_info.win_par[0].area_par[0].y_offset = disp_rect.top - disp_rect.top %2;//info.yoffset;
                 fb_info.win_par[0].area_par[0].xpos = disp_rect.left;
                 fb_info.win_par[0].area_par[0].ypos = disp_rect.top;
@@ -2263,6 +2276,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
 #endif
     memset(&RgaFenceMg,0,sizeof(FenceMangrRga));
 
+    context->Is_bypp = false;
     LOGV("%s(%d):>>> Set  %d layers <<<",
          __FUNCTION__,
          __LINE__,
