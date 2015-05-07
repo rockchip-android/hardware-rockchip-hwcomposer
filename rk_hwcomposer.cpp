@@ -64,7 +64,8 @@ static int skip_count = 0;
 static int last_video_addr[2];
 static char const* compositionModeName[] = {
                             "HWC_VOP",
-                            "HWC_RGA",           
+                            "HWC_RGA",     
+                            "HWC_VOP_RGA",   
                             "HWC_RGA_TRSM_VOP",
                             "HWC_RGA_TRSM_GPU_VOP",
                             "HWC_VOP_GPU",
@@ -890,8 +891,106 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 #endif
 }
 
+    
+// > 2 layers, 0->win0 ,1\2\3->RGA->FB->win1
+int try_hwc_vop_rga_policy(void * ctx,hwc_display_contents_1_t *list)
+{
 
-// > 2 layers, 0->win0 ,1\2\3->FB->win1
+#if 0
+    float hfactor = 1;
+    float vfactor = 1;
+    bool isYuvMod = false;
+    unsigned int i ;
+   // RGA_POLICY_MAX_SIZE
+    hwcContext * context = (hwcContext *)ctx;
+    int  pixelSize  = 0;
+
+   // RGA_POLICY_MAX_SIZE
+    if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA err_cnt =%d,return to other policy",context->engine_err_cnt);
+        return -1;
+    }    
+
+    if(getHdmiMode() == 1)
+        return -1;
+
+    for (  i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
+        {
+            ALOGV("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
+            return -1;  
+        }
+        if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+           || layer->transform != 0
+          )  // video use other policy
+        {
+            return -1;
+        }    
+    }
+
+    for (i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        if(i == 0)
+        {
+            if(context->vop_mbshake )
+            {
+                float vfactor = 1.0;
+                vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+                  / (layer->displayFrame.bottom - layer->displayFrame.top);
+                if(vfactor > 1.0f  )   //   vop sacle donwe need more BW lead to vop shake      
+                {
+                    return -1;
+                }
+            }    
+            if(LayerZoneCheck(layer,context) != 0)
+                return -1;
+            else
+                layer->compositionType = HWC_TOWIN0;
+        }    
+        else
+        {
+            hfactor = (float)(layer->sourceCrop.right - layer->sourceCrop.left)
+                      / (layer->displayFrame.right - layer->displayFrame.left);
+
+            vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+                      / (layer->displayFrame.bottom - layer->displayFrame.top);
+            if(hfactor != 1.0f 
+               || vfactor != 1.0f
+               || layer->transform != 0
+              )   // because rga scale & transform  too slowly,so return to opengl        
+            {
+                ALOGV("RGA_policy not support [%f,%f,%d]",hfactor,vfactor,layer->transform );
+                return -1;
+            }
+            pixelSize += ((layer->sourceCrop.bottom - layer->sourceCrop.top) * \
+                            (layer->sourceCrop.right - layer->sourceCrop.left));
+            if(pixelSize > RGA_POLICY_MAX_SIZE )  // pixel too large,RGA done use more time
+            {
+                ALOGV("pielsize=%d,max_size=%d",pixelSize ,RGA_POLICY_MAX_SIZE);
+                return -1;
+            }    
+
+            layer->compositionType = HWC_BLITTER;
+        }  
+    }
+    context->composer_mode = HWC_VOP_RGA;
+
+    ALOGV("hwc-prepare use HWC_VOP_RGA policy");
+
+    return 0;
+#else
+    return -1;
+#endif
+}
+
+// > 2 layers, 0->win0 ,1\2\3->GPU->FB->win1
 int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 {
     float hfactor = 1;
@@ -945,6 +1044,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 
     return 0;
 }
+
 
 // > 5 layers, 0\1 ->rga->buffer->win0,2\3\4\..\->gpu->FB->win1
 // if 0\1 address and displayzone dont change, buffer->win0,2\3\4\..\->gpu->FB->win1
@@ -1684,6 +1784,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     int i = 0,step = 1;
     int j;
     int winIndex = 0;
+    int rgaIndex = 0;
     bool fb_flag = false;
     cmpType mode = context->composer_mode;
     int dump = 0;
@@ -1717,30 +1818,38 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         case HWC_RGA_TRSM_GPU_VOP:   
         case HWC_NODRAW_GPU_VOP:
         case HWC_RGA_GPU_VOP:
- 			fb_info.win_par[0].area_par[0].data_format = context->fbhandle.format;
-            fb_info.win_par[0].win_id = 0;
-            fb_info.win_par[0].z_order = 0;
+        case HWC_VOP_RGA:
+            if(HWC_VOP_RGA == mode)
+            {
+                rgaIndex = 1;
+                start = 0;
+                end = 1;        
+                winIndex = 0;
+            }
+ 			fb_info.win_par[rgaIndex].area_par[0].data_format = context->fbhandle.format;
+            fb_info.win_par[rgaIndex].win_id = rgaIndex;
+            fb_info.win_par[rgaIndex].z_order = rgaIndex;
             if(mode == HWC_NODRAW_GPU_VOP)
             {
-                fb_info.win_par[0].area_par[0].ion_fd = context->membk_fds[context->NoDrMger.membk_index_pre];                        
+                fb_info.win_par[rgaIndex].area_par[0].ion_fd = context->membk_fds[context->NoDrMger.membk_index_pre];                        
             }
             else
             {
-                fb_info.win_par[0].area_par[0].ion_fd = context->membk_fds[context->membk_index];            
+                fb_info.win_par[rgaIndex].area_par[0].ion_fd = context->membk_fds[context->membk_index];            
             }
-           // fb_info.win_par[0].area_par[0].acq_fence_fd = -1;
-            fb_info.win_par[0].area_par[0].acq_fence_fd = context->membk_fence_acqfd[context->membk_index];
+           // fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = -1;
+            fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = context->membk_fence_acqfd[context->membk_index];
             ALOGV("set vop acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
-            fb_info.win_par[0].area_par[0].x_offset = 0;//info.xoffset;
-            fb_info.win_par[0].area_par[0].y_offset = 0;//info.yoffset;
-            fb_info.win_par[0].area_par[0].xpos = (info.nonstd >> 8) & 0xfff;
-            fb_info.win_par[0].area_par[0].ypos = (info.nonstd >> 20) & 0xfff;
-            fb_info.win_par[0].area_par[0].xsize = (info.grayscale >> 8) & 0xfff;
-            fb_info.win_par[0].area_par[0].ysize = (info.grayscale >> 20) & 0xfff;
-            fb_info.win_par[0].area_par[0].xact = info.xres;
-            fb_info.win_par[0].area_par[0].yact = info.yres;
-            fb_info.win_par[0].area_par[0].xvir = fbhandle->stride;
-            fb_info.win_par[0].area_par[0].yvir = info.yres;
+            fb_info.win_par[rgaIndex].area_par[0].x_offset = 0;//info.xoffset;
+            fb_info.win_par[rgaIndex].area_par[0].y_offset = 0;//info.yoffset;
+            fb_info.win_par[rgaIndex].area_par[0].xpos = (info.nonstd >> 8) & 0xfff;
+            fb_info.win_par[rgaIndex].area_par[0].ypos = (info.nonstd >> 20) & 0xfff;
+            fb_info.win_par[rgaIndex].area_par[0].xsize = (info.grayscale >> 8) & 0xfff;
+            fb_info.win_par[rgaIndex].area_par[0].ysize = (info.grayscale >> 20) & 0xfff;
+            fb_info.win_par[rgaIndex].area_par[0].xact = info.xres;
+            fb_info.win_par[rgaIndex].area_par[0].yact = info.yres;
+            fb_info.win_par[rgaIndex].area_par[0].xvir = fbhandle->stride;
+            fb_info.win_par[rgaIndex].area_par[0].yvir = info.yres;
             fb_info.wait_fs = 0;    
             if(mode == HWC_RGA)
             {
@@ -1981,7 +2090,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].z_order = winIndex;
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
-        fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;
+        fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;       
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == (list->numHwLayers -1))
         {           
@@ -2173,7 +2282,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                    // list->retireFenceFd = fb_info.ret_fence_fd;      
                 
                 break;
-            case HWC_RGA_TRSM_VOP:           
+            case HWC_RGA_TRSM_VOP:  
+            case HWC_VOP_RGA:
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
                     if (fb_info.rel_fence_fd[k] > 0)
@@ -2256,6 +2366,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
 {
     hwcSTATUS status = hwcSTATUS_OK;
     unsigned int i;
+    unsigned int index = 0;
 
 #if hwcUseTime
     struct timeval tpend1, tpend2;
@@ -2456,7 +2567,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
         switch (list->hwLayers[i].compositionType)
         {
             case HWC_BLITTER:
-                LOGV("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
+                ALOGV("%s(%d):Layer %d ,name=%s,is BLIITER", __FUNCTION__, __LINE__, i,list->hwLayers[i].LayerName);
                 /* Do the blit. */
                
 #if hwcBlitUseTime
@@ -2469,7 +2580,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                             &list->hwLayers[i].sourceCrop,
                             &list->hwLayers[i].displayFrame,
                             &list->hwLayers[i].visibleRegionScreen,
-                            &RgaFenceMg));
+                            &RgaFenceMg,index));
                
                 context->rga_fence_relfd[i] =  RgaFenceMg.rel_fd;   
                 
@@ -2487,7 +2598,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                 usec2 = 1000 * (tpendblit2.tv_sec - tpendblit1.tv_sec) + (tpendblit2.tv_usec - tpendblit1.tv_usec) / 1000;
                 LOGD("hwcBlit compositer %d layers=%s use time=%ld ms", i, list->hwLayers[i].LayerName, usec2);
 #endif
-
+                index++;
                 break;
 
             case HWC_CLEAR_HOLE:
@@ -2584,6 +2695,7 @@ int hwc_policy_set(hwcContext * context,hwc_display_contents_1_t *list)
         case HWC_RGA_TRSM_VOP:           
         case HWC_RGA_TRSM_GPU_VOP:   
         case HWC_RGA_GPU_VOP:
+        case HWC_VOP_RGA:
             hwc_rga_blit(context,list);
             hwc_vop_config(context,list);        
             break;
@@ -2639,6 +2751,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         case HWC_RGA_TRSM_VOP:           
         case HWC_RGA_TRSM_GPU_VOP:   
         case HWC_RGA_GPU_VOP:
+        case HWC_VOP_RGA:
             hwc_sync(list);        
             break;
         case HWC_CP_FB:
@@ -3292,6 +3405,7 @@ hwc_device_open(
     context->reference++; 
     context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
     context->fun_policy[HWC_RGA] = try_hwc_rga_policy;
+    context->fun_policy[HWC_VOP_RGA] = try_hwc_vop_rga_policy;
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_rga_trfm_vop_policy  ;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_rga_trfm_gpu_vop_policy;
     context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;

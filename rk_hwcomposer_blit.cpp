@@ -125,7 +125,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
         ALOGV("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
         return -1;
     }
-    if(src->left%8 /*|| dst->left%8*/) 
+    if(src->left%8 || dst->left%8) 
     {
         ALOGV("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
@@ -272,7 +272,8 @@ hwcBlit(
     IN hwc_rect_t * SrcRect,
     IN hwc_rect_t * DstRect,
     IN hwc_region_t * Region,
-    IN FenceMangrRga *FceMrga
+    IN FenceMangrRga *FceMrga,
+    IN int index
 )
 {
     hwcSTATUS status = hwcSTATUS_OK;
@@ -371,6 +372,8 @@ hwcBlit(
         //ALOGD("force dst yuv");
         dstFormat = RK_FORMAT_YCbCr_420_SP;
     }    
+
+
    // ALOGD("fmt = %d",dstFormat);        
     /* <<< End surface information. */
 
@@ -454,70 +457,71 @@ hwcBlit(
 
      //  LOGD(" planeAlpha=%x,Src->blending=%x,name=%s", planeAlpha, Src->blending,Src->LayerName);
 
-#if 1
-    /* Setup blending. */
-    switch ((Src->blending & 0xFFFF))
+    if(index > 0)    // bottom layer donnt need alpah
     {
-        case HWC_BLENDING_PREMULT:
-            perpixelAlpha = _HasAlpha(srcFormat);
+        /* Setup blending. */
+        switch ((Src->blending & 0xFFFF))
+        {
+            case HWC_BLENDING_PREMULT:
+                perpixelAlpha = _HasAlpha(srcFormat);  // only copy
 
-            /* Setup alpha blending. */
-            if (perpixelAlpha && planeAlpha < 255)
-            {
+                /* Setup alpha blending. */
+                if (perpixelAlpha && planeAlpha < 255)
+                {
 
-                RGA_set_alpha_en_info(&Rga_Request, 1, 2, planeAlpha , 1, 9, 0);
-            }
-            else if (perpixelAlpha)
-            {
-                /* Perpixel alpha only. */
-                RGA_set_alpha_en_info(&Rga_Request, 1, 1, 0, 1, 3, 0);
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 2, planeAlpha , 1, 9, 0);
+                }
+                else if (perpixelAlpha)
+                {
+                    /* Perpixel alpha only. */
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 1, 0, 1, 3, 0);
 
-            }
-            else /* if (planeAlpha < 255) */
-            {
-                /* Plane alpha only. */
-                RGA_set_alpha_en_info(&Rga_Request, 1, 0, planeAlpha , 0, 0, 0);
+                }
+                else /* if (planeAlpha < 255) */
+                {
+                    /* Plane alpha only. */
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 0, planeAlpha , 0, 0, 0);
 
-            }
-            break;
+                }
+                break;
 
-        case HWC_BLENDING_COVERAGE:
-            /* SRC_ALPHA / ONE_MINUS_SRC_ALPHA. */
-            /* Cs' = Cs * As
-             * As' = As
-             * C = Cs' + Cd * (1 - As)
-             * A = As' + Ad * (1 - As) */
-            perpixelAlpha = _HasAlpha(srcFormat);
-            LOGI("perpixelAlpha=%d,planeAlpha=%d,line=%d ", perpixelAlpha, planeAlpha, __LINE__);
-            /* Setup alpha blending. */
-            if (perpixelAlpha && planeAlpha < 255)
-            {
+            case HWC_BLENDING_COVERAGE:
+                /* SRC_ALPHA / ONE_MINUS_SRC_ALPHA. */
+                /* Cs' = Cs * As
+                 * As' = As
+                 * C = Cs' + Cd * (1 - As)
+                 * A = As' + Ad * (1 - As) */
+                perpixelAlpha = _HasAlpha(srcFormat);
+                LOGI("perpixelAlpha=%d,planeAlpha=%d,line=%d ", perpixelAlpha, planeAlpha, __LINE__);
+                /* Setup alpha blending. */
+                if (perpixelAlpha && planeAlpha < 255)
+                {
 
-                RGA_set_alpha_en_info(&Rga_Request, 1, 2, planeAlpha , 0, 0, 0);
-            }
-            else if (perpixelAlpha)
-            {
-                /* Perpixel alpha only. */
-                RGA_set_alpha_en_info(&Rga_Request, 1, 1, 0, 0, 0, 0);
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 2, planeAlpha , 0, 0, 0);
+                }
+                else if (perpixelAlpha)
+                {
+                    /* Perpixel alpha only. */
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 1, 0, 0, 0, 0);
 
-            }
-            else /* if (planeAlpha < 255) */
-            {
-                /* Plane alpha only. */
-                RGA_set_alpha_en_info(&Rga_Request, 1, 0, planeAlpha , 0, 0, 0);
+                }
+                else /* if (planeAlpha < 255) */
+                {
+                    /* Plane alpha only. */
+                    RGA_set_alpha_en_info(&Rga_Request, 1, 0, planeAlpha , 0, 0, 0);
 
-            }
-            break;
+                }
+                break;
 
-        case HWC_BLENDING_NONE:
-        default:
-            /* Tips: BLENDING_NONE is non-zero value, handle zero value as
-             * BLENDING_NONE. */
-            /* C = Cs
-             * A = As */
-            break;
-    }
-#endif
+            case HWC_BLENDING_NONE:
+            default:
+                /* Tips: BLENDING_NONE is non-zero value, handle zero value as
+                 * BLENDING_NONE. */
+                /* C = Cs
+                 * A = As */
+                break;
+        }
+    }    
     /* Check yuv format. */
     yuvFormat = (srcFormat >= RK_FORMAT_YCbCr_422_SP && srcFormat <= RK_FORMAT_YCbCr_420_P);
 
