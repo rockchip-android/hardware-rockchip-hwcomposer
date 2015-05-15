@@ -187,7 +187,7 @@ static int hwc_get_string_property(const char* pcProperty, const char* default_v
 
     return 0;
 }
-static int is_out_log( void )
+int is_out_log( void )
 {
     return hwc_get_int_property("sys.hwc.log","0");
 }
@@ -1276,7 +1276,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         try_hwc_gpu_policy((void*)context,list);
     }
     context->NoDrMger.composer_mode_pre = context->composer_mode;
-    ALOGV("cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
+    if(is_out_log())    
+        ALOGD("cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
     if(!(context->composer_mode == HWC_NODRAW_GPU_VOP
         || context->composer_mode == HWC_RGA_GPU_VOP) )
     {
@@ -1944,7 +1945,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             ALOGE("no policy set !!!");
             return -EINVAL;
     }
-    ALOGV("[%d->%d],win_index=%d,step=%d",start,end,winIndex,step);
+    if(is_out_log())
+        ALOGD("[%d->%d],win_index=%d,step=%d",start,end,winIndex,step);
     for (i = start; i < end;)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -2196,8 +2198,9 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             {
                 if(fb_info.win_par[i].area_par[j].ion_fd || fb_info.win_par[i].area_par[j].phy_addr)
                 {
-                   
-                    ALOGV("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+
+                   if(is_out_log())
+                        ALOGD("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
                             i,j,
                             fb_info.win_par[i].z_order,
                             fb_info.win_par[i].win_id,

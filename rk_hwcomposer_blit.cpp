@@ -34,6 +34,8 @@
 #undef LOGI
 #define LOGI(...)
 
+extern int is_out_log( void );
+
 int
 _HasAlpha(RgaSURF_FORMAT Format)
 {
@@ -122,29 +124,34 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
         ||  !isyuv 
         || !rot)
     {
-        ALOGV("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
+        if(is_out_log())
+            ALOGD("exit line=%d,[%d,%d,%d]",__LINE__,mode,isyuv ,rot);
         return -1;
     }
     if(src->left%8 /*|| dst->left%8*/) 
     {
-        ALOGV("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
+        if(is_out_log())
+            ALOGD("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
     }         
     if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
     {
-        ALOGV("exit line=%d,[%d,%d]",__LINE__,src->right- src->left, dst->right- dst->left);
+        if(is_out_log())
+            ALOGD("exit line=%d,[%d,%d]",__LINE__,src->right- src->left, dst->right- dst->left);
         return -1;
     }
     hfactor = (float)(rkmALIGN(rga_p->dst.act_w,8))/(float) (rga_p->src.act_w);
     vfactor = (float)(rkmALIGN(rga_p->dst.act_h,2))/(float)(rga_p->src.act_h);
     if(!((hfactor >= 1.0 && vfactor >= 1.0) || (hfactor <= 1.0 && vfactor <= 1.0)))
     {
-        ALOGV("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
+        if(is_out_log())
+            ALOGD("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
         return -1;
     }
     if(hfactor >= 3 || vfactor >= 3 )
     {
-        ALOGV("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
+        if(is_out_log())
+            ALOGD("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
         return -1;
     }
     return 0;
