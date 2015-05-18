@@ -82,6 +82,9 @@ endif
  LOCAL_CFLAGS += -DUSE_DMA_BUF
 #endif
 
+ifeq ($(strip $(TARGET_BOARD_PLATFORM)),sofia3gr)
+LOCAL_CFLAGS += -DUSE_X86
+endif
 ifeq ($(strip $(BOARD_USE_LAUNCHER2)),true)
 LOCAL_CFLAGS += -DUSE_LAUNCHER2
 endif

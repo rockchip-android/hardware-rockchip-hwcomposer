@@ -864,6 +864,7 @@ hwcBlit(
                 Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
 				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
+#ifdef USE_X86
             if(FceMrga->use_fence)
             {
                 //RGA_set_src_fence_flag(&Rga_Request,Src->acquireFenceFd,true);
@@ -878,6 +879,7 @@ hwcBlit(
                 }
 
             }
+#endif
             #if VIDEO_USE_PPROT
             if(!hwcppCheck(&Rga_Request,Context->composer_mode,yuvFormat,Src->transform, \
                 &srcRect,&dstRects[i]))
@@ -945,7 +947,8 @@ hwcBlit(
                      Src->transform,
                      RotateMode,
                      Rotation);
-				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
+				ALOGE("mmu_rga_flag=%x",Rga_Request.mmu_info.mmu_flag);
+#ifdef USE_X86
                 if(FceMrga->use_fence)
                 {
                     FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
@@ -955,13 +958,16 @@ hwcBlit(
                         close( FceMrga->rel_fd);
                     }    
                     FceMrga->rel_fd = -1;			
-                }    
+                }
+#endif
             }
+#ifdef USE_X86
             if(FceMrga->use_fence)
             {
                 FceMrga->rel_fd = RGA_get_dst_fence(&Rga_Request);
                 Context->engine_err_cnt = Rga_Request.line_draw_info.start_point.x; // RGA  err count,
-            }    
+            }
+#endif
         }
     }
     while (n < (unsigned int) Region->numRects);

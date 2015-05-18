@@ -44,7 +44,11 @@
 #define RGA_REL_FENCE_NUM       10
 #define RGA_ALLOW_MAX_ERR       10
 #define EN_VIDEO_UI_MIX         0
+#ifdef USE_X86
 #define FENCE_TIME_USE          (1)
+#else
+#define FENCE_TIME_USE          (0)
+#endif
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
 #define VOP_WIN_NUM             2
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
@@ -71,7 +75,7 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "2.20"
+#define GHWC_VERSION  "2.21"
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
