@@ -44,11 +44,7 @@
 #define RGA_REL_FENCE_NUM       10
 #define RGA_ALLOW_MAX_ERR       10
 #define EN_VIDEO_UI_MIX         0
-#ifdef USE_X86
 #define FENCE_TIME_USE          (1)
-#else
-#define FENCE_TIME_USE          (0)
-#endif
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
 #define VOP_WIN_NUM             2
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
@@ -70,7 +66,11 @@
 #define VIDEO_FULLSCREEN    (2)
 #define VIDEO_WIN1_UI_DISABLE     1
 #define RGA_USE_FENCE     1
+#ifdef USE_X86
 #define VIDEO_USE_PPROT   1
+#else
+#define VIDEO_USE_PPROT   0
+#endif
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
