@@ -2327,8 +2327,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 }
                 if(fb_info.ret_fence_fd > 0)
                     list->retireFenceFd = fb_info.ret_fence_fd;      
-
-                    
                 break;
                 
             case HWC_VOP_GPU:
