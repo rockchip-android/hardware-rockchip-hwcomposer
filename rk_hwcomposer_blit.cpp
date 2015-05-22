@@ -250,7 +250,10 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
     }
 
 #ifdef TARGET_SECVM
-	VPUMemImport_phyaddr(src, &opt.srcAddr);
+    if(!rga_p->src.yrgb_addr )
+        VPUMemImport_phyaddr(src, &opt.srcAddr);
+	else
+        opt.srcAddr =   rga_p->src.yrgb_addr;
 	VPUMemImport_phyaddr(dst, &opt.dstAddr);
 #endif
 
