@@ -10,6 +10,14 @@
 
 LOCAL_PATH := $(call my-dir)
 #include $(LOCAL_PATH)/../../Android.mk.def
+BUILD_SECVM_LIB := false
+
+ifeq ($(BUILD_SECVM_LIB),true)
+include $(CLEAR_VARS)
+LOCAL_PREBUILT_LIBS := libcodec_intel_sec.so
+LOCAL_MODULE_TAGS := optional
+include $(BUILD_MULTI_PREBUILT)
+endif
 
 #
 # hwcomposer.default.so
@@ -30,6 +38,10 @@ LOCAL_CFLAGS := \
 	-Wall \
 	-Wextra \
 	-DLOG_TAG=\"hwcomposer\"
+
+ifeq ($(BUILD_SECVM_LIB),true)
+LOCAL_CFLAGS += -DTARGET_SECVM
+endif
 
 LOCAL_C_INCLUDES := \
 	$(AQROOT)/sdk/inc \
@@ -53,7 +65,9 @@ LOCAL_SHARED_LIBRARIES := \
 	libsync \
 	libvpu
 
-
+ifeq ($(BUILD_SECVM_LIB),true)
+LOCAL_SHARED_LIBRARIES += libcodec_intel_sec
+endif
 
 #LOCAL_C_INCLUDES := \
 #	$(LOCAL_PATH)/inc

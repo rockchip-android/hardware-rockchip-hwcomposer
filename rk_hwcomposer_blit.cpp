@@ -10,7 +10,6 @@
 
 
 
-
 #include "rk_hwcomposer.h"
 
 #include <fcntl.h>
@@ -23,9 +22,14 @@
 #include <ui/PixelFormat.h>
 
 #include <cutils/properties.h>
-
-#include "common/include/ppOp.h"
 #include "vpu.h"
+
+#ifndef TARGET_SECVM
+#include "common/include/ppOp.h"
+#else
+#include "ppOp.h"
+#endif
+
 //#include "struct.h"
 
 #undef LOGV
@@ -35,6 +39,18 @@
 #define LOGI(...)
 
 extern int is_out_log( void );
+
+#ifdef TARGET_SECVM
+#ifdef __cplusplus
+extern "C" {
+extern int ppOpInit(PP_OP_HANDLE *hnd, PP_OPERATION *init);
+extern int ppOpSet(PP_OP_HANDLE hnd, PP_SET_OPT opt, uint32_t val);
+extern int ppOpPerform(PP_OP_HANDLE hnd);
+extern int ppOpSync(PP_OP_HANDLE hnd);
+extern int ppOpRelease(PP_OP_HANDLE hnd);
+}
+#endif
+#endif
 
 int
 _HasAlpha(RgaSURF_FORMAT Format)
@@ -140,6 +156,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
             ALOGD("exit line=%d,[%d,%d]",__LINE__,src->right- src->left, dst->right- dst->left);
         return -1;
     }
+
     hfactor = (float)(rkmALIGN(rga_p->dst.act_w,8))/(float) (rga_p->src.act_w);
     vfactor = (float)(rkmALIGN(rga_p->dst.act_h,2))/(float)(rga_p->src.act_h);
     if(!((hfactor >= 1.0 && vfactor >= 1.0) || (hfactor <= 1.0 && vfactor <= 1.0)))
@@ -162,16 +179,21 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
 {
     int ret;
     static int vpuFd = -1;
-    android::PP_OP_HANDLE hnd;
-    int src = rga_p->line_draw_info.color & 0xffff;
-    int dst = (rga_p->line_draw_info.color & 0xffff0000)>> 16;
+    unsigned int src = rga_p->line_draw_info.color & 0xffff;
+    unsigned int dst = (rga_p->line_draw_info.color & 0xffff0000)>> 16;
     
+#ifndef TARGET_SECVM
+	android::PP_OP_HANDLE hnd;
+	android::PP_OPERATION opt;
     if(vpuFd < 0)
     {
         vpuFd= VPUClientInit(VPU_PP);
         ALOGV("vpu init fd=%d",vpuFd);
     }
-    android::PP_OPERATION opt;
+#else
+	PP_OP_HANDLE hnd;
+    PP_OPERATION opt;
+#endif
     memset(&opt, 0, sizeof(opt));
     opt.srcAddr     = src;
     opt.srcFormat   = PP_IN_FORMAT_YUV420SEMI;
@@ -227,31 +249,62 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
             break;
     }
 
-    ALOGV("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d,%d",
+#ifdef TARGET_SECVM
+	VPUMemImport_phyaddr(src, &opt.srcAddr);
+	VPUMemImport_phyaddr(dst, &opt.dstAddr);
+#endif
+
+	ALOGV("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d,%d",
     opt.srcAddr,opt.srcX,opt.srcY,opt.srcWidth,opt.srcHeight,opt.srcHStride,opt.srcVStride,
     opt.dstAddr,opt.dstX,opt.dstY,opt.dstWidth,opt.dstHeight,opt.dstHStride,opt.dstVStride,tra,HWC_TRANSFORM_ROT_180);
-
  
     opt.vpuFd       = vpuFd;
+
+#ifndef TARGET_SECVM
     ret |= android::ppOpInit(&hnd, &opt);
     if (ret) {
         ALOGE("ppOpInit failed,vpuFd=%d",vpuFd);
+		hnd = NULL;
+		goto vpuerr;
+	}
+#else 
+    ret = ppOpInit(&hnd, &opt);
+    if (ret < 0) {
+        ALOGE("ppOpInit failed.");
         hnd = NULL;
         goto vpuerr;
-    }
-    ret = android::ppOpPerform(hnd);
+    }else {
+		ALOGV("ppOpInit success fd %d", ret);
+		vpuFd = ret;
+	}
+#endif
+
+#ifndef TARGET_SECVM
+	ret = android::ppOpPerform(hnd);
+#else
+    ret = ppOpPerform(hnd);
+#endif
     if (ret) {
         ALOGE("ppOpPerform failed");
         goto vpuerr;
 
     }
-    ret = android::ppOpSync(hnd);
+
+#ifndef TARGET_SECVM
+	ret = android::ppOpSync(hnd);
+#else
+    ret = ppOpSync(hnd);
+#endif
     if (ret) {
         ALOGE("ppOpSync failed");
         goto vpuerr;
         
     }
-    ret = android::ppOpRelease(hnd);
+#ifndef TARGET_SECVM
+	ret = android::ppOpRelease(hnd);
+#else
+    ret = ppOpRelease(hnd);
+#endif
     if (ret) {    
         ALOGE("ppOpPerform failed");
         goto vpuerr;

@@ -573,6 +573,12 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             {
               ctx->Is_video = true; 
             }
+            if(handle && handle->type && !ctx->iommuEn)
+            {
+                if(is_out_log())
+                    ALOGW("kernel iommu disable,but use mmu buffer,so hwc can not support!");
+                return -1;
+            }
             if(handle && handle->format == HAL_PIXEL_FORMAT_YV12 )
             {               
                 return -1;
@@ -3427,6 +3433,12 @@ hwc_device_open(
     {
         property_set("sys.display.oritation", "2");
     }
+
+    rel = ioctl(context->fbFd, RK_FBIOGET_IOMMU_STA, &context->iommuEn);	    
+    if (rel != 0)
+    {
+         hwcONERROR(hwcSTATUS_IO_ERR);
+    }    
 
 #if USE_HW_VSYNC
 

@@ -36,6 +36,8 @@
 #define  DUMP_SPLIT_AREA        0
 #define FB1_IOCTL_SET_YUV_ADDR 0x5002
 #define RK_FBIOSET_VSYNC_ENABLE 0x4629
+#define RK_FBIOGET_IOMMU_STA        0x4632
+
 //#define USE_LCDC_COMPOSER
 #define USE_HW_VSYNC            1
 #define FBIOSET_OVERLAY_STATE   0x5018
@@ -75,7 +77,13 @@
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
-#define GHWC_VERSION  "2.21"
+
+#ifndef TARGET_SECVM
+#define GHWC_VERSION  "2.22"
+#else
+#define GHWC_VERSION  "2.22_sec"
+#endif
+
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
@@ -314,6 +322,7 @@ FenceMangrRga;
         bool     vop_mbshake;
         bool     Is_video;
         bool     Is_bypp;
+    	int           iommuEn;
         alloc_device_t  *mAllocDev;
         int     *video_ui;
         int rga_fence_relfd[RGA_REL_FENCE_NUM];
