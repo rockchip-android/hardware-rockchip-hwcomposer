@@ -10,7 +10,7 @@
 
 LOCAL_PATH := $(call my-dir)
 #include $(LOCAL_PATH)/../../Android.mk.def
-BUILD_SECVM_LIB := false
+BUILD_SECVM_LIB := true
 
 ifeq ($(BUILD_SECVM_LIB),true)
 include $(CLEAR_VARS)

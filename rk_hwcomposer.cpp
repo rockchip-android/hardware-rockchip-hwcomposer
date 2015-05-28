@@ -600,7 +600,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                  
     }    
     
-    if((list->numHwLayers - 1) <= 0)  // vop not support
+    if((list->numHwLayers - 1) <= 0 || list->numHwLayers >  RGA_REL_FENCE_NUM)  // vop not support
     {
         return -1;
     }
@@ -733,14 +733,16 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
            || layer->transform != 0
           )   // because rga scale & transform  too slowly,so return to opengl        
         {
-            ALOGV("RGA_policy not support [%f,%f,%d]",hfactor,vfactor,layer->transform );
+            if(is_out_log())
+                ALOGD("RGA_policy not support [%f,%f,%d]",hfactor,vfactor,layer->transform );
             return -1;
         }
         pixelSize += ((layer->sourceCrop.bottom - layer->sourceCrop.top) * \
                         (layer->sourceCrop.right - layer->sourceCrop.left));
         if(pixelSize > RGA_POLICY_MAX_SIZE )  // pixel too large,RGA done use more time
         {
-            ALOGV("pielsize=%d,max_size=%d",pixelSize ,RGA_POLICY_MAX_SIZE);
+            if(is_out_log())
+                ALOGD("pielsize=%d,max_size=%d",pixelSize ,RGA_POLICY_MAX_SIZE);
             return -1;
         }    
 
