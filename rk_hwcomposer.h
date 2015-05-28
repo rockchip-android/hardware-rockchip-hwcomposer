@@ -251,11 +251,13 @@ FenceMangrRga;
         unsigned int  offset;
         unsigned int  last_offset;
     } hwc_ion_t;
+#ifdef USE_X86
     typedef struct
     {
         uint32_t xres;
         uint32_t yres;
     } hdmi_info_t;
+#endif
     typedef struct _hwcContext
     {
         hwc_composer_device_1_t device;
@@ -302,7 +304,9 @@ FenceMangrRga;
         unsigned int lcdSize;
         char *pbakupbuf[bakupbufsize];
         /*hdmi info*/
+#ifdef USE_X86
         hdmi_info_t mHdmi;
+#endif
 #if ENABLE_HWC_WORMHOLE
         /* Splited composition area queue. */
         hwcArea *                        compositionArea;

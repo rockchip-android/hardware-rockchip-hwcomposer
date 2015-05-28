@@ -1664,6 +1664,7 @@ int Get_layer_disp_area( hwc_layer_1_t * layer, hwcRECT* dstRects)
     return 0;
 }
 
+#ifdef USE_X86
 int hdmi_get_config()
 {
     unsigned int w_res;
@@ -1783,6 +1784,7 @@ int hdmi_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
     }
     return 0;
 }
+#endif
 
 int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 {
@@ -2188,8 +2190,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     if(!context->fb_blanked)
     {
 
+#ifdef USE_X86
         if(getHdmiMode() == 1 && context == gcontextAnchor[HWC_DISPLAY_PRIMARY])
             hdmi_reset_dstpos(&fb_info,0);
+#endif
 
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
@@ -2860,6 +2864,7 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 //struct timeval tpend1, tpend2;
 void handle_hotplug_event(int hdmi_mode ,int flag )
 {
+#ifdef USE_X86
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
 
     switch(flag){
@@ -2873,6 +2878,8 @@ void handle_hotplug_event(int hdmi_mode ,int flag )
     default:
         break;
     }
+#endif
+    return;
 }
 
 static void handle_vsync_event(hwcContext * context)
@@ -3577,8 +3584,10 @@ void init_hdmi_mode()
         }
         close(fd);
         g_hdmi_mode = atoi(statebuf);
+#ifdef USE_X86
         if(g_hdmi_mode)
             hdmi_get_config();
+#endif
         //ALOGD("g_hdmi_mode is %d",g_hdmi_mode);
 
     }
