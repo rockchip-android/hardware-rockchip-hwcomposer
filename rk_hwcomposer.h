@@ -69,7 +69,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define RGA_USE_FENCE     1
 #ifdef USE_X86
-#define VIDEO_USE_PPROT   1
+#define VIDEO_USE_PPROT   0
 #else
 #define VIDEO_USE_PPROT   0
 #endif
@@ -81,7 +81,7 @@
 #ifndef TARGET_SECVM
 #define GHWC_VERSION  "2.24"
 #else
-#define GHWC_VERSION  "2.24_sec"
+#define GHWC_VERSION  "2.24_sec_nopp"
 #endif
 
 //HWC version Tag
@@ -326,6 +326,7 @@ FenceMangrRga;
         bool     vop_mbshake;
         bool     Is_video;
         bool     Is_bypp;
+        int      Is_debug;
     	int           iommuEn;
         alloc_device_t  *mAllocDev;
         int     *video_ui;

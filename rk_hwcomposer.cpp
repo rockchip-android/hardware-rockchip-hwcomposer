@@ -187,9 +187,18 @@ static int hwc_get_string_property(const char* pcProperty, const char* default_v
 
     return 0;
 }
+void is_debug_log(void)
+{
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    context->Is_debug = hwc_get_int_property("sys.hwc.log","0");
+    
+}
 int is_out_log( void )
 {
-    return hwc_get_int_property("sys.hwc.log","0");
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    return context->Is_debug;
 }
 
 static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
@@ -560,6 +569,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     int hwc_en; 
     
     ctx->Is_video = false;
+    is_debug_log();    
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -569,6 +579,15 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
         {
             layer->dospecialflag = 0;
             handle = (struct private_handle_t *)layer->handle;
+            if(is_out_log())
+            {
+                ALOGD("layer[%d],name=%s,hanlde=%x,tra=%d,flag=%d",i,layer->LayerName,handle,layer->transform,layer->flags);
+                if(handle)
+                {
+                    ALOGD("layer[%d],fmt=%d,usage=%x,protect=%x",i,handle->format,handle->usage,GRALLOC_USAGE_PROTECTED);                   
+                }
+                
+            }           
             if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
             {
               ctx->Is_video = true; 
@@ -580,19 +599,27 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 return -1;
             }
             if(handle && handle->format == HAL_PIXEL_FORMAT_YV12 )
-            {               
+            {   
+                if(is_out_log())
+                    ALOGW("line=%d",__LINE__);
                 return -1;
             }
             if(strstr(layer->LayerName,"android.tests.devicesetup"))
             {
+                if(is_out_log())
+                    ALOGW("line=%d",__LINE__);
                 return -1;
             }
             if(strstr(layer->LayerName,"android.app.cts.uiautomation"))
             {
+                if(is_out_log())
+                    ALOGW("line=%d",__LINE__);            
                 return -1;
             }
             if(strstr(layer->LayerName,"com.android.cts.view"))
             {
+                if(is_out_log())
+                    ALOGW("line=%d",__LINE__);            
                 return -1;
             }
 
@@ -602,11 +629,17 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     
     if((list->numHwLayers - 1) <= 0 || list->numHwLayers >  RGA_REL_FENCE_NUM)  // vop not support
     {
+        if(is_out_log())
+            ALOGW("line=%d,num=%d",__LINE__,list->numHwLayers);
+    
         return -1;
     }
     hwc_en = hwc_get_int_property("sys.hwc.enable","0");
     if(!hwc_en)
     {
+        if(is_out_log())
+            ALOGW("line=%d",__LINE__);            
+    
         return -1;
     }
     //hwc_sync(list);  // video must sync,since UI will be used to detected
@@ -710,11 +743,14 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
         if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
         {
-            ALOGV("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
+            if(is_out_log())
+                ALOGD("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
             return -1;  
         }
         if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)  // video use other policy
         {
+            if(is_out_log())
+                ALOGD("format is nv12,line=%d",__LINE__);
             return -1;
         }    
     }
@@ -770,10 +806,15 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
 
     if(getHdmiMode() == 1)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
-
+    }
     if((list->numHwLayers - 1) > VOP_WIN_NUM || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)  // vop not support
     {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d,err_cnt=%d",__LINE__,list->numHwLayers - 1,context->engine_err_cnt);
         return -1;
     }
 
@@ -783,6 +824,10 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
         if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
         {
+            if(is_out_log())
+            {   
+                ALOGD("policy skip,flag=%x,hanlde=%x,line=%d,name=%s",layer->flags,handle,__LINE__,layer->LayerName);              
+            }    
             return -1;  
         }
         if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
@@ -793,7 +838,12 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     }    
     ALOGV("yuv_cnt=%d",yuv_cnt); 
     if( yuv_cnt != 1 )  // 0 or > 1 yuv skip
+    {
+        if(is_out_log())
+           ALOGD("yuv_cnt=%d,line=%d",yuv_cnt,__LINE__);
+
         return -1;
+    }    
         
     for ( i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -814,7 +864,11 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 || layer->transform != 0
             )   // wop has only one support scale        
             {
-                ALOGV("[%f,%f,%d],nmae=%s",hfactor,vfactor,layer->transform,layer->LayerName);
+                if(is_out_log())
+                {
+                    ALOGD("[%f,%f,%d],nmae=%s,line=%d",hfactor,vfactor,layer->transform,layer->LayerName,__LINE__);
+                                       
+                }    
                 return -1;
             }
             #if VIDEO_WIN1_UI_DISABLE
@@ -823,6 +877,8 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
                 {
+                    if(is_out_log())
+                        ALOGD("detect exit line=%d",__LINE__);
                     return -1;
                 }  
             }    
@@ -855,31 +911,48 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
 
     if(getHdmiMode() == 1)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
+    }
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
 
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
+    {
+        if(is_out_log())
+           ALOGD("exit line=%d,err_cnt=%d",__LINE__,context->engine_err_cnt);
         return -1;
-
+    }
     #if VIDEO_WIN1_UI_DISABLE
     if(context->vop_mbshake)
     {
+        if(is_out_log())
+            ALOGD("exit line=%d",__LINE__);
+
         return -1;  
     }
     #endif
     if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
     {
+        if(is_out_log())
+          ALOGD("policy skip,flag=%x,hanlde=%x,line=%d",layer->flags,handle,__LINE__);
         return -1;  
     }
     if(handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12 || layer->transform == 0)  // video use other policy
     {
+        if(is_out_log())
+            ALOGD("exit line=%d,fmt=%x,nmae=%s",__LINE__,handle->format,layer->LayerName);
         return -1;
     }   
     
     if(layer->sourceCrop.left % 4  /*|| (layer->sourceCrop.right - layer->sourceCrop.left) % 4*/)
     {
+        if(is_out_log())
+            ALOGD("exit line=%d,left=%d",__LINE__,layer->sourceCrop.left);
+
         return -1; // yuv rga do  must 4 align
     }
     
@@ -1009,8 +1082,11 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
 
     if(getHdmiMode() == 1)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
-
+    }
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -1019,6 +1095,8 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
        // ||(list->numHwLayers - 1)>4
         ||(list->numHwLayers - 1)<3)
     {
+        if(is_out_log())
+          ALOGD("policy skip,flag=%x,hanlde=%x,tra=%d,num=%d,line=%d",layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);
         return -1;  
     }
 
@@ -1035,11 +1113,17 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
                   / (layer->displayFrame.bottom - layer->displayFrame.top);
                 if(vfactor > 1.0f  )   //   vop sacle donwe need more BW lead to vop shake      
                 {
+                    if(is_out_log())
+                        ALOGD("exit line=%d",__LINE__);
                     return -1;
                 }
             }    
             if(LayerZoneCheck(layer,context) != 0)
+            {
+                if(is_out_log())
+                    ALOGD("exit line=%d",__LINE__);
                 return -1;
+            }    
             else
                 layer->compositionType = HWC_TOWIN0;
         }    
@@ -2743,7 +2827,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     }
 
     /* Check layer list. */
-    if (list->skipflag || black_cnt < 5)
+    if (list->skipflag || black_cnt < 5 || list->numHwLayers <=1)
     {
       
         hwc_sync_release(list);
