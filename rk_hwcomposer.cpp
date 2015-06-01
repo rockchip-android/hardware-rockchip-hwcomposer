@@ -1907,7 +1907,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 fb_info.win_par[0].area_par[0].ypos = disp_rect.top;
                 fb_info.win_par[0].area_par[0].xsize = disp_rect.right - disp_rect.left;
                 fb_info.win_par[0].area_par[0].ysize = disp_rect.bottom - disp_rect.top;
-                fb_info.win_par[0].area_par[0].xact = disp_rect.right - disp_rect.left;
+                if(context->Is_bypp)
+                    fb_info.win_par[0].area_par[0].xact = disp_rect.right - rkmALIGN(disp_rect.left,8);
+                else
+                    fb_info.win_par[0].area_par[0].xact = disp_rect.right - disp_rect.left;
                 fb_info.win_par[0].area_par[0].xact -= fb_info.win_par[0].area_par[0].xact%2;
                 fb_info.win_par[0].area_par[0].yact = disp_rect.bottom - disp_rect.top;  
                 fb_info.win_par[0].area_par[0].yact -= fb_info.win_par[0].area_par[0].yact%2;
