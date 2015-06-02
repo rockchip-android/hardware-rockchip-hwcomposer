@@ -31,7 +31,7 @@
 #define hwcDEBUG                0
 #define hwcUseTime              1
 #define hwcBlitUseTime          0
-#define hwcDumpSurface          1
+#define hwcDumpSurface          0
 #define  ENABLE_HWC_WORMHOLE    1
 #define  DUMP_SPLIT_AREA        0
 #define FB1_IOCTL_SET_YUV_ADDR 0x5002
