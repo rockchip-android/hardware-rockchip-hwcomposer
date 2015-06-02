@@ -69,7 +69,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define RGA_USE_FENCE     1
 #ifdef USE_X86
-#define VIDEO_USE_PPROT   0
+#define VIDEO_USE_PPROT   1
 #else
 #define VIDEO_USE_PPROT   0
 #endif
@@ -79,9 +79,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.24"
+#define GHWC_VERSION  "2.25"
 #else
-#define GHWC_VERSION  "2.24_sec_nopp"
+#define GHWC_VERSION  "2.25_sec"
 #endif
 
 //HWC version Tag
