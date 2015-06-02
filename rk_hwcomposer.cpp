@@ -948,7 +948,7 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }   
     
-    if(layer->sourceCrop.left % 4  /*|| (layer->sourceCrop.right - layer->sourceCrop.left) % 4*/)
+    if((layer->sourceCrop.left % 4) && !(handle->usage & GRALLOC_USAGE_PROTECTED))
     {
         if(is_out_log())
             ALOGD("exit line=%d,left=%d",__LINE__,layer->sourceCrop.left);
