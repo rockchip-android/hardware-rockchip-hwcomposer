@@ -1403,11 +1403,14 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
 int hwc_prepare_virtual(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
     HWC_UNREFERENCED_PARAMETER(dev);
+    hwcContext * context_PRI = gcontextAnchor[HWC_DISPLAY_PRIMARY];
 
+    context_PRI->wfddev = 0;
     if (list == NULL)
     {
         return 0;
     }
+    context_PRI->wfddev = 1;
     return 0;
 }
 

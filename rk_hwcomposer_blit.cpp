@@ -150,10 +150,13 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
             ALOGD("exit line=%d,[%d,%d]",__LINE__,src->left, dst->left);
         return -1;
     }         
-    if((src->right- src->left)%8 || (dst->right- dst->left)%8) 
+    if((src->right- src->left)%8 
+        || (dst->right - dst->left)%8
+        || (src->bottom - src->top)%8) 
     {
         if(is_out_log())
-            ALOGD("exit line=%d,[%d,%d]",__LINE__,src->right- src->left, dst->right- dst->left);
+            ALOGD("src w,h,dst w exit line=%d,[%d,%d,%d]",
+                __LINE__,src->right- src->left, dst->right- dst->left,src->bottom - src->top);
         return -1;
     }
 
@@ -257,10 +260,11 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
 	VPUMemImport_phyaddr(dst, &opt.dstAddr);
 #endif
 
-	ALOGV("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d,%d",
-    opt.srcAddr,opt.srcX,opt.srcY,opt.srcWidth,opt.srcHeight,opt.srcHStride,opt.srcVStride,
-    opt.dstAddr,opt.dstX,opt.dstY,opt.dstWidth,opt.dstHeight,opt.dstHStride,opt.dstVStride,tra,HWC_TRANSFORM_ROT_180);
- 
+    if(is_out_log())
+	    ALOGD("src[addr=%x,%d,%d,%d,%d][%d,%d]=>dst[addr=%x,%d,%d,%d,%d][%d,%d],rot=%d,%d",
+        opt.srcAddr,opt.srcX,opt.srcY,opt.srcWidth,opt.srcHeight,opt.srcHStride,opt.srcVStride,
+        opt.dstAddr,opt.dstX,opt.dstY,opt.dstWidth,opt.dstHeight,opt.dstHStride,opt.dstVStride,tra,HWC_TRANSFORM_ROT_180);
+    
     opt.vpuFd       = vpuFd;
 
 #ifndef TARGET_SECVM
@@ -589,6 +593,15 @@ hwcBlit(
     yuvFormat = (srcFormat >= RK_FORMAT_YCbCr_422_SP && srcFormat <= RK_FORMAT_YCbCr_420_P);
 
     /* Check stretching. */
+
+    if(yuvFormat)  
+    {
+        dstRect.left -= dstRect.left%2;
+        dstRect.top -= dstRect.top%2;            
+        dstRect.right -= dstRect.right%2;
+        dstRect.bottom -= dstRect.bottom%2;
+    }
+    
     if ((Src->transform == HWC_TRANSFORM_ROT_90) || (Src->transform == HWC_TRANSFORM_ROT_270))
     {
         hfactor = (float)(srcRect.bottom - srcRect.top)
@@ -935,7 +948,7 @@ hwcBlit(
             }
             #if VIDEO_USE_PPROT
             if(!hwcppCheck(&Rga_Request,Context->composer_mode,yuvFormat,Src->transform, \
-                &srcRect,&dstRects[i]))
+                &srcRects[i],&dstRects[i]) && !Context->wfddev)
             {
                 Context->Is_bypp = true;
                 Rga_Request.src.x_offset = srcRect.left;

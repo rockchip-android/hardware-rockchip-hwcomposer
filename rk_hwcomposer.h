@@ -79,9 +79,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.26"
+#define GHWC_VERSION  "2.28"
 #else
-#define GHWC_VERSION  "2.26_sec"
+#define GHWC_VERSION  "2.28_sec"
 #endif
 
 //HWC version Tag
@@ -295,6 +295,7 @@ FenceMangrRga;
         unsigned int fbStride;
         int          fb_disp_ofset;
         int          wfdOptimize;
+        int          wfddev;
         int         win_swap;  
         /* PMEM stuff. */
         unsigned int pmemPhysical;
