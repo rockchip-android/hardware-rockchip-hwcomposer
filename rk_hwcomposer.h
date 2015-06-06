@@ -79,9 +79,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.28"
+#define GHWC_VERSION  "2.29"
 #else
-#define GHWC_VERSION  "2.28_sec"
+#define GHWC_VERSION  "2.29_sec"
 #endif
 
 //HWC version Tag

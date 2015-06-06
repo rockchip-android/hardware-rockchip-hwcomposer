@@ -2830,7 +2830,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     }
 
     /* Check layer list. */
-    if (list->skipflag || black_cnt < 5 || list->numHwLayers <=1)
+    if (list->skipflag || black_cnt < 5 /*|| list->numHwLayers <=1*/)
     {
       
         hwc_sync_release(list);
