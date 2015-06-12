@@ -2295,7 +2295,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     }
     #endif
 
-    if(!context->fb_blanked)
+   // if(!context->fb_blanked)
     {
 
 #ifdef USE_X86
