@@ -79,9 +79,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.29"
+#define GHWC_VERSION  "2.32"
 #else
-#define GHWC_VERSION  "2.29_sec"
+#define GHWC_VERSION  "2.32_sec"
 #endif
 
 //HWC version Tag
@@ -326,6 +326,7 @@ FenceMangrRga;
         int     vui_hide;    
         bool     vop_mbshake;
         bool     Is_video;
+        bool     Is_Lvideo;        
         bool     Is_bypp;
         int      Is_debug;
     	int           iommuEn;

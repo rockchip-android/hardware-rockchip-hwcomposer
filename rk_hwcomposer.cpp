@@ -569,6 +569,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     int hwc_en; 
     
     ctx->Is_video = false;
+    ctx->Is_Lvideo = false;
     is_debug_log();    
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -590,7 +591,9 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             }           
             if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
             {
-              ctx->Is_video = true; 
+                ctx->Is_video = true; 
+                if(handle->width > 1440 || handle->height > 1440)
+                    ctx->Is_Lvideo = true;;
             }
             if(handle && handle->type && !ctx->iommuEn)
             {
@@ -1366,6 +1369,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     else
     {
         try_hwc_gpu_policy((void*)context,list);
+        
     }
     context->NoDrMger.composer_mode_pre = context->composer_mode;
     if(is_out_log())    
@@ -1400,17 +1404,29 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
     return 0;
 }
 
-int hwc_prepare_virtual(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
+int hwc_prepare_virtual(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list,hwc_display_contents_1_t *list_P) 
 {
     HWC_UNREFERENCED_PARAMETER(dev);
     hwcContext * context_PRI = gcontextAnchor[HWC_DISPLAY_PRIMARY];
 
     context_PRI->wfddev = 0;
-    if (list == NULL)
+    if (NULL  == list || NULL == list_P)
     {
+        if(is_out_log())    
+            ALOGD("list=%p,list_p=%p",list,list_P);
         return 0;
     }
     context_PRI->wfddev = 1;
+    if(context_PRI->Is_Lvideo)
+    {
+        try_hwc_gpu_policy((void*)context_PRI,list_P);
+        context_PRI->composer_mode = HWC_GPU;
+
+        if(is_out_log())    
+            ALOGD("Is large video > 1440 return GPU");
+
+    }    
+
     return 0;
 }
 
@@ -1436,7 +1452,7 @@ hwc_prepare(
                 ret = hwc_prepare_external(dev, list);
                 break;
             case HWC_DISPLAY_VIRTUAL:
-                ret = hwc_prepare_virtual(dev, list);
+                ret = hwc_prepare_virtual(dev, list,displays[HWC_DISPLAY_PRIMARY]);
                 break;
             default:
                 ret = -EINVAL;
