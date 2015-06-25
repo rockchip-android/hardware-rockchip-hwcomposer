@@ -252,7 +252,7 @@ int  ipp_open(ipp_device_t *ippDev)
 
         // int shared_fd;
         //struct ion_handle *ion_hnd;
-        unsigned int heap_mask = ION_HEAP(ION_HEAP_SYSTEM_MASK);
+        unsigned int heap_mask = ION_HEAP(ION_CARVEOUT_HEAP_ID);//ION_HEAP(ION_HEAP_SYSTEM_MASK);
         ipp_buffer.ion_client = ion_open();
         if (ipp_buffer.ion_client < 0)
         {
