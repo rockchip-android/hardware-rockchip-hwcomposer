@@ -18,7 +18,7 @@
 
 #include <hardware/hardware.h>
 
-
+#include <sys/prctl.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <cutils/properties.h> 
@@ -108,6 +108,20 @@ hwc_set(
     size_t numDisplays,
     hwc_display_contents_1_t  ** displays
 );
+
+int
+hotplug_get_config(int flag);
+
+int
+hotplug_set_config();
+
+int
+hotplug_reset_dstpos(
+    struct rk_fb_win_cfg_data * fb_info,
+    int flag);
+
+void
+*hotplug_init_thread(void *arg);
 
 static int
 hwc_device_close(
@@ -1355,7 +1369,23 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
          __FUNCTION__,
          __LINE__,
          list->numHwLayers);
-    if(!try_prepare_first(context,list))
+
+    if(is_out_log())
+        ALOGD("Is need nodraw[%d,%d]",context->mHtg.HtgOn,
+            gcontextAnchor[1]?(!gcontextAnchor[1]->fb_blanked):-1);
+
+    if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
+    {
+        if(is_out_log())
+            ALOGD("Prepare:Primary no draw");
+        for (i = 0; i < (list->numHwLayers - 1); i++)
+        {
+            hwc_layer_1_t * layer = &list->hwLayers[i];
+            layer->compositionType = HWC_NODRAW;
+        }
+        context->composer_mode = HWC_GPU;
+    }
+    else if(!try_prepare_first(context,list))
     {
         for(i = 0;i < HWC_POLICY_NUM;i++)
         {
@@ -1371,6 +1401,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         try_hwc_gpu_policy((void*)context,list);
         
     }
+
     context->NoDrMger.composer_mode_pre = context->composer_mode;
     if(is_out_log())    
         ALOGD("cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
@@ -1401,6 +1432,69 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 }
 static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
+    size_t i;
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
+    int iVideoCount = 0;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
+    static int videoIndex = 0;
+    int ret;
+
+    /* Check device handle. */
+    if (context == NULL)
+    {
+        LOGV("%s(%d):hotpluging!", __FUNCTION__, __LINE__);
+        return 0;
+    }
+    context->composer_mode = HWC_GPU;
+    context->win_swap = 0;
+#if hwcDEBUG
+    LOGD("%s(%d):Layers to prepare:", __FUNCTION__, __LINE__);
+    _Dump(list);
+#endif
+
+#if hwcDumpSurface
+    _DumpSurface(list);
+#endif
+
+    /* Check layer list. */
+    if ((list == NULL) || (list->numHwLayers == 0))
+    {
+        return 0;
+    }
+
+    LOGV("%s(%d):>>> prepare_primary %d layers <<<",
+         __FUNCTION__,
+         __LINE__,
+         list->numHwLayers);
+
+    try_hwc_gpu_policy((void*)context,list);
+    context->NoDrMger.composer_mode_pre = context->composer_mode;
+    if(is_out_log())
+        ALOGD("ext:cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
+    if(!(context->composer_mode == HWC_NODRAW_GPU_VOP
+        || context->composer_mode == HWC_RGA_GPU_VOP) )
+    {
+        for ( i = 0; i < 2 ; i++)
+        {
+            context->NoDrMger.addr[i] = 0;
+            context->NoDrMger.alpha[i] = 0;
+        }
+    }
+
+    if(context->composer_mode == HWC_RGA || context->composer_mode == HWC_GPU )
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[0];
+        layer->bufferCount = 1;
+    }
+    else   // win 0 & win 1 enable ,surfaceflinger change to one layer when 5s donot updata
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[0];
+        layer->bufferCount = 2;
+    }
+
+    //if(context->composer_mode == HWC_NODRAW_GPU_VOP)
+
     return 0;
 }
 
@@ -1471,7 +1565,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
 
     HWC_UNREFERENCED_PARAMETER(dev);
 
-
+    ALOGI("dpy=%d,blank=%d",dpy,blank);
     switch (dpy)
     {
         case HWC_DISPLAY_PRIMARY:
@@ -1497,6 +1591,7 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
             }
 
         case HWC_DISPLAY_EXTERNAL:
+			gcontextAnchor[HWC_DISPLAY_EXTERNAL]->fb_blanked = blank;
             /*
             if (pdev->hdmi_hpd) {
                 if (blank && !pdev->hdmi_blanked)
@@ -1769,128 +1864,6 @@ int Get_layer_disp_area( hwc_layer_1_t * layer, hwcRECT* dstRects)
     return 0;
 }
 
-#ifdef USE_X86
-int hdmi_get_config()
-{
-    unsigned int w_res;
-    unsigned int h_res;
-    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
-
-    int fd = open("/sys/class/display/HDMI/mode", O_RDONLY);
-
-    if (fd > 0)
-    {
-        char statebuf[100];
-        memset(statebuf, 0, sizeof(statebuf));
-        int err = read(fd, statebuf, sizeof(statebuf));
-        if (err < 0)
-        {
-            ALOGE("error reading hdmi mode: %s", strerror(errno));
-            return -1;
-        }
-        //ALOGD("statebuf=%s",statebuf);
-        close(fd);
-        char xres[10];
-        char yres[10];
-        int temp = 0;
-        memset(xres, 0, sizeof(xres));
-        memset(yres, 0, sizeof(yres));
-        for (unsigned int i=0; i<strlen(statebuf); i++)
-        {
-            if (statebuf[i] >= '0' && statebuf[i] <= '9')
-            {
-                xres[i] = statebuf[i];
-            }
-            else
-            {
-                temp = i;
-                break;
-            }
-        }
-        int m = 0;
-        for (unsigned int j=temp+1; j<strlen(statebuf);j++)
-        {
-            if (statebuf[j] >= '0' && statebuf[j] <= '9')
-            {
-                yres[m] = statebuf[j];
-                m++;
-            }
-            else
-            {
-                break;
-            }
-        }
-        w_res = atoi(xres);
-        h_res = atoi(yres);
-        close(fd);
-        ALOGI("hdmi width=%d,height=%d",w_res,h_res);
-        context->mHdmi.xres = w_res;
-        context->mHdmi.yres = h_res;
-        return 0;
-    }
-    else
-    {
-        close(fd);
-        ALOGE("Get HDMI mode fail");
-        return -1;
-    }
-    return 0;
-}
-
-int hdmi_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
-{
-    unsigned int w_source = 0;
-    unsigned int h_source = 0;
-    unsigned int w_dstpos = 0;
-    unsigned int h_dstpos = 0;
-    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
-
-    switch(flag){
-    case 0:
-        w_dstpos = context->mHdmi.xres;
-        h_dstpos = context->mHdmi.yres;
-        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
-        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
-        break;
-
-    case 1:
-        break;
-
-    default:
-        break;
-    }
-
-    float w_scale = (float)w_dstpos / w_source;
-    float h_scale = (float)h_dstpos / h_source;
-
-    if(h_source != h_dstpos)
-    {
-        for(int i = 0;i<4;i++)
-        {
-            for(int j=0;j<4;j++)
-            {
-                if(fb_info->win_par[i].area_par[j].ion_fd || fb_info->win_par[i].area_par[j].phy_addr)
-                {
-                    fb_info->win_par[i].area_par[j].xpos  =
-                        (unsigned short)(fb_info->win_par[i].area_par[j].xpos * w_scale);
-                    fb_info->win_par[i].area_par[j].ypos  =
-                        (unsigned short)(fb_info->win_par[i].area_par[j].ypos * h_scale);
-                    fb_info->win_par[i].area_par[j].xsize =
-                        (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
-                    fb_info->win_par[i].area_par[j].ysize =
-                        (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
-
-                    ALOGV("Adjust dst to => [%d,%d,%d,%d]",
-                        fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
-                        fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
-                }
-            }
-        }
-    }
-    return 0;
-}
-#endif
-
 int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
@@ -1917,19 +1890,19 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         return -1;
     }
     fbhandle = (struct private_handle_t*)fbayer->handle;
-    
-    ALOGV("hwc_vop_config mode=%s",compositionModeName[mode]);    
-    info = context->info;    
+
+    ALOGV("hwc_vop_config mode=%s",compositionModeName[mode]);
+    info = context->info;
     memset(&fb_info, 0, sizeof(fb_info));
     switch (mode)
     {
         case HWC_VOP:
             start = 0;
-            end = list->numHwLayers - 1;        
+            end = list->numHwLayers - 1;
             break;
         case HWC_RGA:
-        case HWC_RGA_TRSM_VOP:   
-        case HWC_RGA_TRSM_GPU_VOP:   
+        case HWC_RGA_TRSM_VOP:
+        case HWC_RGA_TRSM_GPU_VOP:
         case HWC_NODRAW_GPU_VOP:
         case HWC_RGA_GPU_VOP:
         case HWC_VOP_RGA:
@@ -2297,12 +2270,11 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
    // if(!context->fb_blanked)
     {
-
 #ifdef USE_X86
-        if(getHdmiMode() == 1 && context == gcontextAnchor[HWC_DISPLAY_PRIMARY])
-            hdmi_reset_dstpos(&fb_info,0);
+        if(context == gcontextAnchor[0] && gcontextAnchor[0]->mHtg.HtgOn 
+            && (gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked))
+            hotplug_reset_dstpos(&fb_info,0);
 #endif
-
         ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
 
         ///gettimeofday(&tpend2, NULL);
@@ -2889,6 +2861,11 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
          __LINE__,
          list->numHwLayers);
 
+    if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
+    {
+        hwc_sync_release(list);
+        return 0;
+    }
     hwc_policy_set(context,list);
 #if hwcUseTime
     gettimeofday(&tpend2, NULL);
@@ -2901,7 +2878,80 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 
 static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1_t* list)
 {
-    return 0;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
+    static int black_cnt = 0;
+#if hwcUseTime
+    struct timeval tpend1, tpend2;
+    long usec1 = 0;
+#endif
+
+
+    /* Check device handle. */
+    if (context == NULL || list == NULL)
+    {
+        LOGV("%s(%d):hotplug not well!", __FUNCTION__, __LINE__);
+        return 0;
+    }
+
+    /* Check layer list. */
+    if (list->skipflag || black_cnt < 5 /*|| list->numHwLayers <=1*/)
+    {
+
+        hwc_sync_release(list);
+        black_cnt ++;
+        ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
+        return 0;
+    }
+#if hwcUseTime
+    gettimeofday(&tpend1, NULL);
+#endif
+   // hwc_sync(list);
+
+    switch (context->composer_mode)
+    {
+        case HWC_VOP:
+        case HWC_VOP_GPU:
+        case HWC_GPU:
+        case HWC_NODRAW_GPU_VOP:
+            break;
+        case HWC_RGA:
+        case HWC_RGA_TRSM_VOP:
+        case HWC_RGA_TRSM_GPU_VOP:
+        case HWC_RGA_GPU_VOP:
+        case HWC_VOP_RGA:
+            hwc_sync(list);
+            break;
+        case HWC_CP_FB:
+            break;
+        default:
+            ALOGW("ext:composer_mode error");
+            return -EINVAL;
+    }
+
+
+    //gettimeofday(&tpend2, NULL);
+    //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+    //LOGD("hwc_syncs_set use time=%ld ms",  usec1);
+
+    LOGV("%s(%d):>>> Set start %d layers <<<",
+         __FUNCTION__,
+         __LINE__,
+         list->numHwLayers);
+
+    if(context->mHtg.HtgOn && gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked)
+    {
+        hwc_sync_release(list);
+        return 0;
+    }
+
+    hwc_policy_set(context,list);
+#if hwcUseTime
+    gettimeofday(&tpend2, NULL);
+    usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
+    LOGV("set compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1);
+#endif
+    hwc_sync_release(list);
+    return 0; //? 0 : HWC_EGL_ERROR;
 }
 int hwc_set(
     hwc_composer_device_1_t * dev,
@@ -2970,16 +3020,48 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 }
 
 //struct timeval tpend1, tpend2;
-void handle_hotplug_event(int hdmi_mode ,int flag )
+void handle_hotplug_event(int mode ,int flag )
 {
-#ifdef USE_X86
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
-
+#ifdef USE_X86
     switch(flag){
     case 0:
-        if(hdmi_mode)
+        if(context->mHtg.HtgOn)
         {
-            hdmi_get_config();
+            int count = 0;
+            while(gcontextAnchor[1]->fb_blanked)
+            {
+                count++;
+                usleep(10000);
+                if(1000==count){
+                    ALOGW("wait for unblank");
+                    break;
+                }
+            }
+            if(context->mHtg.CvbsOn)
+                context->mHtg.CvbsOn = false;
+            else
+                context->mHtg.HdmiOn = false;
+            context->mHtg.HtgOn = false;
+            context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+            gcontextAnchor[1]->fb_blanked = 1;
+            gcontextAnchor[1]->dpyAttr[HWC_DISPLAY_PRIMARY].connected = false;
+            //hotplug_set_frame(context,0);
+            ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,mode,flag);
+        }
+        if(mode)
+        {
+            hotplug_get_config(0);
+            hotplug_set_config();
+            //if(6 == flag)
+            //    context->mHdmiSI.HdmiOn = true;
+            //else if(1 == flag)
+            //    context->mHdmiSI.CvbsOn = true;
+            //hotplug_set_frame(context,0);
+            context->mHtg.HtgOn = true;
+            context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+            ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,mode,flag);
         }
         break;
 
@@ -3053,8 +3135,7 @@ static void *hwc_thread(void *data)
 
     HWC_UNREFERENCED_PARAMETER(data);
 
-
-
+    prctl(PR_SET_NAME,"HWC_vsync");
 
     char temp[4096];
 
@@ -3537,6 +3618,7 @@ hwc_device_open(
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
     if(context->fbWidth * context->fbHeight >= 1920*1080 )
         context->vop_mbshake = true;
+    context->fb_blanked = 1;    
     gcontextAnchor[HWC_DISPLAY_PRIMARY] = context;
     if (context->fbWidth > context->fbHeight)
     {
@@ -3611,6 +3693,16 @@ hwc_device_open(
     {
         LOGD("Create readHdmiMode thread error .");
     }
+#ifdef USE_X86
+    if(getHdmiMode())
+    {
+        pthread_t t0;
+        if (pthread_create(&t, NULL, hotplug_init_thread, NULL))
+        {
+            LOGD("Create hotplug_init_thread error .");
+        }
+    }
+#endif    
     return 0;
 
 OnError:
@@ -3692,10 +3784,6 @@ void init_hdmi_mode()
         }
         close(fd);
         g_hdmi_mode = atoi(statebuf);
-#ifdef USE_X86
-        if(g_hdmi_mode)
-            hdmi_get_config();
-#endif
         //ALOGD("g_hdmi_mode is %d",g_hdmi_mode);
 
     }
@@ -3704,5 +3792,478 @@ void init_hdmi_mode()
         LOGE("Open hdmi mode error.");
     }
 
+}
+
+int hotplug_parse_mode(int *outX, int *outY)
+{
+   int fd = open("/sys/class/display/HDMI/mode", O_RDONLY);
+   ALOGD("enter %s", __FUNCTION__);
+
+   if (fd > 0)
+   {
+        char statebuf[100];
+        memset(statebuf, 0, sizeof(statebuf));
+        int err = read(fd, statebuf, sizeof(statebuf));
+        if (err < 0)
+        {
+            ALOGE("error reading hdmi mode: %s", strerror(errno));
+            return -1;
+        }
+        //ALOGD("statebuf=%s",statebuf);
+        close(fd);
+        char xres[10];
+        char yres[10];
+        int temp = 0;
+        memset(xres, 0, sizeof(xres));
+        memset(yres, 0, sizeof(yres));
+        for (unsigned int i=0; i<strlen(statebuf); i++)
+        {
+            if (statebuf[i] >= '0' && statebuf[i] <= '9')
+            {
+                xres[i] = statebuf[i];
+            }
+            else
+            {
+                temp = i;
+                break;
+            }
+        }
+        int m = 0;
+        for (unsigned int j=temp+1; j<strlen(statebuf);j++)
+        {
+            if (statebuf[j] >= '0' && statebuf[j] <= '9')
+            {
+                yres[m] = statebuf[j];
+                m++;
+            }
+            else
+            {
+                break;
+            }
+        }
+        *outX = atoi(xres);
+        *outY = atoi(yres);
+        close(fd);
+        return 0;
+    }
+    else
+    {
+        close(fd);
+        ALOGE("Get HDMI mode fail");
+        return -1;
+    }
+}
+
+int hotplug_get_config(int flag)
+{
+    int  status    = 0;
+    int rel;
+    int err;
+    hwcContext * context = NULL;
+    struct fb_fix_screeninfo fixInfo;
+    struct fb_var_screeninfo info;
+    int refreshRate = 0;
+    float xdpi;
+    float ydpi;
+    uint32_t vsync_period;
+    char pro_value[PROPERTY_VALUE_MAX];
+#if !ONLY_USE_FB_BUFFERS
+    int stride_gr;
+#endif
+
+    /* Get context. */
+    context = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
+
+    if(context == NULL ){
+        context = (hwcContext *) malloc(sizeof (hwcContext));
+        if(context==NULL){
+            ALOGE("hotplug_get_config:Alloc context fail");
+            return -1;
+        }
+        memset(context, 0, sizeof (hwcContext));
+    }
+
+    if (context == NULL)
+    {
+        LOGE("%s(%d):malloc Failed!", __FUNCTION__, __LINE__);
+        return -EINVAL;
+    }
+
+#ifdef USE_X86
+    if(gcontextAnchor[HWC_DISPLAY_PRIMARY]->fbFd > 0)
+        context->fbFd = gcontextAnchor[HWC_DISPLAY_PRIMARY]->fbFd;
+    else
+    {
+        context->fbFd = open("/dev/graphics/fb0", O_RDWR, 0);
+        if (context->fbFd < 0)
+        {
+            hwcONERROR(hwcSTATUS_IO_ERR);
+        }
+    }
+#else
+    context->fbFd = open("/dev/graphics/fb0", O_RDWR, 0);
+    if (context->fbFd < 0)
+    {
+        hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+#endif
+    rel = ioctl(context->fbFd, FBIOGET_FSCREENINFO, &fixInfo);
+    if (rel != 0)
+    {
+        hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+
+    if (ioctl(context->fbFd, FBIOGET_VSCREENINFO, &info) == -1)
+    {
+        hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+
+    int xres,yres;
+    hotplug_parse_mode(&xres, &yres);
+    info.xres = xres;
+    info.yres = yres;
+
+    xdpi = 1000 * (info.xres * 25.4f) / info.width;
+    ydpi = 1000 * (info.yres * 25.4f) / info.height;
+
+    refreshRate = 1000000000000LLU /
+                  (
+                      uint64_t(info.upper_margin + info.lower_margin + info.yres)
+                      * (info.left_margin  + info.right_margin + info.xres)
+                      * info.pixclock
+                  );
+
+    if (refreshRate == 0)
+    {
+        ALOGW("invalid refresh rate, assuming 60 Hz");
+        refreshRate = 60 * 1000;
+    }
+
+
+    vsync_period  = 1000000000 / refreshRate;
+
+    context->dpyAttr[HWC_DISPLAY_PRIMARY].fd  = context->fbFd;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].fd = context->fbFd;
+    //xres, yres may not be 32 aligned
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].stride = fixInfo.line_length / (info.xres / 8);
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres = info.xres;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres = info.yres;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].xdpi = xdpi;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].ydpi = ydpi;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].vsync_period = vsync_period;
+    context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = true;
+    context->dpyAttr[HWC_DISPLAY_PRIMARY].connected  = true;
+    context->info = info;
+
+    /* Initialize variables. */
+
+    context->device.common.tag = HARDWARE_DEVICE_TAG;
+    context->device.common.version = HWC_DEVICE_API_VERSION_1_3;
+
+    /* initialize the procs */
+    context->device.common.close   = hwc_device_close;
+    context->device.prepare        = hwc_prepare;
+    context->device.set            = hwc_set;
+    // context->device.common.version = HWC_DEVICE_API_VERSION_1_0;
+    context->device.blank          = hwc_blank;
+    context->device.query          = hwc_query;
+    context->device.eventControl   = hwc_event_control;
+
+    context->device.registerProcs  = hwc_registerProcs;
+
+    context->device.getDisplayConfigs = hwc_getDisplayConfigs;
+    context->device.getDisplayAttributes = hwc_getDisplayAttributes;
+    context->device.rkCopybit = hwc_copybit;
+
+    context->device.dump = hwc_dump;
+
+    context->membk_index = 0;
+
+    if(gcontextAnchor[HWC_DISPLAY_PRIMARY]->engine_fd > 0)
+        context->engine_fd = gcontextAnchor[HWC_DISPLAY_PRIMARY]->engine_fd;
+    else
+        hwcONERROR(hwcRGA_OPEN_ERR);
+
+
+#if ENABLE_WFD_OPTIMIZE
+    property_set("sys.enable.wfd.optimize", "1");
+#endif
+    {
+        char value[PROPERTY_VALUE_MAX];
+        memset(value, 0, PROPERTY_VALUE_MAX);
+        property_get("sys.enable.wfd.optimize", value, "0");
+        int type = atoi(value);
+        context->wfdOptimize = type;
+        init_rga_cfg(context->engine_fd);
+        if (type > 0 && !is_surport_wfd_optimize())
+        {
+            property_set("sys.enable.wfd.optimize", "0");
+        }
+    }
+    property_set("sys.yuv.rgb.format", "4");
+    /* Initialize pmem and frameubffer stuff. */
+    // context->fbFd         = 0;
+    // context->fbPhysical   = ~0U;
+    // context->fbStride     = 0;
+
+
+    if (info.pixclock > 0)
+    {
+        refreshRate = 1000000000000000LLU /
+                      (
+                          uint64_t(info.vsync_len + info.upper_margin + info.lower_margin + info.yres)
+                          * (info.hsync_len + info.left_margin  + info.right_margin + info.xres)
+                          * info.pixclock
+                      );
+    }
+    else
+    {
+        ALOGW("fbdev pixclock is zero");
+    }
+
+    if (refreshRate == 0)
+    {
+        refreshRate = 60 * 1000;  // 60 Hz
+    }
+
+    context->fb_fps = refreshRate / 1000.0f;
+
+    context->fbPhysical = fixInfo.smem_start;
+    context->fbStride   = fixInfo.line_length;
+    context->fbWidth = info.xres;
+    context->fbHeight = info.yres;
+    context->fbhandle.width = info.xres;
+    context->fbhandle.height = info.yres;
+    context->fbhandle.format = info.nonstd & 0xff;
+    context->fbhandle.stride = (info.xres + 31) & (~31);
+    context->pmemPhysical = ~0U;
+    context->pmemLength   = 0;
+    property_get("ro.rk.soc", pro_value, "0");
+    context->IsRk3188 = !strcmp(pro_value, "rk3188");
+    context->IsRk3126 = !strcmp(pro_value, "rk3126");
+    context->fbSize = context->fbStride * info.yres * 3;//info.xres*info.yres*4*3;
+    context->lcdSize = context->fbStride * info.yres;//info.xres*info.yres*4;
+	context->fb_blanked = 1;
+    {
+
+#if 0//!ONLY_USE_FB_BUFFERS
+        hw_module_t const* module_gr;
+
+        err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module_gr);
+        ALOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
+        if (err == 0)
+        {
+            gralloc_open(module_gr, &context->mAllocDev);
+
+            for (int  i = 0;i < FB_BUFFERS_NUM;i++)
+            {
+                err = context->mAllocDev->alloc(context->mAllocDev,rkmALIGN(info.xres,32), \
+                                                info.yres, context->fbhandle.format, \
+                                                GRALLOC_USAGE_HW_COMPOSER | GRALLOC_USAGE_HW_RENDER, \
+                                                (buffer_handle_t*)(&context->phd_bk[i]), &stride_gr);
+                if (!err)
+                {
+                    struct private_handle_t*phandle_gr = (struct private_handle_t*)context->phd_bk[i];
+                    context->membk_fds[i] = phandle_gr->share_fd;
+                    context->membk_base[i] = phandle_gr->base;
+                    context->membk_type[i] = phandle_gr->type;
+                    ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height,
+                        phandle_gr->format, phandle_gr->share_fd);
+                }
+                else
+                {
+                    ALOGE("hwc alloc faild");
+                    goto OnError;
+                }
+            }
+        }
+        else
+        {
+            ALOGE(" GRALLOC_HARDWARE_MODULE_ID failed");
+        }
+#endif
+
+    }
+
+    /* Increment reference count. */
+    context->reference++;
+    context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
+    context->fun_policy[HWC_RGA] = try_hwc_rga_policy;
+    context->fun_policy[HWC_VOP_RGA] = try_hwc_vop_rga_policy;
+    context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_rga_trfm_vop_policy  ;
+    context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_rga_trfm_gpu_vop_policy;
+    context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;
+    context->fun_policy[HWC_NODRAW_GPU_VOP] = try_hwc_nodraw_gpu_vop_policy;
+    context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_rga_gpu_vop_policy;
+    context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
+    context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
+    if(context->fbWidth * context->fbHeight >= 1920*1080 )
+        context->vop_mbshake = true;
+    gcontextAnchor[HWC_DISPLAY_EXTERNAL] = context;
+    if (context->fbWidth > context->fbHeight)
+    {
+        property_set("sys.display.oritation", "0");
+    }
+    else
+    {
+        property_set("sys.display.oritation", "2");
+    }
+
+    rel = ioctl(context->fbFd, RK_FBIOGET_IOMMU_STA, &context->iommuEn);
+    if (rel != 0)
+    {
+         hwcONERROR(hwcSTATUS_IO_ERR);
+    }
+
+    context->ippDev = new ipp_device_t();
+    rel = ipp_open(context->ippDev);
+    if (rel < 0)
+    {
+        delete context->ippDev;
+        context->ippDev = NULL;
+        ALOGE("Open ipp device fail.");
+    }
+    return 0;
+
+OnError:
+
+    if (context->vsync_fd > 0)
+    {
+        close(context->vsync_fd);
+    }
+    if (context->fbFd > 0)
+    {
+        close(context->fbFd);
+
+    }
+    if (context->fbFd1 > 0)
+    {
+        close(context->fbFd1);
+    }
+
+
+    for (int i = 0;i < FB_BUFFERS_NUM;i++)
+    {
+        if (context->phd_bk[i])
+        {
+            err = context->mAllocDev->free(context->mAllocDev, context->phd_bk[i]);
+            ALOGW_IF(err, "free(...) failed %d (%s)", err, strerror(-err));
+        }
+
+    }
+
+    pthread_mutex_destroy(&context->lock);
+
+    /* Error roll back. */
+    if (context != NULL)
+    {
+        if (context->engine_fd != 0)
+        {
+            close(context->engine_fd);
+        }
+        free(context);
+
+    }
+
+    LOGE("%s(%d):Failed!", __FUNCTION__, __LINE__);
+
+    return -EINVAL;
+}
+
+int hotplug_set_config()
+{
+    int dType = HWC_DISPLAY_EXTERNAL;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+    hwcContext * context1 = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
+    if(context1 != NULL){
+        context->dpyAttr[dType].fd = context1->dpyAttr[dType].fd;
+        context->dpyAttr[dType].stride = context1->dpyAttr[dType].stride;
+        context->dpyAttr[dType].xres = context1->dpyAttr[dType].xres;
+        context->dpyAttr[dType].yres = context1->dpyAttr[dType].yres;
+        context->dpyAttr[dType].xdpi = context1->dpyAttr[dType].xdpi;
+        context->dpyAttr[dType].ydpi = context1->dpyAttr[dType].ydpi;
+        context->dpyAttr[dType].vsync_period = context1->dpyAttr[dType].vsync_period;
+        context->dpyAttr[dType].connected = true;
+        return 0;
+    }
+    else{
+        context->dpyAttr[dType].connected = false;
+        return -1;
+    }
+}
+
+int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
+{
+    unsigned int w_source = 0;
+    unsigned int h_source = 0;
+    unsigned int w_dstpos = 0;
+    unsigned int h_dstpos = 0;
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+
+    switch(flag){
+    case 0:
+        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        w_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        break;
+
+    case 1:
+        break;
+
+    default:
+        break;
+    }
+
+    float w_scale = (float)w_dstpos / w_source;
+    float h_scale = (float)h_dstpos / h_source;
+
+    if(h_source != h_dstpos)
+    {
+        for(int i = 0;i<4;i++)
+        {
+            for(int j=0;j<4;j++)
+            {
+                if(fb_info->win_par[i].area_par[j].ion_fd || fb_info->win_par[i].area_par[j].phy_addr)
+                {
+                    fb_info->win_par[i].area_par[j].xpos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xpos * w_scale);
+                    fb_info->win_par[i].area_par[j].ypos  =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ypos * h_scale);
+                    fb_info->win_par[i].area_par[j].xsize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].xsize * w_scale);
+                    fb_info->win_par[i].area_par[j].ysize =
+                        (unsigned short)(fb_info->win_par[i].area_par[j].ysize * h_scale);
+                    ALOGV("Adjust dst to => [%d,%d,%d,%d]",
+                        fb_info->win_par[i].area_par[j].xpos,fb_info->win_par[i].area_par[j].ypos,
+                        fb_info->win_par[i].area_par[j].xsize,fb_info->win_par[i].area_par[j].ysize);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void  *hotplug_init_thread(void *arg)
+{
+    prctl(PR_SET_NAME,"HWC_htg1");
+    HWC_UNREFERENCED_PARAMETER(arg);
+    hotplug_get_config(0);
+    hotplug_set_config();
+    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+    context->mHtg.HtgOn = true;
+    int count = 0;
+    while(context->fb_blanked)
+    {
+        count++;
+        usleep(10000);
+        if(300==count){
+            ALOGW("wait for primary unblank");
+            break;
+        }
+    }
+    handle_hotplug_event(1,0);
+    pthread_exit(NULL);
+    return NULL;
 }
 

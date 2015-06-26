@@ -79,9 +79,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.33"
+#define GHWC_VERSION  "2.34"
 #else
-#define GHWC_VERSION  "2.33_sec"
+#define GHWC_VERSION  "2.34_sec"
 #endif
 
 //HWC version Tag
@@ -91,7 +91,7 @@
 #define HWC_VERSION "HWC_VERSION  \
 Author:huangds \
 Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
-Version:2.24 \
+Version:2.34 \
 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
 
 /* Set it to 1 to enable swap rectangle optimization;
@@ -251,13 +251,17 @@ FenceMangrRga;
         unsigned int  offset;
         unsigned int  last_offset;
     } hwc_ion_t;
-#ifdef USE_X86
+
     typedef struct
     {
         uint32_t xres;
         uint32_t yres;
-    } hdmi_info_t;
-#endif
+        bool HtgOn;
+        bool CvbsOn;
+        bool HdmiOn;
+    } htg_info_t;
+
+
     typedef struct _hwcContext
     {
         hwc_composer_device_1_t device;
@@ -304,10 +308,9 @@ FenceMangrRga;
         unsigned int fbSize;
         unsigned int lcdSize;
         char *pbakupbuf[bakupbufsize];
-        /*hdmi info*/
-#ifdef USE_X86
-        hdmi_info_t mHdmi;
-#endif
+        /*hotplug info*/
+        htg_info_t mHtg;
+
 #if ENABLE_HWC_WORMHOLE
         /* Splited composition area queue. */
         hwcArea *                        compositionArea;

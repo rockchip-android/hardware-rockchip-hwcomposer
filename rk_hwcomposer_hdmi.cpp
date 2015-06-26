@@ -8,7 +8,7 @@
 * Copyright (C) 2015 Rockchip Electronics Co., Ltd.
 
 */
-
+#include <sys/prctl.h>
 #include "rk_hwcomposer_hdmi.h"
 #include <errno.h>
 #include <malloc.h>
@@ -81,7 +81,7 @@ void  *rk_hwc_hdmi_thread(void *arg)
     struct pollfd fds[1];
     int timeout;
     int err;
-
+    prctl(PR_SET_NAME,"HWC_htg");
     HWC_UNREFERENCED_PARAMETER(arg);
 
     uevent_init();
