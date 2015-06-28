@@ -2326,6 +2326,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             close(fb_info.ret_fence_fd);
 
 #else
+        if(is_out_log()>1)
+        {
+            for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                ALOGD("fb_info.rel_fence_fd[k]=%d",fb_info.rel_fence_fd[k]);
+            ALOGD("fb_info.ret_fence_fd=%d",fb_info.ret_fence_fd);
+        }
         switch (mode)
         {
             case HWC_VOP:       
@@ -2447,6 +2453,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 break;
             default:
                 return -EINVAL;
+        }
+        if(is_out_log()>1)
+        {
+            for(int k=0;k<list->numHwLayers;k++)
+                ALOGD("list->hwLayers[k].releaseFenceFd=%d",list->hwLayers[k].releaseFenceFd);
+            ALOGD("list->retireFenceFd=%d",list->retireFenceFd);
         }
 #endif  
     }
@@ -2826,6 +2838,13 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
         return 0;
     }
+
+    if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
+    {
+        hwc_sync_release(list);
+        return 0;
+    }
+
 #if hwcUseTime
     gettimeofday(&tpend1, NULL);
 #endif
@@ -2861,11 +2880,6 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
          __LINE__,
          list->numHwLayers);
 
-    if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
-    {
-        hwc_sync_release(list);
-        return 0;
-    }
     hwc_policy_set(context,list);
 #if hwcUseTime
     gettimeofday(&tpend2, NULL);
@@ -3026,11 +3040,9 @@ void handle_hotplug_event(int mode ,int flag )
 #ifdef USE_X86
     switch(flag){
     case 0:
-        if(context->mHtg.HtgOn)
-        {
+        if(context->mHtg.HtgOn){
             int count = 0;
-            while(gcontextAnchor[1]->fb_blanked)
-            {
+            while(gcontextAnchor[1]->fb_blanked){
                 count++;
                 usleep(10000);
                 if(1000==count){
@@ -3050,8 +3062,7 @@ void handle_hotplug_event(int mode ,int flag )
             //hotplug_set_frame(context,0);
             ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,mode,flag);
         }
-        if(mode)
-        {
+        if(mode){
             hotplug_get_config(0);
             hotplug_set_config();
             //if(6 == flag)
@@ -3060,8 +3071,20 @@ void handle_hotplug_event(int mode ,int flag )
             //    context->mHdmiSI.CvbsOn = true;
             //hotplug_set_frame(context,0);
             context->mHtg.HtgOn = true;
+            char value[PROPERTY_VALUE_MAX];
+            property_set("callbak.hwc.htg","hotplug");
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-            ALOGI("connet to hotplug device [%d,%d,%d]",__LINE__,mode,flag);
+            property_get("callbak.hwc.htg",value,"hotplug");
+            int count = 0;
+            while(strcmp(value,"true")){
+                count ++;
+                if(count%3==0)
+                    context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+                context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
+                property_get("callbak.hwc.htg",value,"hotplug");
+                ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
+            }
+            ALOGI("connet to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
         }
         break;
 
