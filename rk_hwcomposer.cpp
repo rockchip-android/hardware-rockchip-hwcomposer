@@ -2908,7 +2908,7 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
     }
 
     /* Check layer list. */
-    if (list->skipflag || black_cnt < 5 /*|| list->numHwLayers <=1*/)
+    if (list->skipflag/* || black_cnt < 5 || list->numHwLayers <=1*/)
     {
 
         hwc_sync_release(list);
@@ -3056,7 +3056,9 @@ void handle_hotplug_event(int mode ,int flag )
                 context->mHtg.HdmiOn = false;
             context->mHtg.HtgOn = false;
             context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
+#if HOTPLUG_MODE
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
+#endif
             gcontextAnchor[1]->fb_blanked = 1;
             gcontextAnchor[1]->dpyAttr[HWC_DISPLAY_PRIMARY].connected = false;
             //hotplug_set_frame(context,0);
@@ -3071,6 +3073,7 @@ void handle_hotplug_event(int mode ,int flag )
             //    context->mHdmiSI.CvbsOn = true;
             //hotplug_set_frame(context,0);
             context->mHtg.HtgOn = true;
+#if HOTPLUG_MODE
             char value[PROPERTY_VALUE_MAX];
             property_set("callbak.hwc.htg","hotplug");
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
@@ -3084,6 +3087,7 @@ void handle_hotplug_event(int mode ,int flag )
                 property_get("callbak.hwc.htg",value,"hotplug");
                 ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
             }
+#endif
             ALOGI("connet to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
         }
         break;

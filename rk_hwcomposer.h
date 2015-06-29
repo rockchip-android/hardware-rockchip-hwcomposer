@@ -73,15 +73,16 @@
 #else
 #define VIDEO_USE_PPROT   0
 #endif
+#define HOTPLUG_MODE      1
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.34"
+#define GHWC_VERSION  "2.35"
 #else
-#define GHWC_VERSION  "2.34_sec"
+#define GHWC_VERSION  "2.35_sec"
 #endif
 
 //HWC version Tag
@@ -91,7 +92,7 @@
 #define HWC_VERSION "HWC_VERSION  \
 Author:huangds \
 Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
-Version:2.34 \
+Version:2.35 \
 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
 
 /* Set it to 1 to enable swap rectangle optimization;

@@ -31,11 +31,10 @@ int         g_hdmi_mode;
 void rk_check_hdmi_uevents(const char *buf)
 {
     //ALOGI("fun[%s],line[%d],buf is [%s]",__FUNCTION__,__LINE__,buf);
-    if (!strcmp(buf, "remove@/devices/virtual/display/HDMI") ||
-            !strcmp(buf, "change@/devices/virtual/display/HDMI"))
+    if (!strcmp(buf, "change@/devices/virtual/display/HDMI"))
     {
-        //int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-        int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
+        int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+        //int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
 
         if (fd > 0)
         {
