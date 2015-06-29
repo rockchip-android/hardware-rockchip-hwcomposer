@@ -1986,8 +1986,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 }    
                 hwc_layer_1_t * layer = &list->hwLayers[0];
                 hwcRECT disp_rect;                
-                Get_layer_disp_area(layer,&disp_rect);               
+                Get_layer_disp_area(layer,&disp_rect);
+#ifdef USE_X86
                 fb_info.win_par[0].area_par[0].data_format = 0x20;//dump_fmt;
+#endif
                 if(context->Is_bypp)
                     fb_info.win_par[0].area_par[0].x_offset = rkmALIGN(disp_rect.left,8);//info.xoffset
                 else

@@ -433,13 +433,14 @@ hwcBlit(
                      &dstFormat
                     ));
 
+#ifdef USE_X86
     if(Context->composer_mode  == HWC_RGA_TRSM_VOP
         || Context->composer_mode  == HWC_RGA_TRSM_GPU_VOP)
     {
         //ALOGD("force dst yuv");
         dstFormat = RK_FORMAT_YCbCr_420_SP;
-    }    
-
+    }
+#endif
 
    // ALOGD("fmt = %d",dstFormat);        
     /* <<< End surface information. */
