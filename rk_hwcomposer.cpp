@@ -960,9 +960,23 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     }
     if(handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12 || layer->transform == 0)  // video use other policy
     {
-        if(is_out_log())
-            ALOGD("exit line=%d,fmt=%x,nmae=%s",__LINE__,handle->format,layer->LayerName);
-        return -1;
+        float vfactor = 1.0;
+            vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+            / (layer->displayFrame.bottom - layer->displayFrame.top);
+
+        if(context->Is_video 
+            && (handle->usage & GRALLOC_USAGE_PROTECTED)
+            && vfactor > 2.4f)
+        {
+            if(is_out_log())
+                ALOGD("Video use RGA,since secure video can't back GPU,fmt=%d,[%f]",handle->format,vfactor); 
+        }  
+        else
+        {
+            if(is_out_log())
+                ALOGD("exit line=%d,fmt=%x,nmae=%s",__LINE__,handle->format,layer->LayerName);
+            return -1;                
+        }        
     }   
     
     if((layer->sourceCrop.left % 4) && !(handle->usage & GRALLOC_USAGE_PROTECTED))
