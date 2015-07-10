@@ -900,6 +900,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 }  
             }    
             #endif
+            
         }
         if(i == 0)
             layer->compositionType = HWC_BLITTER;  
@@ -3029,13 +3030,13 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 
     HWC_UNREFERENCED_PARAMETER(dev);
     HWC_UNREFERENCED_PARAMETER(dpy);
-
     switch (event)
     {
         case HWC_EVENT_VSYNC:
             {
                 int val = !!enabled;
                 int err;
+
                 err = ioctl(context->fbFd, RK_FBIOSET_VSYNC_ENABLE, &val);
                 if (err < 0)
                 {
@@ -3140,10 +3141,11 @@ static void handle_vsync_event(hwcContext * context)
 
     //  errno = 0;
     uint64_t timestamp = strtoull(buf, NULL, 0) ;/*+ (uint64_t)(1e9 / context->fb_fps)  ;*/
-
+    err = 0;
+#if 0
     uint64_t mNextFakeVSync = timestamp + (uint64_t)(1e9 / context->fb_fps);
-
-
+    err = 0;
+    
     struct timespec spec;
     spec.tv_sec  = mNextFakeVSync / 1000000000;
     spec.tv_nsec = mNextFakeVSync % 1000000000;
@@ -3153,10 +3155,13 @@ static void handle_vsync_event(hwcContext * context)
         err = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &spec, NULL);
     }
     while (err < 0 && errno == EINTR);
-
+#else
+    uint64_t mNextFakeVSync = timestamp;
+#endif
 
     if (err == 0)
     {
+         
         context->procs->vsync(context->procs, 0, mNextFakeVSync);
        // gettimeofday(&tpend2, NULL);
        // usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
