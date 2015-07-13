@@ -584,6 +584,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     
     ctx->Is_video = false;
     ctx->Is_Lvideo = false;
+    ctx->Is_Secure = false;
     is_debug_log();    
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
@@ -608,6 +609,8 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 ctx->Is_video = true; 
                 if(handle->width > 1440 || handle->height > 1440)
                     ctx->Is_Lvideo = true;;
+                if(handle->usage & GRALLOC_USAGE_PROTECTED )
+                    ctx->Is_Secure = true;
             }
             if(handle && handle->type && !ctx->iommuEn)
             {
@@ -953,6 +956,12 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;  
     }
     #endif
+    if( (list->numHwLayers - 1) > 2 && context->Is_Lvideo && !context->Is_Secure)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,num=%d,Is_Lvideo=%d,Is_Secure=%d",__LINE__,list->numHwLayers - 1, context->Is_Lvideo ,context->Is_Secure);
+        return -1;  
+    }
     if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
     {
         if(is_out_log())
@@ -2901,7 +2910,8 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 #if hwcUseTime
     gettimeofday(&tpend2, NULL);
     usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
-    LOGV("set compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
+    if(is_out_log())
+        LOGD("set compositer %d layers use time=%ld ms", list->numHwLayers -1, usec1); 
 #endif
     hwc_sync_release(list);
     return 0; //? 0 : HWC_EGL_ERROR;
