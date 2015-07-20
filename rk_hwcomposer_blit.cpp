@@ -1225,7 +1225,6 @@ hwcDim(
                 );
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
 
-            RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
 
             if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
@@ -1413,7 +1412,6 @@ hwcClear(
                  WidthAct,
                  HeightAct
                 );
-            RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
 
             if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
