@@ -581,11 +581,19 @@ int hwc_get_layer_area_info(hwc_layer_1_t * layer,hwcRECT *srcrect,hwcRECT *dstr
 int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
 {
     int hwc_en; 
-    
+    int static cnt = 0;
     ctx->Is_video = false;
     ctx->Is_Lvideo = false;
     ctx->Is_Secure = false;
     is_debug_log();    
+    
+    if(cnt < 2)
+    {
+        cnt ++;
+        if(is_out_log())
+            ALOGW("boot cnt =%d ",cnt);
+        return -1;
+    }
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
