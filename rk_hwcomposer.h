@@ -333,6 +333,7 @@ FenceMangrRga;
         bool     Is_Lvideo;        
         bool     Is_bypp;
         bool     Is_Secure;
+        bool    special_app;
         int      Is_debug;
     	int           iommuEn;
         alloc_device_t  *mAllocDev;
