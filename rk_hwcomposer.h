@@ -73,6 +73,7 @@
 #else
 #define VIDEO_USE_PPROT   0
 #endif
+#define IQIY_SPECIAL_PROCESS 0
 #define HOTPLUG_MODE      1
 #define rkmALIGN(n, align) \
 ( \

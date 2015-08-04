@@ -621,6 +621,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 if(handle->usage & GRALLOC_USAGE_PROTECTED )
                     ctx->Is_Secure = true;
             }
+            #if IQIY_SPECIAL_PROCESS
             if(1==i && strstr(layer->LayerName,"com.qiyi.video/org.qiyi.android.video.MainActivity"))
             {
                 ctx->special_app = true;
@@ -628,7 +629,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 if(!temp)
                    ctx->special_app = false;  
             } 
-                     
+            #endif          
             if(handle && handle->type && !ctx->iommuEn)
             {
                 if(is_out_log())
