@@ -3146,16 +3146,16 @@ void handle_hotplug_event(int mode ,int flag )
             context->mHtg.HtgOn = true;
 #if HOTPLUG_MODE
             char value[PROPERTY_VALUE_MAX];
-            property_set("callbak.hwc.htg","hotplug");
+            property_set("sys.hwc.htg","hotplug");
             context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-            property_get("callbak.hwc.htg",value,"hotplug");
+            property_get("sys.hwc.htg",value,"hotplug");
             int count = 0;
             while(strcmp(value,"true")){
                 count ++;
                 if(count%3==0)
                     context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 0);
                 context->procs->hotplug(context->procs, HWC_DISPLAY_EXTERNAL, 1);
-                property_get("callbak.hwc.htg",value,"hotplug");
+                property_get("sys.hwc.htg",value,"hotplug");
                 ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
             }
 #endif
