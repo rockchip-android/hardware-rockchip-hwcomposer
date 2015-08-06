@@ -3112,6 +3112,7 @@ void handle_hotplug_event(int mode ,int flag )
     switch(flag){
     case 0:
         if(context->mHtg.HtgOn){
+#if HOTPLUG_MODE
             int count = 0;
             while(gcontextAnchor[1]->fb_blanked){
                 count++;
@@ -3121,10 +3122,12 @@ void handle_hotplug_event(int mode ,int flag )
                     break;
                 }
             }
-            if(context->mHtg.CvbsOn)
+#endif
+            if(context->mHtg.CvbsOn){
                 context->mHtg.CvbsOn = false;
-            else
+            }else{
                 context->mHtg.HdmiOn = false;
+            }
             context->mHtg.HtgOn = false;
             context->dpyAttr[HWC_DISPLAY_EXTERNAL].connected = false;
 #if HOTPLUG_MODE
@@ -3133,7 +3136,11 @@ void handle_hotplug_event(int mode ,int flag )
             gcontextAnchor[1]->fb_blanked = 1;
             gcontextAnchor[1]->dpyAttr[HWC_DISPLAY_PRIMARY].connected = false;
             //hotplug_set_frame(context,0);
+#if HOTPLUG_MODE
             ALOGI("remove hotplug device [%d,%d,%d]",__LINE__,mode,flag);
+#else
+            ALOGI("remove hdmi device [%d,%d,%d]",__LINE__,mode,flag);
+#endif
         }
         if(mode){
             hotplug_get_config(0);
@@ -3158,8 +3165,10 @@ void handle_hotplug_event(int mode ,int flag )
                 property_get("sys.hwc.htg",value,"hotplug");
                 ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
             }
-#endif
             ALOGI("connet to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
+#else
+            ALOGI("connet to hdmi [%d,%d,%d]",__LINE__,mode,flag);
+#endif   
         }
         break;
 

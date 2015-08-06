@@ -70,11 +70,12 @@
 #define RGA_USE_FENCE     1
 #ifdef USE_X86
 #define VIDEO_USE_PPROT   1
+#define HOTPLUG_MODE      0
 #else
 #define VIDEO_USE_PPROT   0
+#define HOTPLUG_MODE      0
 #endif
 #define IQIY_SPECIAL_PROCESS 0
-#define HOTPLUG_MODE      1
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
