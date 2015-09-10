@@ -652,97 +652,99 @@ hwcBlit(
 
 
     /* Go through all visible regions (clip rectangles?). */
-    do
+    //do
     {
         /* 16 rectangles a batch. */
-        unsigned int m;
+        unsigned int m = 0;
         hwcRECT srcRects[16];
         hwcRECT dstRects[16];
         hwc_rect_t const * rects = Region->rects;
-
-        for (m = 0; n < (unsigned int) Region->numRects && m < 16; n++)
+        int left_min=0 ;
+        int top_min=0;
+        int right_max=0;
+        int bottom_max=0;
+        if(rects){
+             left_min = rects[0].left; 
+             top_min  = rects[0].top;
+             right_max  = rects[0].right;
+             bottom_max = rects[0].bottom;
+        }
+        for (int r = 0; r < (int) Region->numRects ; r++)
         {
-            /* Hardware will mirror in dest rect and blit area in clipped rect.
-             * But we need mirror area in clippred rect.
-             * NOTE: Now we always set dstRect to clip area. */
+            int r_left;
+            int r_top;
+            int r_right;
+            int r_bottom;
 
-            /* Intersect clip with dest. */
-            if(Src->dospecialflag)
-            {
-                dstRects[m].left   = dstRect.left;   
-                dstRects[m].top    = dstRect.top;
-                dstRects[m].right  = dstRect.right;
-                dstRects[m].bottom = dstRect.bottom;    
-                ALOGD("@spicial [%d,%d,%d,%d]",dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
-            }
-            else
-            {
-                dstRects[m].left   = hwcMAX(dstRect.left,   rects[n].left);
-                dstRects[m].top    = hwcMAX(dstRect.top,    rects[n].top);
-                dstRects[m].right  = hwcMIN(dstRect.right,  rects[n].right);
-                dstRects[m].right  = hwcMIN(dstRects[m].right, dstWidth);
-                dstRects[m].bottom = hwcMIN(dstRect.bottom, rects[n].bottom);
-            }    
-            if (dstRects[m].top < 0) // @ buyudaren grame dstRects[m].top < 0,bottom is height ,so do this
-            {
-                dstRects[m].top = dstRects[m].top + dstHeight;
-                dstRects[m].bottom = dstRects[m].bottom + dstRects[m].top;
-            }
+            r_left   = hwcMAX(DstRect->left,   rects[r].left);
+            left_min = hwcMIN(r_left,left_min);
+            r_top    = hwcMAX(DstRect->top,    rects[r].top);
+            top_min  = hwcMIN(r_top,top_min);
+            r_right    = hwcMIN(DstRect->right,  rects[r].right);
+            right_max  = hwcMAX(r_right,right_max);
+            r_bottom = hwcMIN(DstRect->bottom, rects[r].bottom);
+            bottom_max  = hwcMAX(r_bottom,bottom_max);
+        }
+        if(Src->dospecialflag)
+        {
+            dstRects[m].left   = dstRect.left;
+            dstRects[m].top    = dstRect.top;
+            dstRects[m].right  = dstRect.right;
+            dstRects[m].bottom = dstRect.bottom;
+            ALOGD("@spicial [%d,%d,%d,%d]",dstRects[m].left,dstRects[m].top,dstRects[m].right,dstRects[m].bottom);
+        }
+        else
+        {
+            dstRects[m].left = left_min;
+            dstRects[m].top = top_min;
+            dstRects[m].right = right_max;
+            dstRects[m].bottom = bottom_max;
+        }
+        if (dstRects[m].top < 0) // @ buyudaren grame dstRects[m].top < 0,bottom is height ,so do this
+        {
+            dstRects[m].top = dstRects[m].top + dstHeight;
+            dstRects[m].bottom = dstRects[m].bottom + dstRects[m].top;
+        }
 
-            /* Check dest area. */
-            if ((dstRects[m].right <= dstRects[m].left)
-                    || (dstRects[m].bottom <= dstRects[m].top)
-               )
-            {
-                /* Skip this empty rectangle. */
-                LOGI("%s(%d):  skip empty rectangle [%d,%d,%d,%d]",
-                     __FUNCTION__,
-                     __LINE__,
-                     dstRects[m].left,
-                     dstRects[m].top,
-                     dstRects[m].right,
-                     dstRects[m].bottom);
-
-                continue;
-            }
-            if(yuvFormat)  
-            {
-                dstRects[m].left -= dstRects[m].left%2;
-                dstRects[m].top -= dstRects[m].top%2;            
-                dstRects[m].right -= dstRects[m].right%2;
-                dstRects[m].bottom -= dstRects[m].bottom%2;
-
-            }
-            
-            LOGI("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
+        /* Check dest area. */
+        if ((dstRects[m].right <= dstRects[m].left) || (dstRects[m].bottom <= dstRects[m].top))
+        {
+            /* Skip this empty rectangle. */
+            ALOGI("%s(%d):  skip empty rectangle [%d,%d,%d,%d]",
                  __FUNCTION__,
                  __LINE__,
-                 m,
-                 rects[n].left,
-                 rects[n].top,
-                 rects[n].right,
-                 rects[n].bottom);
+                 dstRects[m].left,
+                 dstRects[m].top,
+                 dstRects[m].right,
+                 dstRects[m].bottom);
 
-            /* Advance to next rectangle. */
-            m++;
-            if(Src->dospecialflag)
-            {
-                 n = (unsigned int) Region->numRects;
-            }     
-        }
-
-        /* Try next group if no rects. */
-        if (m == 0)
-        {
             hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
         }
+        if(yuvFormat)
+        {
+            dstRects[m].left -= dstRects[m].left%2;
+            dstRects[m].top -= dstRects[m].top%2;
+            dstRects[m].right -= dstRects[m].right%2;
+            dstRects[m].bottom -= dstRects[m].bottom%2;
 
-        
+        }
+
+        ALOGI("%s(%d): Region rect[%d]:  [%d,%d,%d,%d]",
+             __FUNCTION__,
+             __LINE__,
+             m,
+             rects[n].left,
+             rects[n].top,
+             rects[n].right,
+             rects[n].bottom);
+
+            /* Advance to next rectangle. */
+
+        m=1;
         for (unsigned int i = 0; i < m; i++)
         {
             switch (Src->transform)
             {
-
                 case 0:
                     RotateMode = stretch;
                     Xoffset = dstRects[i].left;
@@ -752,17 +754,10 @@ hwcBlit(
                     /* calculate srcRects,dstRect is virtual rect,dstRects[i] is actual rect,
                        hfactor and vfactor are scale factor.
                     */
-                    srcRects[i].left   = srcRect.left
-                                         - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
-
-                    srcRects[i].top    = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].right  = srcRect.right
-                                         - (int)((dstRect.right  - dstRects[i].right)  * hfactor);
-
-                    srcRects[i].bottom = srcRect.bottom
-                                         - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
 
                     break;
                 case HWC_TRANSFORM_FLIP_H:
@@ -771,17 +766,10 @@ hwcBlit(
                     Yoffset = dstRects[i].top;
                     WidthAct = dstRects[i].right - dstRects[i].left ;
                     HeightAct = dstRects[i].bottom - dstRects[i].top ;
-                    srcRects[i].left   = srcRect.left
-                                         - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
-
-                    srcRects[i].top    = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].right  = srcRect.right
-                                         - (int)((dstRect.right  - dstRects[i].right)  * hfactor);
-
-                    srcRects[i].bottom = srcRect.bottom
-                                         - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
 
                     break;
                 case HWC_TRANSFORM_FLIP_V:
@@ -790,17 +778,11 @@ hwcBlit(
                     Yoffset = dstRects[i].top;
                     WidthAct = dstRects[i].right - dstRects[i].left ;
                     HeightAct = dstRects[i].bottom - dstRects[i].top ;
-                    srcRects[i].left   = srcRect.left
-                                         - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
 
-                    srcRects[i].top    = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].right  = srcRect.right
-                                         - (int)((dstRect.right  - dstRects[i].right)  * hfactor);
-
-                    srcRects[i].bottom = srcRect.bottom
-                                         - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
 
                     break;
 
@@ -812,18 +794,10 @@ hwcBlit(
                     WidthAct = dstRects[i].bottom - dstRects[i].top ;
                     HeightAct = dstRects[i].right - dstRects[i].left ;
 
-                    srcRects[i].left   = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].top    =  srcRect.left
-                                          - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
-
-                    srcRects[i].right  = srcRects[i].left
-                                         + (int)((dstRects[i].bottom - dstRects[i].top) * vfactor);
-
-                    srcRects[i].bottom = srcRects[i].top
-                                         + (int)((dstRects[i].right  - dstRects[i].left) * hfactor);
-
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
                     break;
 
                 case HWC_TRANSFORM_ROT_180:
@@ -838,18 +812,10 @@ hwcBlit(
                     //- ((dstRects[i].right - dstRects[i].left) * hfactor)
                     //+ ((dstRect.left   - dstRects[i].left)   * hfactor);
 
-                    srcRects[i].left   = srcRect.left + (srcRect.right - srcRect.left)
-                                         - ((dstRects[i].right - dstRect.left)   * hfactor);
-
-                    srcRects[i].top    = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].right  = srcRects[i].left
-                                         + (int)((dstRects[i].right  - dstRects[i].left) * hfactor);
-
-                    srcRects[i].bottom = srcRects[i].top
-                                         + (int)((dstRects[i].bottom - dstRects[i].top) * vfactor);
-
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
                     break;
 
                 case HWC_TRANSFORM_ROT_270:
@@ -861,22 +827,10 @@ hwcBlit(
                     WidthAct = dstRects[i].bottom - dstRects[i].top ;
                     HeightAct = dstRects[i].right - dstRects[i].left ;
 
-                    //srcRects[i].left   = srcRect.top +  (srcRect.right - srcRect.left)
-                    //- ((dstRects[i].bottom - dstRects[i].top) * vfactor)
-                    //+ ((dstRect.top    - dstRects[i].top)    * vfactor);
-
-                    srcRects[i].left   = srcRect.top + (srcRect.right - srcRect.left)
-                                         - ((dstRects[i].bottom - dstRect.top)    * vfactor);
-
-                    srcRects[i].top    =  srcRect.left
-                                          - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
-
-                    srcRects[i].right  = srcRects[i].left
-                                         + (int)((dstRects[i].bottom - dstRects[i].top) * vfactor);
-
-                    srcRects[i].bottom = srcRects[i].top
-                                         + (int)((dstRects[i].right  - dstRects[i].left) * hfactor);
-
+                    srcRects[i].left   = srcRect.left ;
+                    srcRects[i].top    =  srcRect.top;
+                    srcRects[i].right  = srcRect.right;
+                    srcRects[i].bottom = srcRect.bottom;
                     break;
                 default:
                     hwcONERROR(hwcSTATUS_INVALID_ARGUMENT);
@@ -926,7 +880,7 @@ hwcBlit(
             RGA_set_src_act_info(&Rga_Request, srcRects[i].right -  srcRects[i].left, srcRects[i].bottom - srcRects[i].top,  srcRects[i].left, srcRects[i].top);
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
 
-			ALOGV("src_type=%d,dst_type=%d,index=%d",
+			LOGV("src_type=%d,dst_type=%d,index=%d",
 				srchnd->type,Context->membk_type[Context->membk_index],Context->membk_index);
             if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
             {
@@ -940,12 +894,7 @@ hwcBlit(
                 RGA_set_src_fence_flag(&Rga_Request,0,false);
                 ALOGV("set src_fd=%d,name=%s,is_last=%d",Src->acquireFenceFd,Src->LayerName,FceMrga->is_last);
                 // ALOGD("[%d,%d,%d,%d]",n,Region->numRects,i,m);
-                if((n >= (unsigned int) Region->numRects)
-                    && (i== m-1))
-                {
-                    ALOGV("set dstoutfence flag=true");
-                    RGA_set_dst_fence_flag(&Rga_Request,true);
-                }
+                RGA_set_dst_fence_flag(&Rga_Request,true);
             }
             #if VIDEO_USE_PPROT
             if(!hwcppCheck(&Rga_Request,Context->composer_mode,yuvFormat,Src->transform, \
@@ -970,7 +919,6 @@ hwcBlit(
                          dstRects[i].right,
                          dstRects[i].bottom
                         );
-                
                 }
                 return hwcSTATUS_OK;
             }
@@ -978,14 +926,14 @@ hwcBlit(
             retv = ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request);
             if( retv != 0)
             {
-                LOGE("RGA ASYNC err=%d,name=%s",retv, Src->LayerName);
-                LOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
-                LOGE("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
+                ALOGE("RGA ASYNC err=%d,name=%s",retv, Src->LayerName);
+                ALOGE("%s(%d)[i=%d]:  RGA_BLIT_ASYNC Failed Region->numRects=%d ,n=%d,m=%d", __FUNCTION__, __LINE__, i, Region->numRects, n, m);
+                ALOGE("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
                      srcStride, srcHeight, srcLogical, srcFormat);
-                LOGE("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
+                ALOGE("RGA dst:fd=%d,offset=%d,base=%p,dst_vir_w = %d, dst_vir_h = %d,dstLogical=%x,dstPhysical=%x,dstFormat=%d", dstFd, DstHandle->offset, DstHandle->base, \
                      dstWidth, dstHeight, dstLogical, dstPhysical, dstFormat);
                 
-                LOGE("%s(%d): Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
+                ALOGE("%s(%d): Adjust ActSrcRect[%d]=[%d,%d,%d,%d] => ActDstRect=[%d,%d,%d,%d]",
                      __FUNCTION__,
                      __LINE__,
                      i,
@@ -999,13 +947,13 @@ hwcBlit(
                      dstRects[i].bottom
                     );
 
-                LOGE("RGA src[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct= %d",
+                ALOGE("RGA src[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct= %d",
                      i,
                      srcRects[i].left,
                      srcRects[i].top,
                      srcRects[i].right -  srcRects[i].left,
                      srcRects[i].bottom - srcRects[i].top);
-                LOGE("RGA dst[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct=%d,transform =%d,RotateMode=%d,Rotation=%d",
+                ALOGE("RGA dst[%d] Xoffset=%d,Yoffset=%d,WidthAct=%d,HeightAct=%d,transform =%d,RotateMode=%d,Rotation=%d",
                      i,
                      Xoffset,
                      Yoffset,
@@ -1033,8 +981,8 @@ hwcBlit(
             }
         }
     }
-    while (n < (unsigned int) Region->numRects);
-    LOGI(" hwcBlit end---<");
+    //while (n < (unsigned int) Region->numRects);
+    LOGV(" hwcBlit end---<");
 
     //debug: clear fb to 0xff
 #if 0
