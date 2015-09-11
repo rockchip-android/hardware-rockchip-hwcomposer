@@ -853,7 +853,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
     }
-    if((list->numHwLayers - 1) > VOP_WIN_NUM)  // vop not support
+    if((list->numHwLayers - 1) > VOP_WIN_NUM || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)  // vop not support
     {
         if(is_out_log())
             ALOGD("line=%d,num=%d,err_cnt=%d",__LINE__,list->numHwLayers - 1,context->engine_err_cnt);
