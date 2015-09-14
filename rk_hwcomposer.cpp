@@ -771,7 +771,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     int  pixelSize  = 0;
     unsigned int  i ;
     hwcContext * context = (hwcContext *)ctx;
-    
+
    // RGA_POLICY_MAX_SIZE
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
@@ -1149,7 +1149,6 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int i ;
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
-
     if(getHdmiMode() == 1)
     {
         if(is_out_log())
@@ -1173,6 +1172,13 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        if (layer->flags & HWC_SKIP_LAYER)
+        {
+            if(is_out_log())
+                ALOGD("vop_gpu skip,flag=%x,hanlde=%x",layer->flags);
+            return -1;  
+        }
+        
         if(i == 0)
         {
             if((context->vop_mbshake || context->Is_video)&& !(handle->usage & GRALLOC_USAGE_PROTECTED))
@@ -2918,8 +2924,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 #if hwcUseTime
     gettimeofday(&tpend1, NULL);
 #endif
-   // hwc_sync(list);        
-
+    //hwc_sync(list);
     switch (context->composer_mode)
     {
         case HWC_VOP: 
