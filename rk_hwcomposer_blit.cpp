@@ -605,11 +605,13 @@ hwcBlit(
     
     if ((Src->transform == HWC_TRANSFORM_ROT_90) || (Src->transform == HWC_TRANSFORM_ROT_270))
     {
-        hfactor = (float)(srcRect.bottom - srcRect.top)
+    
+        hfactor = (float)(srcRect.right - srcRect.left)
+                  / (dstRect.bottom - dstRect.top);
+
+        vfactor= (float)(srcRect.bottom - srcRect.top)
                   / (dstRect.right - dstRect.left);
 
-        vfactor = (float)(srcRect.right - srcRect.left)
-                  / (dstRect.bottom - dstRect.top);
 
     }
     else
@@ -885,6 +887,9 @@ hwcBlit(
 
             srcRects[i].left = hwcMAX(srcRects[i].left,0);
             srcRects[i].top = hwcMAX(srcRects[i].top,0); 
+            srcRects[i].right =  hwcMIN(srcRects[i].right,srcRect.right);
+            srcRects[i].bottom =  hwcMIN(srcRects[i].bottom,srcRect.bottom);
+
             if (yuvFormat)
             {
                 srcRects[i].left -=   srcRects[i].left % 2;
