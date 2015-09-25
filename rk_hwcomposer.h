@@ -71,9 +71,11 @@
 #ifdef USE_X86
 #define VIDEO_USE_PPROT   1
 #define HOTPLUG_MODE      0
+#define ONLY_USE_ONE_VOP  1
 #else
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      0
+#define ONLY_USE_ONE_VOP  1
 #endif
 #define IQIY_SPECIAL_PROCESS 0
 #define rkmALIGN(n, align) \
@@ -82,9 +84,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.44"
+#define GHWC_VERSION  "2.45"
 #else
-#define GHWC_VERSION  "2.44_sec"
+#define GHWC_VERSION  "2.45_sec"
 #endif
 
 //HWC version Tag

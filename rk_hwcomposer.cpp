@@ -690,10 +690,12 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     int scale_cnt = 0;
     hwcContext * context = (hwcContext *)ctx;
 
+#ifdef USE_X86
     if(getHdmiMode() == 1 && list->numHwLayers - 1 > 1 && !context->Is_video)
     {
         return -1;
     }
+#endif
 
     if((list->numHwLayers - 1) > VOP_WIN_NUM && !context->special_app)  // vop not support
     {
@@ -846,13 +848,14 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     int yuv_cnt = 0;
     
    // RGA_POLICY_MAX_SIZE
-
+#if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
     {
         if(is_out_log())
             ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
     }
+#endif
     if((list->numHwLayers - 1) > VOP_WIN_NUM || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)  // vop not support
     {
         if(is_out_log())
@@ -953,12 +956,14 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+#if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
     {
         if(is_out_log())
             ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
     }
+#endif
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
@@ -1149,12 +1154,14 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int i ;
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
+#ifdef USE_X86
     if(getHdmiMode() == 1)
     {
         if(is_out_log())
             ALOGD("exit line=%d,is hdmi",__LINE__);
         return -1;
     }
+#endif
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -1371,6 +1378,11 @@ int try_hwc_cp_fb_policy(void * ctx,hwc_display_contents_1_t *list)
     return -1;
 }
 
+int try_hwc_skip_policy(void * ctx,hwc_display_contents_1_t *list)
+{
+    return -1;
+}
+
 int try_hwc_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 {
 
@@ -1385,7 +1397,6 @@ int try_hwc_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     return 0;
 }
 
-
 //extern "C" void *blend(uint8_t *dst, uint8_t *src, int dst_w, int src_w, int src_h);
 static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t *list) 
 {
@@ -1396,7 +1407,7 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
     static int videoIndex = 0;
     int ret;
-
+    
     /* Check device handle. */
     if (context == NULL || &context->device.common != (hw_device_t *) dev )
     {
@@ -1428,10 +1439,10 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
          __LINE__,
          list->numHwLayers);
 
+#if ONLY_USE_ONE_VOP
     if(is_out_log())
         ALOGD("Is need nodraw[%d,%d]",context->mHtg.HtgOn,
             gcontextAnchor[1]?(!gcontextAnchor[1]->fb_blanked):-1);
-
     if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
     {
         if(is_out_log())
@@ -1444,6 +1455,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
         context->composer_mode = HWC_GPU;
     }
     else if(!try_prepare_first(context,list))
+#else
+    if(!try_prepare_first(context,list))
+#endif
     {
         for(i = 0;i < HWC_POLICY_NUM;i++)
         {
@@ -1525,8 +1539,25 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
          __FUNCTION__,
          __LINE__,
          list->numHwLayers);
-
+#ifndef USE_X86
+    if(!try_prepare_first(context,list))
+    {
+        for(i = 0;i < HWC_POLICY_NUM;i++)
+        {
+            ret = context->fun_policy[i]((void*)context,list);
+            if(!ret)
+            {
+                break; // find the policy
+            }
+        }
+    }
+    else
+    {
+        try_hwc_gpu_policy((void*)context,list);
+    }    
+#else
     try_hwc_gpu_policy((void*)context,list);
+#endif
     context->NoDrMger.composer_mode_pre = context->composer_mode;
     if(is_out_log())
         ALOGD("ext:cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
@@ -2340,8 +2371,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             && (gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked))
             hotplug_reset_dstpos(&fb_info,0);
 #endif
-        ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info);
-
+        if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
+        {
+            ALOGE("ioctl config done error");
+        }
         ///gettimeofday(&tpend2, NULL);
         //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
         //LOGD("config use time=%ld ms",  usec1); 
@@ -2355,7 +2388,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 {
 
                    if(is_out_log())
-                        ALOGD("par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                        ALOGD("%s,par[%d],area[%d],z_win_galp[%d,%d,%x],[%d,%d,%d,%d]=>[%d,%d,%d,%d],w_h_f[%d,%d,%d],acq_fence_fd=%d,fd=%d,addr=%x",
+                            context == gcontextAnchor[0] ? "primary:" : "external:",
                             i,j,
                             fb_info.win_par[i].z_order,
                             fb_info.win_par[i].win_id,
@@ -2915,11 +2949,13 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         return 0;
     }
 
+#if ONLY_USE_ONE_VOP
     if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
     {
         hwc_sync_release(list);
         return 0;
     }
+#endif
 
 #if hwcUseTime
     gettimeofday(&tpend1, NULL);
@@ -3028,11 +3064,13 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
          __LINE__,
          list->numHwLayers);
 
+#if ONLY_USE_ONE_VOP
     if(context->mHtg.HtgOn && gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked)
     {
         hwc_sync_release(list);
         return 0;
     }
+#endif
 
     hwc_policy_set(context,list);
 #if hwcUseTime
@@ -3113,7 +3151,7 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 void handle_hotplug_event(int mode ,int flag )
 {
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
-#ifdef USE_X86
+#if (defined(USE_X86) || HOTPLUG_MODE)
     switch(flag){
     case 0:
         if(context->mHtg.HtgOn){
@@ -3809,7 +3847,7 @@ hwc_device_open(
     {
         LOGD("Create readHdmiMode thread error .");
     }
-#ifdef USE_X86
+#if (defined(USE_X86) || HOTPLUG_MODE)
     if(getHdmiMode())
     {
         pthread_t t0;
@@ -3900,7 +3938,7 @@ void init_hdmi_mode()
         }
         close(fd);
         g_hdmi_mode = atoi(statebuf);
-        //ALOGD("g_hdmi_mode is %d",g_hdmi_mode);
+        ALOGD("g_hdmi_mode is %d",g_hdmi_mode);
 
     }
     else
@@ -3999,8 +4037,7 @@ int hotplug_get_config(int flag)
         memset(context, 0, sizeof (hwcContext));
     }
 
-    if (context == NULL)
-    {
+    if (context == NULL){
         LOGE("%s(%d):malloc Failed!", __FUNCTION__, __LINE__);
         return -EINVAL;
     }
@@ -4008,29 +4045,28 @@ int hotplug_get_config(int flag)
 #ifdef USE_X86
     if(gcontextAnchor[HWC_DISPLAY_PRIMARY]->fbFd > 0)
         context->fbFd = gcontextAnchor[HWC_DISPLAY_PRIMARY]->fbFd;
-    else
-    {
+    else{
         context->fbFd = open("/dev/graphics/fb0", O_RDWR, 0);
-        if (context->fbFd < 0)
-        {
+        if (context->fbFd < 0){
             hwcONERROR(hwcSTATUS_IO_ERR);
         }
     }
 #else
-    context->fbFd = open("/dev/graphics/fb0", O_RDWR, 0);
-    if (context->fbFd < 0)
-    {
-        hwcONERROR(hwcSTATUS_IO_ERR);
+    if(context->fbFd > 0)
+        context->fbFd = context->fbFd;
+    else{
+        context->fbFd = open("/dev/graphics/fb2", O_RDWR, 0);
+        if (context->fbFd < 0){
+            hwcONERROR(hwcSTATUS_IO_ERR);
+        }
     }
 #endif
     rel = ioctl(context->fbFd, FBIOGET_FSCREENINFO, &fixInfo);
-    if (rel != 0)
-    {
+    if (rel != 0){
         hwcONERROR(hwcSTATUS_IO_ERR);
     }
 
-    if (ioctl(context->fbFd, FBIOGET_VSCREENINFO, &info) == -1)
-    {
+    if (ioctl(context->fbFd, FBIOGET_VSCREENINFO, &info) == -1){
         hwcONERROR(hwcSTATUS_IO_ERR);
     }
 
@@ -4049,15 +4085,14 @@ int hotplug_get_config(int flag)
                       * info.pixclock
                   );
 
-    if (refreshRate == 0)
-    {
+    if (refreshRate == 0){
         ALOGW("invalid refresh rate, assuming 60 Hz");
         refreshRate = 60 * 1000;
     }
 
 
     vsync_period  = 1000000000 / refreshRate;
-
+    context->fb_blanked = 1;
     context->dpyAttr[HWC_DISPLAY_PRIMARY].fd  = context->fbFd;
     context->dpyAttr[HWC_DISPLAY_EXTERNAL].fd = context->fbFd;
     //xres, yres may not be 32 aligned
@@ -4111,8 +4146,7 @@ int hotplug_get_config(int flag)
         int type = atoi(value);
         context->wfdOptimize = type;
         init_rga_cfg(context->engine_fd);
-        if (type > 0 && !is_surport_wfd_optimize())
-        {
+        if (type > 0 && !is_surport_wfd_optimize()){
             property_set("sys.enable.wfd.optimize", "0");
         }
     }
@@ -4123,22 +4157,18 @@ int hotplug_get_config(int flag)
     // context->fbStride     = 0;
 
 
-    if (info.pixclock > 0)
-    {
+    if (info.pixclock > 0){
         refreshRate = 1000000000000000LLU /
                       (
                           uint64_t(info.vsync_len + info.upper_margin + info.lower_margin + info.yres)
                           * (info.hsync_len + info.left_margin  + info.right_margin + info.xres)
                           * info.pixclock
                       );
-    }
-    else
-    {
+    }else{
         ALOGW("fbdev pixclock is zero");
     }
 
-    if (refreshRate == 0)
-    {
+    if (refreshRate == 0){
         refreshRate = 60 * 1000;  // 60 Hz
     }
 
@@ -4203,6 +4233,7 @@ int hotplug_get_config(int flag)
 
     /* Increment reference count. */
     context->reference++;
+#ifdef USE_X86
     context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
     context->fun_policy[HWC_RGA] = try_hwc_rga_policy;
     context->fun_policy[HWC_VOP_RGA] = try_hwc_vop_rga_policy;
@@ -4213,28 +4244,35 @@ int hotplug_get_config(int flag)
     context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_rga_gpu_vop_policy;
     context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
+#else
+    context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
+    context->fun_policy[HWC_RGA] = try_hwc_skip_policy;
+    context->fun_policy[HWC_VOP_RGA] = try_hwc_skip_policy;
+    context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_skip_policy  ;
+    context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_skip_policy;
+    context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;
+    context->fun_policy[HWC_NODRAW_GPU_VOP] = try_hwc_nodraw_gpu_vop_policy;
+    context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_skip_policy;
+    context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
+    context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
+#endif
     if(context->fbWidth * context->fbHeight >= 1920*1080 )
         context->vop_mbshake = true;
     gcontextAnchor[HWC_DISPLAY_EXTERNAL] = context;
-    if (context->fbWidth > context->fbHeight)
-    {
+    if (context->fbWidth > context->fbHeight){
         property_set("sys.display.oritation", "0");
-    }
-    else
-    {
+    }else{
         property_set("sys.display.oritation", "2");
     }
 
     rel = ioctl(context->fbFd, RK_FBIOGET_IOMMU_STA, &context->iommuEn);
-    if (rel != 0)
-    {
+    if (rel != 0){
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
 
     context->ippDev = new ipp_device_t();
     rel = ipp_open(context->ippDev);
-    if (rel < 0)
-    {
+    if (rel < 0){
         delete context->ippDev;
         context->ippDev = NULL;
         ALOGE("Open ipp device fail.");
@@ -4301,8 +4339,7 @@ int hotplug_set_config()
         context->dpyAttr[dType].vsync_period = context1->dpyAttr[dType].vsync_period;
         context->dpyAttr[dType].connected = true;
         return 0;
-    }
-    else{
+    }else{
         context->dpyAttr[dType].connected = false;
         return -1;
     }
@@ -4382,4 +4419,5 @@ void  *hotplug_init_thread(void *arg)
     pthread_exit(NULL);
     return NULL;
 }
+
 
