@@ -791,6 +791,10 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
                 ALOGD("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
             return -1;  
         }
+        if(layer->transform == 1 || layer->transform == 2)
+        {
+            return -1;
+        }
         if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)  // video use other policy
         {
             if(is_out_log())
@@ -874,6 +878,10 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 ALOGD("policy skip,flag=%x,hanlde=%x,line=%d,name=%s",layer->flags,handle,__LINE__,layer->LayerName);              
             }    
             return -1;  
+        }
+        if(i == 0 && (layer->transform == 1 || layer->transform == 2))
+        {
+            return -1;
         }
         if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
             &&(context->vop_mbshake || layer->transform != 0))  // video use other policy
@@ -967,7 +975,10 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
-
+    if(layer->transform == 1 || layer->transform == 2)
+    {
+        return -1;
+    }
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
         if(is_out_log())
