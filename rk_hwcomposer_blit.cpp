@@ -773,14 +773,14 @@ hwcBlit(
                     Yoffset = dstRects[i].top;
                     WidthAct = dstRects[i].right - dstRects[i].left ;
                     HeightAct = dstRects[i].bottom - dstRects[i].top ;
-                    srcRects[i].left   = srcRect.left
-                                         - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
+                    srcRects[i].left   = srcWidth - (srcRect.right
+                                         - (int)((dstRect.right  - dstRects[i].right)  * hfactor));
 
                     srcRects[i].top    = srcRect.top
                                          - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
 
-                    srcRects[i].right  = srcRect.right
-                                         - (int)((dstRect.right  - dstRects[i].right)  * hfactor);
+                    srcRects[i].right  = srcWidth - (srcRect.left
+                                         - (int)((dstRect.left   - dstRects[i].left)   * hfactor));
 
                     srcRects[i].bottom = srcRect.bottom
                                          - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
@@ -795,14 +795,14 @@ hwcBlit(
                     srcRects[i].left   = srcRect.left
                                          - (int)((dstRect.left   - dstRects[i].left)   * hfactor);
 
-                    srcRects[i].top    = srcRect.top
-                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor);
+                    srcRects[i].top    = srcHeight - (srcRect.bottom
+                                         - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor));
 
                     srcRects[i].right  = srcRect.right
                                          - (int)((dstRect.right  - dstRects[i].right)  * hfactor);
 
-                    srcRects[i].bottom = srcRect.bottom
-                                         - (int)((dstRect.bottom - dstRects[i].bottom) * vfactor);
+                    srcRects[i].bottom = srcHeight - (srcRect.top
+                                         - (int)((dstRect.top    - dstRects[i].top)    * vfactor));
 
                     break;
 
