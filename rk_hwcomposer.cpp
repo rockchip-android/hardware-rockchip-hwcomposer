@@ -791,7 +791,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
                 ALOGD("rga policy skip,flag=%x,hanlde=%x",layer->flags,handle);
             return -1;  
         }
-        if(layer->transform == 1 || layer->transform == 2)
+        if(layer->transform == 5 || layer->transform == 6)
         {
             return -1;
         }
@@ -879,7 +879,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             }    
             return -1;  
         }
-        if(i == 0 && (layer->transform == 1 || layer->transform == 2))
+        if(i == 0 && (layer->transform == 5 || layer->transform == 6))
         {
             return -1;
         }
@@ -975,7 +975,7 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
-    if(layer->transform == 1 || layer->transform == 2)
+    if(layer->transform == 5 || layer->transform == 6)
     {
         return -1;
     }
