@@ -162,7 +162,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
 
     hfactor = (float)(rkmALIGN(rga_p->dst.act_w,8))/(float) (rga_p->src.act_w);
     vfactor = (float)(rkmALIGN(rga_p->dst.act_h,2))/(float)(rga_p->src.act_h);
-    if(!((hfactor >= 1.0 && vfactor >= 1.0) || (hfactor <= 1.0 && vfactor <= 1.0)))
+    if(!((hfactor > 1.0 && vfactor > 1.0) || (hfactor < 1.0 && vfactor < 1.0) || (hfactor == vfactor)))
     {
         if(is_out_log())
             ALOGD("exit line=%d,[%f,%f]",__LINE__,hfactor ,vfactor);
