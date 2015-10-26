@@ -264,10 +264,13 @@ hwcGetBufFormat(
             break;
 
         case HAL_PIXEL_FORMAT_YCrCb_NV12:
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
             /* YUV 420 semi planner: NV12 */
             *Format = RK_FORMAT_YCbCr_420_SP;
             break;
+        case HAL_PIXEL_FORMAT_YCrCb_420_SP:  // NV21
+            *Format = RK_FORMAT_YCrCb_420_SP;
+            break;
+
 		case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
 		   *Format = RK_FORMAT_YCbCr_420_SP;
 			 break; 
