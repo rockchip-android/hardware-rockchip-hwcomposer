@@ -883,7 +883,8 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         {
             return -1;
         }
-        if(handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 
+        if((handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12
+            || handle->format == HAL_PIXEL_FORMAT_YCrCb_420_SP)
             &&(context->vop_mbshake || layer->transform != 0))  // video use other policy
         {
             yuv_cnt ++;
