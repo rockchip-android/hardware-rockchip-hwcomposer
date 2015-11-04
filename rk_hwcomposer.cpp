@@ -1971,6 +1971,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     int start = 0,end = 0;
     int i = 0,step = 1;
     int j;
+    int fd_dup = -1;
     int winIndex = 0;
     int rgaIndex = 0;
     bool fb_flag = false;
@@ -2025,8 +2026,27 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             {
                 fb_info.win_par[rgaIndex].area_par[0].ion_fd = context->membk_fds[context->membk_index];            
             }
-           // fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = -1;
-            fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = context->membk_fence_acqfd[context->membk_index];
+            // fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = -1;
+            if(HWC_RGA == mode)
+            {
+                fd_dup = dup(context->membk_fence_acqfd[context->membk_index]);
+                if(fd_dup < 0 && context->membk_fence_acqfd[context->membk_index] > -1)
+                {
+                    ALOGE("%s,%d,Dup fd fail for %s",__FUNCTION__,__LINE__,strerror(errno));
+                }
+                else if(fd_dup == context->membk_fence_acqfd[context->membk_index])
+                    ALOGE("%s,%d,Dup fd fail for %s",__FUNCTION__,__LINE__,strerror(errno));
+                else
+                {
+                    fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = fd_dup;
+                    context->membk_fence_acqfd[context->membk_index] = -1;
+                    //ALOGD("{%d,%d}",context->membk_fence_acqfd[context->membk_index],fd_dup);
+                }
+            }
+            else
+            {
+                fb_info.win_par[rgaIndex].area_par[0].acq_fence_fd = context->membk_fence_acqfd[context->membk_index];
+            }
             ALOGV("set vop acq_fd=%d",fb_info.win_par[0].area_par[0].acq_fence_fd);
             fb_info.win_par[rgaIndex].area_par[0].x_offset = 0;//info.xoffset;
             fb_info.win_par[rgaIndex].area_par[0].y_offset = 0;//info.yoffset;
@@ -2368,7 +2388,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                             fb_info.win_par[i].area_par[j].ion_fd = 0;
                             fb_info.win_par[i].area_par[j].phy_addr = 0;
                         }
-                    }    
+                    }
                 }    
                 context->vui_fd = uiHnd->share_fd;
             }    
@@ -2442,6 +2462,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 ALOGD("fb_info.rel_fence_fd[k]=%d",fb_info.rel_fence_fd[k]);
             ALOGD("fb_info.ret_fence_fd=%d",fb_info.ret_fence_fd);
+#if RGA_USE_FENCE
+            for(int k = 0; k<RGA_REL_FENCE_NUM; k++)
+                ALOGD("rga_fence_fd[%d] = %d,index=%d", k, context->rga_fence_relfd[k],bk_index);
+#endif
         }
         switch (mode)
         {
@@ -2474,23 +2498,25 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             	{
                     if(context->rga_fence_relfd[k] != -1)
                     {
-                        
-                        if(k < (list->numHwLayers -2))
+                        if(k < (list->numHwLayers - 1))
                         {
                             list->hwLayers[k].releaseFenceFd = context->rga_fence_relfd[k];
                             ALOGV("rga_fence_fd[%d] = %d,index=%d", k, context->rga_fence_relfd[k],bk_index);
-                        }    
+                        }
                         else
                             close(context->rga_fence_relfd[k]);
                      }
             	}
                 #endif
-                
                 if(fb_info.ret_fence_fd > 0)
                     close(fb_info.ret_fence_fd);
                 // if(fb_info.ret_fence_fd > 0)
                    // list->retireFenceFd = fb_info.ret_fence_fd;      
-                
+                if(fd_dup > -1)
+                {
+                    close(fd_dup);
+                    fd_dup = -1;
+                }
                 break;
             case HWC_RGA_TRSM_VOP:  
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
