@@ -84,9 +84,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.48"
+#define GHWC_VERSION  "2.49"
 #else
-#define GHWC_VERSION  "2.48_sec"
+#define GHWC_VERSION  "2.49_sec"
 #endif
 
 //HWC version Tag
@@ -96,7 +96,7 @@
 #define HWC_VERSION "HWC_VERSION  \
 Author:huangds \
 Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
-Version:2.48 \
+Version:2.49 \
 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
 
 /* Set it to 1 to enable swap rectangle optimization;
@@ -132,11 +132,13 @@ extern "C"
         HWC_VOP = 0,
         HWC_RGA,   
         HWC_VOP_RGA,
+        HWC_RGA_VOP,
         HWC_RGA_TRSM_VOP,
         HWC_RGA_TRSM_GPU_VOP,
         HWC_VOP_GPU,
         HWC_NODRAW_GPU_VOP,
         HWC_RGA_GPU_VOP,
+        HWC_GPU_VOP,
         HWC_CP_FB,
         HWC_GPU,
         HWC_POLICY_NUM
@@ -331,7 +333,8 @@ FenceMangrRga;
         int     mFbFd;
         int     mFbBase;
         int     vui_fd;
-        int     vui_hide;    
+        int     vui_hide;
+        int     videoCnt;
         bool     vop_mbshake;
         bool     Is_video;
         bool     Is_Lvideo;        

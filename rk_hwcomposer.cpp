@@ -65,12 +65,14 @@ static int last_video_addr[2];
 static char const* compositionModeName[] = {
                             "HWC_VOP",
                             "HWC_RGA",     
-                            "HWC_VOP_RGA",   
+                            "HWC_VOP_RGA",
+                            "HWC_RGA_VOP",
                             "HWC_RGA_TRSM_VOP",
                             "HWC_RGA_TRSM_GPU_VOP",
                             "HWC_VOP_GPU",
                             "HWC_NODRAW_GPU_VOP",
                             "HWC_RGA_GPU_VOP",
+                            "HWC_GPU_VOP",
                             "HWC_CP_FB",
                             "HWC_GPU"
                           };
@@ -582,6 +584,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
 {
     int hwc_en; 
     int static cnt = 0;
+    ctx->videoCnt = 0;
     ctx->Is_video = false;
     ctx->Is_Lvideo = false;
     ctx->Is_Secure = false;
@@ -621,13 +624,17 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 if(handle->usage & GRALLOC_USAGE_PROTECTED )
                     ctx->Is_Secure = true;
             }
+            if(handle && (handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || handle->format == HAL_PIXEL_FORMAT_YCrCb_420_SP))
+            {
+                ctx->videoCnt ++;
+            }
             #if IQIY_SPECIAL_PROCESS
             if(1==i && strstr(layer->LayerName,"com.qiyi.video/org.qiyi.android.video.MainActivity"))
             {
                 ctx->special_app = true;
                 int temp = hwc_get_int_property("sys.hwc.special","1");
                 if(!temp)
-                   ctx->special_app = false;  
+                   ctx->special_app = false;
             } 
             #endif          
             if(handle && handle->type && !ctx->iommuEn)
@@ -700,7 +707,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     if((list->numHwLayers - 1) > VOP_WIN_NUM && !context->special_app)  // vop not support
     {
         if(is_out_log())
-            ALOGE("line=%d,num=%d,special=%d",__LINE__,list->numHwLayers - 1,context->special_app);
+            ALOGD("line=%d,num=%d,special=%d",__LINE__,list->numHwLayers - 1,context->special_app);
         return -1;
     }
     
@@ -837,6 +844,110 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     ALOGV("hwc-prepare use HWC_RGA policy");
 
     return 0;
+}
+
+int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
+{
+
+#if 1
+    float hfactor = 1;
+    float vfactor = 1;
+    int  pixelSize  = 0;
+    int  yuvPixelSize  = 0;
+    unsigned int i ;
+    hwcContext * context = (hwcContext *)ctx;
+    int yuv_cnt = 0;
+
+#if ONLY_USE_ONE_VOP
+    if(getHdmiMode() == 1)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,is hdmi",__LINE__);
+        return -1;
+    }
+#endif
+    if(list->numHwLayers - 1 < 3 || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)//optimazation
+    {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d,err_cnt=%d",__LINE__,list->numHwLayers - 1,context->engine_err_cnt);
+        return -1;
+    }
+
+    for ( i = 0; i < (list->numHwLayers - 2); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+        if ((layer->flags & HWC_SKIP_LAYER) || (handle == NULL))
+        {
+            if(is_out_log())
+            {
+                ALOGD("policy skip,flag=%x,hanlde=%x,line=%d,name=%s",layer->flags,handle,__LINE__,layer->LayerName);
+            }
+            return -1;
+        }
+        if((layer->transform == 5 || layer->transform == 6))
+        {
+            if(is_out_log())
+            {
+                ALOGD("policy skip,line=%d,trfm=%d",__LINE__,layer->transform);
+            }
+            return -1;
+        }
+        if((handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || handle->format == HAL_PIXEL_FORMAT_YCrCb_420_SP))
+        {
+            yuv_cnt ++;
+        }
+        yuvPixelSize += handle->width * handle->height;
+    }
+    ALOGV("yuvPixelSize=%d",yuvPixelSize);
+    if( yuvPixelSize > 1024001 || yuv_cnt != 2)  // 1280 x 800 + 1 pixels
+    {
+        if(is_out_log())
+           ALOGD("line=%d,yuvPixelSize=%d,yuv_cnt=%d",__LINE__,yuvPixelSize,yuv_cnt);
+        return -1;
+    }
+
+    for ( i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+
+        if(i == list->numHwLayers - 2)
+        {
+            if(handle == NULL)
+            {
+                if(is_out_log())
+                   ALOGD("line=%d,handle=%d",__LINE__,handle);
+                return -1;
+            }
+            float hfactor = 1.0;
+            float vfactor = 1.0;
+            hfactor = (float)(layer->sourceCrop.right - layer->sourceCrop.left)
+                      / (layer->displayFrame.right - layer->displayFrame.left);
+
+            vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+                      / (layer->displayFrame.bottom - layer->displayFrame.top);
+            if(hfactor != 1.0f || vfactor != 1.0f || layer->transform != 0)// wop has only one support scale
+            {
+                if(is_out_log())
+                {
+                    ALOGD("[%f,%f,%d],nmae=%s,line=%d",hfactor,vfactor,layer->transform,layer->LayerName,__LINE__);
+                }
+                return -1;
+            }
+        }
+        if(i == list->numHwLayers - 2)
+            layer->compositionType = HWC_LCDC;
+        else
+            layer->compositionType = HWC_BLITTER;
+    }
+    context->composer_mode = HWC_RGA_VOP;
+    ALOGV("hwc-prepare use HWC_RGA_VOP policy");
+
+    return 0;
+#else
+    return -1;
+#endif
 }
 
 // video two layers ,one need transform, 0->rga_trfm->buffer->win0, 1->win1
@@ -977,6 +1088,10 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if(layer->transform == 5 || layer->transform == 6)
+    {
+        return -1;
+    }
+    if(context->videoCnt == 2)//car recorder
     {
         return -1;
     }
@@ -1384,6 +1499,76 @@ int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 #endif
 }
 
+int try_hwc_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
+{
+
+#if 0
+    float hfactor = 1;
+    float vfactor = 1;
+    int  pixelSize  = 0;
+    int  yuvPixelSize  = 0;
+    unsigned int i ;
+    hwcContext * context = (hwcContext *)ctx;
+    int yuv_cnt = 0;
+
+#if ONLY_USE_ONE_VOP
+    if(getHdmiMode() == 1)
+    {
+        if(is_out_log())
+            ALOGD("exit line=%d,is hdmi",__LINE__);
+        return -1;
+    }
+#endif
+    if(list->numHwLayers - 1 < 3 || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)//optimazation
+    {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d,err_cnt=%d",__LINE__,list->numHwLayers - 1,context->engine_err_cnt);
+        return -1;
+    }
+
+    for ( i = 0; i < (list->numHwLayers - 1); i++)
+    {
+        hwc_layer_1_t * layer = &list->hwLayers[i];
+        struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
+
+        if(i == list->numHwLayers - 2)
+        {
+            if(handle == NULL)
+            {
+                if(is_out_log())
+                   ALOGD("line=%d,handle=%d",__LINE__,handle);
+                return -1;
+            }
+            float hfactor = 1.0;
+            float vfactor = 1.0;
+            hfactor = (float)(layer->sourceCrop.right - layer->sourceCrop.left)
+                      / (layer->displayFrame.right - layer->displayFrame.left);
+
+            vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
+                      / (layer->displayFrame.bottom - layer->displayFrame.top);
+            if(hfactor != 1.0f || vfactor != 1.0f || layer->transform != 0)// wop has only one support scale
+            {
+                if(is_out_log())
+                {
+                    ALOGD("[%f,%f,%d],nmae=%s,line=%d",hfactor,vfactor,layer->transform,layer->LayerName,__LINE__);
+                }
+                return -1;
+            }
+        }
+        if(i == list->numHwLayers - 2)
+            layer->compositionType = HWC_LCDC;
+        else
+            layer->compositionType = HWC_FRAMEBUFFER;
+    }
+    context->win_swap = 1;
+    context->composer_mode = HWC_GPU_VOP;
+    ALOGV("hwc-prepare use HWC_GPU_VOP policy");
+
+    return 0;
+#else
+    return -1;
+#endif
+}
 
 int try_hwc_cp_fb_policy(void * ctx,hwc_display_contents_1_t *list)
 {
@@ -2003,6 +2188,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             end = list->numHwLayers - 1;
             break;
         case HWC_RGA:
+        case HWC_RGA_VOP:
         case HWC_RGA_TRSM_VOP:
         case HWC_RGA_TRSM_GPU_VOP:
         case HWC_NODRAW_GPU_VOP:
@@ -2014,6 +2200,13 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 start = 0;
                 end = 1;        
                 winIndex = 0;
+            }
+            if(HWC_RGA_VOP)
+            {
+                rgaIndex = 0;
+                start = list->numHwLayers - 2;
+                end = list->numHwLayers - 1;
+                winIndex = 1;
             }
  			fb_info.win_par[rgaIndex].area_par[0].data_format = context->fbhandle.format;
             fb_info.win_par[rgaIndex].win_id = rgaIndex;
@@ -2145,6 +2338,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             winIndex = 0;
             step = list->numHwLayers -1;
             break;
+        case HWC_GPU_VOP:
+            start = list->numHwLayers - 2;
+            end = list->numHwLayers;
+            winIndex = 0;
+            step = 1;
+            break;
         case HWC_CP_FB:
             break;
         case HWC_GPU:
@@ -2186,7 +2385,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if (!handle)
         {
             ALOGW("layer[%d].handle=NULL,name=%s",i,layer->LayerName);
-            i += step;            
+            i += step;
             continue;
         }
         #if 0   // debug ,Dont remove
@@ -2306,7 +2505,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
            );
 
         fb_info.win_par[winIndex].win_id = context->win_swap ?(1-winIndex):winIndex;
-        fb_info.win_par[winIndex].z_order = winIndex;
+        if(mode == HWC_GPU_VOP)
+        {
+            fb_info.win_par[winIndex].z_order = 1 - winIndex;
+        }
+        else
+            fb_info.win_par[winIndex].z_order = winIndex;
         fb_info.win_par[winIndex].area_par[0].ion_fd = handle->share_fd;
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
         fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;       
@@ -2349,7 +2553,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     }
     //fb_info.wait_fs = 1;
     //gettimeofday(&tpend1, NULL);
-
     #if 1 // detect UI invalid ,so close win1 ,reduce  bandwidth.
     if(
         /*fb_info.win_par[0].area_par[0].data_format == 0x20*/
@@ -2448,12 +2651,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 #if 0
         for (int k = 0;k < RK_MAX_BUF_NUM;k++)
         {
-            if (fb_info.rel_fence_fd[k] > 0)
+            if (fb_info.rel_fence_fd[k] > -1)
             {
                 close(fb_info.rel_fence_fd[k]);
             }                 
         }
-        if(fb_info.ret_fence_fd > 0)
+        if(fb_info.ret_fence_fd > -1)
             close(fb_info.ret_fence_fd);
 
 #else
@@ -2469,10 +2672,10 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         }
         switch (mode)
         {
-            case HWC_VOP:       
+            case HWC_VOP:
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0)
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         if( k < list->numHwLayers - 1)
                             list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
@@ -2480,17 +2683,17 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                             close(fb_info.rel_fence_fd[k]);
                     }                 
                 }
-                if(fb_info.ret_fence_fd > 0)
+                if(fb_info.ret_fence_fd > -1)
                     list->retireFenceFd = fb_info.ret_fence_fd;
                 break;
             case HWC_RGA:
                 
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0)
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         context->membk_fence_fd[bk_index] = fb_info.rel_fence_fd[k];
-                    }                 
+                    }
                 }
 
                 #if RGA_USE_FENCE
@@ -2518,40 +2721,55 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                     fd_dup = -1;
                 }
                 break;
-            case HWC_RGA_TRSM_VOP:  
+            case HWC_RGA_VOP:
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0)
+                    if (fb_info.rel_fence_fd[k] > -1)
+                    {
+                        if(0 == k)
+                            list->hwLayers[list->numHwLayers - 2].releaseFenceFd = fb_info.rel_fence_fd[k];
+                        else
+                            close(fb_info.rel_fence_fd[k]);
+                    }
+                }
+                if(fb_info.ret_fence_fd > -1)
+                    list->retireFenceFd = fb_info.ret_fence_fd;
+                    //close(fb_info.ret_fence_fd);
+                break;
+            case HWC_RGA_TRSM_VOP:
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                {
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         close(fb_info.rel_fence_fd[k]);
                     }                 
                 }
-                if(fb_info.ret_fence_fd > 0)
+                if(fb_info.ret_fence_fd > -1)
                     close(fb_info.ret_fence_fd);                                   
                 break;
             case HWC_VOP_RGA:
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0)
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         if(0 == k)
                             list->hwLayers[k].releaseFenceFd = fb_info.rel_fence_fd[k];
                         else                        
                             close(fb_info.rel_fence_fd[k]);
-                    }                 
+                    }
                 }
-                if(fb_info.ret_fence_fd > 0)
-                    close(fb_info.ret_fence_fd);                                   
+                if(fb_info.ret_fence_fd > -1)
+                    close(fb_info.ret_fence_fd);
                 break;
             case HWC_RGA_TRSM_GPU_VOP:   
             case HWC_NODRAW_GPU_VOP:
             case HWC_RGA_GPU_VOP:
-            case HWC_GPU:   
+            case HWC_GPU:
             //case HWC_VOP_GPU:
 
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0)
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         if( k < list->numHwLayers && !fb_flag )
                         {
@@ -2563,14 +2781,14 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                             close(fb_info.rel_fence_fd[k]);
                     }                 
                 }
-                if(fb_info.ret_fence_fd > 0)
+                if(fb_info.ret_fence_fd > -1)
                     list->retireFenceFd = fb_info.ret_fence_fd;      
                 break;
                 
             case HWC_VOP_GPU:
                 for (int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
-                    if (fb_info.rel_fence_fd[k] > 0 )
+                    if (fb_info.rel_fence_fd[k] > -1)
                     {
                         if( k == 0 )
                         {
@@ -2590,12 +2808,31 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                             close(fb_info.rel_fence_fd[k]);
                     }           
                 }
-                if(fb_info.ret_fence_fd > 0)
+                if(fb_info.ret_fence_fd > -1)
                 {
                     list->retireFenceFd = fb_info.ret_fence_fd;
                     //list->retireFenceFd = -1;
                     //close(fb_info.ret_fence_fd);
                 }
+                break;
+            case HWC_GPU_VOP:
+		        list->hwLayers[list->numHwLayers - 1].releaseFenceFd = -1;
+		        list->hwLayers[list->numHwLayers - 2].releaseFenceFd = -1;
+                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                {
+                    ALOGD("fb_info.rel_fence_fd[%d]=%d",k,fb_info.rel_fence_fd[k]);
+                    if (fb_info.rel_fence_fd[k] > -1)
+                    {
+                        if(list->hwLayers[list->numHwLayers - 2].releaseFenceFd == -1)
+                            list->hwLayers[list->numHwLayers - 2].releaseFenceFd = fb_info.rel_fence_fd[k];
+			            else if(list->hwLayers[list->numHwLayers - 1].releaseFenceFd == -1)
+			                list->hwLayers[list->numHwLayers - 1].releaseFenceFd = fb_info.rel_fence_fd[k];
+                        else 
+                            close(fb_info.rel_fence_fd[k]);
+                    }
+                }
+                if(fb_info.ret_fence_fd > -1)
+                    list->retireFenceFd = fb_info.ret_fence_fd;
                 break;
             case HWC_CP_FB:
                 break;
@@ -2832,8 +3069,11 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                             &list->hwLayers[i].displayFrame,
                             &list->hwLayers[i].visibleRegionScreen,
                             &RgaFenceMg,index));
-               
-                context->rga_fence_relfd[i] =  RgaFenceMg.rel_fd;   
+
+                if(RgaFenceMg.use_fence)
+                    context->rga_fence_relfd[i] =  RgaFenceMg.rel_fd;
+                else
+                    context->rga_fence_relfd[i] = -1;
                 
         #if RGA_USE_FENCE
                 if(context->rga_fence_relfd[i] > 0 && i < 1)  
@@ -2938,11 +3178,13 @@ int hwc_policy_set(hwcContext * context,hwc_display_contents_1_t *list)
     {
         case HWC_VOP: 
         case HWC_VOP_GPU:
+        case HWC_GPU_VOP:
         case HWC_GPU:        
         case HWC_NODRAW_GPU_VOP:
             hwc_vop_config(context,list);        
             break;
         case HWC_RGA:
+        case HWC_RGA_VOP:
         case HWC_RGA_TRSM_VOP:           
         case HWC_RGA_TRSM_GPU_VOP:   
         case HWC_RGA_GPU_VOP:
@@ -3001,17 +3243,19 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     //hwc_sync(list);
     switch (context->composer_mode)
     {
-        case HWC_VOP: 
+        case HWC_VOP:
         case HWC_VOP_GPU:
-        case HWC_GPU:        
+        case HWC_GPU_VOP:
+        case HWC_GPU:
         case HWC_NODRAW_GPU_VOP:
             break;
         case HWC_RGA:
+        case HWC_RGA_VOP:
         case HWC_RGA_TRSM_VOP:           
         case HWC_RGA_TRSM_GPU_VOP:   
         case HWC_RGA_GPU_VOP:
         case HWC_VOP_RGA:
-            hwc_sync(list);        
+            hwc_sync(list);
             break;
         case HWC_CP_FB:
             break;
@@ -3801,11 +4045,13 @@ hwc_device_open(
     context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
     context->fun_policy[HWC_RGA] = try_hwc_rga_policy;
     context->fun_policy[HWC_VOP_RGA] = try_hwc_vop_rga_policy;
+    context->fun_policy[HWC_RGA_VOP] = try_hwc_rga_vop_policy;
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_rga_trfm_vop_policy  ;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_rga_trfm_gpu_vop_policy;
     context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;
     context->fun_policy[HWC_NODRAW_GPU_VOP] = try_hwc_nodraw_gpu_vop_policy;
     context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_rga_gpu_vop_policy;
+    context->fun_policy[HWC_GPU_VOP] = try_hwc_gpu_vop_policy;
     context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
     if(context->fbWidth * context->fbHeight >= 1920*1080 )
@@ -4275,22 +4521,26 @@ int hotplug_get_config(int flag)
     context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
     context->fun_policy[HWC_RGA] = try_hwc_rga_policy;
     context->fun_policy[HWC_VOP_RGA] = try_hwc_vop_rga_policy;
+    context->fun_policy[HWC_RGA_VOP] = try_hwc_rga_vop_policy;
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_rga_trfm_vop_policy  ;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_rga_trfm_gpu_vop_policy;
     context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;
     context->fun_policy[HWC_NODRAW_GPU_VOP] = try_hwc_nodraw_gpu_vop_policy;
     context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_rga_gpu_vop_policy;
+    context->fun_policy[HWC_GPU_VOP] = try_hwc_gpu_vop_policy;
     context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
 #else
     context->fun_policy[HWC_VOP] = try_hwc_vop_policy;
     context->fun_policy[HWC_RGA] = try_hwc_skip_policy;
     context->fun_policy[HWC_VOP_RGA] = try_hwc_skip_policy;
+    context->fun_policy[HWC_RGA_VOP] = try_hwc_skip_policy;
     context->fun_policy[HWC_RGA_TRSM_VOP] = try_hwc_skip_policy  ;
     context->fun_policy[HWC_RGA_TRSM_GPU_VOP] = try_hwc_skip_policy;
     context->fun_policy[HWC_VOP_GPU] = try_hwc_vop_gpu_policy;
     context->fun_policy[HWC_NODRAW_GPU_VOP] = try_hwc_nodraw_gpu_vop_policy;
     context->fun_policy[HWC_RGA_GPU_VOP] = try_hwc_skip_policy;
+    context->fun_policy[HWC_GPU_VOP] = try_hwc_skip_policy;
     context->fun_policy[HWC_CP_FB] = try_hwc_cp_fb_policy;
     context->fun_policy[HWC_GPU] = try_hwc_gpu_policy;
 #endif
