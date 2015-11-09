@@ -178,7 +178,7 @@ hwcGetBufferInfo(
 			#ifdef USE_LCDC_COMPOSER
             *Physical      =  Handle->phy_addr;//Context->fbPhysical;//Handle->phy_addr; ; // debug
             #else
-            *Physical      = NULL;
+            *Physical      = 0;
             #endif
 
             *Width         = width;

@@ -180,7 +180,7 @@ int hwcppCheck(struct rga_req * rga_p,cmpType mode,int isyuv,int rot,hwcRECT *sr
 //return property value of pcProperty
 int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
 {
-    int ret;
+    int ret = -1;
     static int vpuFd = -1;
     unsigned int src = rga_p->line_draw_info.color & 0xffff;
     unsigned int dst = (rga_p->line_draw_info.color & 0xffff0000)>> 16;
@@ -682,7 +682,7 @@ hwcBlit(
                 dstRects[m].left   = hwcMAX(dstRect.left,   rects[n].left);
                 dstRects[m].top    = hwcMAX(dstRect.top,    rects[n].top);
                 dstRects[m].right  = hwcMIN(dstRect.right,  rects[n].right);
-                dstRects[m].right  = hwcMIN(dstRects[m].right, dstWidth);
+                dstRects[m].right  = hwcMIN(dstRects[m].right, (int)dstWidth);//dstWidth to signed int  can't be negative
                 dstRects[m].bottom = hwcMIN(dstRect.bottom, rects[n].bottom);
             }    
             if (dstRects[m].top < 0) // @ buyudaren grame dstRects[m].top < 0,bottom is height ,so do this

@@ -252,7 +252,7 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
          right_max  = rects[0].right;
          bottom_max = rects[0].bottom;
     }
-    for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+    for (unsigned int r = 0; r < (unsigned int) Region->numRects ; r++)
     {
         int r_left;
         int r_top;
@@ -509,7 +509,7 @@ hwcDumpArea(
                 }
             }
 
-            if (area->owners < (1U << i))
+            if ((unsigned int)area->owners < (1U << i))
             {
                 break;
             }
@@ -550,7 +550,7 @@ int hwc_get_layer_area_info(hwc_layer_1_t * layer,hwcRECT *srcrect,hwcRECT *dstr
          right_max  = rects[0].right;
          bottom_max = rects[0].bottom;
     }
-    for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+    for (unsigned int r = 0; r < (unsigned int) Region->numRects ; r++)
     {
         int r_left;
         int r_top;
@@ -2017,7 +2017,7 @@ static int CompareLines(int *da,int w)
     {
         for(j= 0;j<w;j++)  
         {
-            if(*da != 0xff000000 && *da != 0x0)
+            if((*da & 0xFFFFFFFF) != 0xff000000 && *da != 0x0)
             {
                 ALOGV("[%d,%d]=%x",i,j,*da);
                 return 1;
@@ -2036,7 +2036,7 @@ static int CompareVers(int *da,int w,int h)
         data = da + i;
         for(j= 0;j<h;j++)  
         {
-            if(*data != 0xff000000 && *data != 0x0 )
+            if((*data & 0xFFFFFFFF) != 0xff000000 && *data != 0x0 )
             {
                 ALOGV("vers [%d,%d]=%x",i,j,*da);
 
@@ -2122,7 +2122,7 @@ int Get_layer_disp_area( hwc_layer_1_t * layer, hwcRECT* dstRects)
          right_max  = rects[0].right;
          bottom_max = rects[0].bottom;
     }
-    for (int r = 0; r < (unsigned int) Region->numRects ; r++)
+    for (unsigned int r = 0; r < (unsigned int) Region->numRects ; r++)
     {
         int r_left;
         int r_top;
@@ -2460,7 +2460,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         dstRects.right  = hwcMIN(DstRect->right,  rect_merge.right);
         dstRects.bottom = hwcMIN(DstRect->bottom, rect_merge.bottom);
 
-        if( i == (list->numHwLayers -1))
+        if( i == int(list->numHwLayers -1))
         {
             srcRects.left  = dstRects.left;
             srcRects.top = dstRects.top;
@@ -2515,7 +2515,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].data_format = handle->format;
         fb_info.win_par[winIndex].area_par[0].acq_fence_fd = layer->acquireFenceFd;       
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
-        if( i == (list->numHwLayers -1))
+        if( i == int(list->numHwLayers -1))
         {           
             fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;    
             fb_info.win_par[winIndex].area_par[0].yvir = handle->height*NUM_FB_BUFFERS;
@@ -2673,7 +2673,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         switch (mode)
         {
             case HWC_VOP:
-                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                for (unsigned int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
                     if (fb_info.rel_fence_fd[k] > -1)
                     {
@@ -2697,7 +2697,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 }
 
                 #if RGA_USE_FENCE
-            	for(int k = 0; k<RGA_REL_FENCE_NUM; k++)
+                for(unsigned int k = 0; k<RGA_REL_FENCE_NUM; k++)
             	{
                     if(context->rga_fence_relfd[k] != -1)
                     {
@@ -2767,7 +2767,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             case HWC_GPU:
             //case HWC_VOP_GPU:
 
-                for (int k = 0;k < RK_MAX_BUF_NUM;k++)
+                for (unsigned int k = 0;k < RK_MAX_BUF_NUM;k++)
                 {
                     if (fb_info.rel_fence_fd[k] > -1)
                     {
@@ -2841,7 +2841,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         }
         if(is_out_log()>1)
         {
-            for(int k=0;k<list->numHwLayers;k++)
+            for(unsigned int k=0;k<list->numHwLayers;k++)
                 ALOGD("list->hwLayers[k].releaseFenceFd=%d",list->hwLayers[k].releaseFenceFd);
             ALOGD("list->retireFenceFd=%d",list->retireFenceFd);
         }
@@ -2980,7 +2980,7 @@ int hwc_rga_blit( hwcContext * context ,hwc_display_contents_1_t *list)
                     continue;
                 }
                 /* Now go through all rectangles to split areas. */
-                for (int j = 0; j < region->numRects; j++)
+                for (unsigned int j = 0; j < region->numRects; j++)
                 {
                     /* Assume the region will never go out of dest surface. */
                     DivArea(context,

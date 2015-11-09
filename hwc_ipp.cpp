@@ -305,7 +305,7 @@ int ipp_close(ipp_device_t *ippDev)
     {
         close(ipp_buffer.shared_fd);
         if (0 != ion_free(ipp_buffer.ion_client, ipp_buffer.ion_hnd))
-            AERR("Failed to ion_free( ion_client: %d ion_hnd: %p )", ipp_buffer.ion_client, ipp_buffer.ion_hnd);
+            AERR("Failed to ion_free( ion_client: %d ion_hnd: %x )", ipp_buffer.ion_client, ipp_buffer.ion_hnd);
         if (0 != ion_close(ipp_buffer.ion_client))
             AERR("Failed to close ion_client: %d", ipp_buffer.ion_client);
         close(ipp_buffer.ion_client);
