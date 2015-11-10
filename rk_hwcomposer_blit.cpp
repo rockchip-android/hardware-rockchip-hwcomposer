@@ -268,7 +268,7 @@ int hwcDobypp(struct rga_req * rga_p,int x,int y,int tra)
     opt.vpuFd       = vpuFd;
 
 #ifndef TARGET_SECVM
-    ret |= android::ppOpInit(&hnd, &opt);
+    ret = android::ppOpInit(&hnd, &opt);
     if (ret) {
         ALOGE("ppOpInit failed,vpuFd=%d",vpuFd);
 		hnd = NULL;
