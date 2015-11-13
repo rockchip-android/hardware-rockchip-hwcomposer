@@ -84,9 +84,9 @@
 )
 
 #ifndef TARGET_SECVM
-#define GHWC_VERSION  "2.49"
+#define GHWC_VERSION  "2.50"
 #else
-#define GHWC_VERSION  "2.49_sec"
+#define GHWC_VERSION  "2.50_sec"
 #endif
 
 //HWC version Tag
@@ -96,7 +96,7 @@
 #define HWC_VERSION "HWC_VERSION  \
 Author:huangds \
 Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
-Version:2.49 \
+Version:2.50 \
 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
 
 /* Set it to 1 to enable swap rectangle optimization;

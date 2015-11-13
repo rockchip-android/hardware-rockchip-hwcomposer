@@ -3433,6 +3433,9 @@ static int hwc_event_control(struct hwc_composer_device_1* dev,
 void handle_hotplug_event(int mode ,int flag )
 {
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+    context->procs->invalidate(context->procs);
+    if(flag == 1)
+        return;
 #if (defined(USE_X86) || HOTPLUG_MODE)
     switch(flag){
     case 0:

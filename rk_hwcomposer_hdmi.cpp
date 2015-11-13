@@ -26,54 +26,82 @@
 #include <hardware/hwcomposer.h>
 
 int         g_hdmi_mode;
-
-//0,1,2
-void rk_check_hdmi_uevents(const char *buf)
+void rk_parse_uevent_buf(const char *buf,int* type,int* flag,int* fbx, int len)
 {
-    //ALOGI("fun[%s],line[%d],buf is [%s]",__FUNCTION__,__LINE__,buf);
-    if (!strcmp(buf, "change@/devices/virtual/display/HDMI"))
+	const char *str = buf;
+	while(*str){
+        sscanf(str,"SCREEN=%d,ENABLE=%d",type,flag);
+        sscanf(str,"FBDEV=%d",fbx);
+        str += strlen(str) + 1;
+        if (str - buf >= len){
+            break;
+        }
+        //ALOGI("line %d,buf[%s]",__LINE__,str);
+    }
+    ALOGI("SCREEN=%d ENABLE=%d,",*type,*flag);
+
+}
+
+void rk_check_hdmi_state()
+{
+    //int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
+    int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
+    if (fd > 0)
     {
-        //int fd = open("/sys/devices/virtual/switch/hdmi/state", O_RDONLY);
-        int fd = open("/sys/devices/virtual/display/HDMI/connect", O_RDONLY);
+        char statebuf[100];
+        memset(statebuf, 0, sizeof(statebuf));
+        int err = read(fd, statebuf, sizeof(statebuf));
 
-        if (fd > 0)
+        if (err < 0)
         {
-            char statebuf[100];
-            memset(statebuf, 0, sizeof(statebuf));
-            int err = read(fd, statebuf, sizeof(statebuf));
-
-            if (err < 0)
-            {
-                ALOGE("error reading vsync timestamp: %s", strerror(errno));
-                return;
-            }
-            close(fd);
-            g_hdmi_mode = atoi(statebuf);
-            /* if (g_hdmi_mode==0)
-             {
+            ALOGE("error reading vsync timestamp: %s", strerror(errno));
+            return;
+        }
+        close(fd);
+        g_hdmi_mode = atoi(statebuf);
+        /* if (g_hdmi_mode==0)
+        {
             property_set("sys.hdmi.mode", "0");
-             }
-            else
-            {
-            property_set("sys.hdmi.mode", "1");
-            }*/
-
-            handle_hotplug_event(g_hdmi_mode,0);
         }
         else
         {
-            ALOGD("err=%s", strerror(errno));
-        }
-
+            property_set("sys.hdmi.mode", "1");
+        }*/
+    }
+    else
+    {
+        ALOGD("err=%s", strerror(errno));
     }
 }
 
-void rk_handle_uevents(const char *buff)
+//0,1,2
+void rk_check_hdmi_uevents(const char *buf,int len)
 {
-    // uint64_t timestamp = 0;
-    rk_check_hdmi_uevents(buff);
+    //ALOGI("fun[%s],line[%d],buf is [%s]",__FUNCTION__,__LINE__,buf);
+#ifdef USE_X86
+    if(!strcmp(buf, "change@/devices/soc0/e0000000.noc/ef010000.l2_noc/e1000000.ahb_per/vop0"))
+#else
+    if (!strcmp(buf, "change@/devices/virtual/display/HDMI"))
+#endif
+    {
+        int type,flag,fbx;
+        type = flag = fbx = -1;
+        rk_check_hdmi_state();
+        rk_parse_uevent_buf(buf,&type,&flag,&fbx,len);
+#ifdef USE_X86
+        if(type == -1 && flag == -1)
+            handle_hotplug_event(g_hdmi_mode,1);
+        else
+#endif
+            handle_hotplug_event(g_hdmi_mode,0);
+    }
 }
 
+void rk_handle_uevents(const char *buff,int len)
+{
+    // uint64_t timestamp = 0;
+    rk_check_hdmi_uevents(buff,len);
+}
 
 void  *rk_hwc_hdmi_thread(void *arg)
 {
@@ -101,8 +129,8 @@ void  *rk_hwc_hdmi_thread(void *arg)
 
         if (fds[0].revents & POLLIN)
         {
-            uevent_next_event(uevent_desc, sizeof(uevent_desc) - 2);
-            rk_handle_uevents(uevent_desc);
+            int len = uevent_next_event(uevent_desc, sizeof(uevent_desc) - 2);
+            rk_handle_uevents(uevent_desc,len);
         }
     }
     while (1);
