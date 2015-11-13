@@ -83,11 +83,7 @@
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
 
-#ifndef TARGET_SECVM
 #define GHWC_VERSION  "2.50"
-#else
-#define GHWC_VERSION  "2.50_sec"
-#endif
 
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"

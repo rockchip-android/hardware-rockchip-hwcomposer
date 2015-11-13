@@ -4107,7 +4107,23 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    property_set("sys.ghwc.version", GHWC_VERSION);
+    char acVersion[30];
+    memset(acVersion,0,sizeof(acVersion));
+    if(sizeof(GHWC_VERSION) > 12)
+        strncpy(acVersion,GHWC_VERSION,12);
+    else
+        strcpy(acVersion,GHWC_VERSION);
+#ifndef TARGET_SECVM
+    strcat(acVersion,"");
+#else
+    strcat(acVersion,"_sec");
+#endif
+#if HOTPLUG_MODE
+    strcat(acVersion,"_htg");
+#else
+    strcat(acVersion,"");
+#endif
+    property_set("sys.ghwc.version", acVersion);
 
     LOGD(HWC_VERSION);
 
