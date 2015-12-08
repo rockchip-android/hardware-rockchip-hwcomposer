@@ -3222,11 +3222,13 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     /* Check layer list. */
     if (list->skipflag || black_cnt < 5 /*|| list->numHwLayers <=1*/)
     {
-      
-        hwc_sync_release(list);
-        black_cnt ++;
-        ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
-        return 0;
+        if(!context->IsRk3126 && !context->IsRk3128)
+        {
+            hwc_sync_release(list);
+            black_cnt ++;
+            ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
+            return 0;
+        }
     }
 
 #if ONLY_USE_ONE_VOP
@@ -4000,6 +4002,7 @@ hwc_device_open(
     property_get("ro.rk.soc", pro_value, "0");
     context->IsRk3188 = !strcmp(pro_value, "rk3188");
     context->IsRk3126 = !strcmp(pro_value, "rk3126");
+    context->IsRk3128 = !strcmp(pro_value, "rk3128");
     context->fbSize = context->fbStride * info.yres * 3;//info.xres*info.yres*4*3;
     context->lcdSize = context->fbStride * info.yres;//info.xres*info.yres*4;
     {
@@ -4726,5 +4729,3 @@ void  *hotplug_init_thread(void *arg)
     pthread_exit(NULL);
     return NULL;
 }
-
-

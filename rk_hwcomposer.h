@@ -325,6 +325,7 @@ FenceMangrRga;
         int     fb_blanked;
         bool    IsRk3188;
         bool    IsRk3126;
+        bool    IsRk3128;
         int     IsInput;
         int     mFbFd;
         int     mFbBase;
