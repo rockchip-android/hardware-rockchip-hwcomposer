@@ -781,7 +781,13 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int  i ;
     hwcContext * context = (hwcContext *)ctx;
 
-   // RGA_POLICY_MAX_SIZE
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
+    // RGA_POLICY_MAX_SIZE
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
         if(is_out_log())
@@ -858,6 +864,12 @@ int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
     int yuv_cnt = 0;
 
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
 #if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
     {
@@ -961,8 +973,14 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int i ;
     hwcContext * context = (hwcContext *)ctx;
     int yuv_cnt = 0;
-    
-   // RGA_POLICY_MAX_SIZE
+
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
+    // RGA_POLICY_MAX_SIZE
 #if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
     {
@@ -1076,6 +1094,12 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
 #if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
     {
@@ -1181,7 +1205,13 @@ int try_hwc_vop_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
     int  pixelSize  = 0;
 
-   // RGA_POLICY_MAX_SIZE
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
+    // RGA_POLICY_MAX_SIZE
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
         if(is_out_log())
@@ -1439,6 +1469,12 @@ int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     if(getHdmiMode() == 1)
         return -1;
 
+    if(context->IsRk3126)
+    {
+        if(is_out_log())
+            ALOGI("%s,%d,Is rk3126 not support rga blit",__FUNCTION__,__LINE__);
+        return -1;
+    }
     if((list->numHwLayers - 1) < 5)  // too less
     {
         return -1;
