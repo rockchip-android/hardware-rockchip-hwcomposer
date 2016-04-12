@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+BOARD_USES_DRM_HWCOMPOSER=true
 ifeq ($(strip $(BOARD_USES_DRM_HWCOMPOSER)),true)
 
 LOCAL_PATH := $(call my-dir)
@@ -62,7 +62,7 @@ LOCAL_CPPFLAGS += -DUSE_NVIDIA_IMPORTER
 else
 LOCAL_C_INCLUDES += external/drm_gralloc
 LOCAL_SRC_FILES += drmgenericimporter.cpp
-LOCAL_CPPFLAGS += -DUSE_DRM_GENERIC_IMPORTER
+LOCAL_CPPFLAGS += -DUSE_DRM_GENERIC_IMPORTER -DRK_HWC
 endif
 
 LOCAL_MODULE := hwcomposer.drm

@@ -45,6 +45,10 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 
+#ifdef RK_HWC
+#include "gralloc_drm_handle.h"
+#endif
+
 #define UM_PER_INCH 25400
 
 namespace android {
@@ -259,17 +263,64 @@ void DrmHwcNativeHandle::Clear() {
   }
 }
 
+#ifdef RK_HWC
+int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
+                                  const gralloc_module_t *gralloc) {
+    struct gralloc_drm_handle_t* drm_handle;
+    DrmConnector *c;
+    DrmMode mode;
+    unsigned int size;
+#else
 int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
-  sf_handle = sf_layer->handle;
-  alpha = sf_layer->planeAlpha;
+#endif
 
-  source_crop = DrmHwcRect<float>(
+    sf_handle = sf_layer->handle;
+    alpha = sf_layer->planeAlpha;
+
+    source_crop = DrmHwcRect<float>(
       sf_layer->sourceCropf.left, sf_layer->sourceCropf.top,
       sf_layer->sourceCropf.right, sf_layer->sourceCropf.bottom);
-  display_frame = DrmHwcRect<int>(
+    display_frame = DrmHwcRect<int>(
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
+
+#ifdef RK_HWC
+    drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
+    c = ctx->drm.GetConnectorForDisplay(0);
+    if (!c) {
+        ALOGE("Failed to get DrmConnector for display %d", 0);
+        return -ENODEV;
+    }
+    mode = c->active_mode();
+    format = drm_handle->format;
+    if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+        is_yuv = true;
+    else
+        is_yuv = false;
+
+    if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
+        ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
+        h_scale_mul = (float) (source_crop.bottom - source_crop.top)
+                / (display_frame.right - display_frame.left);
+        v_scale_mul = (float) (source_crop.right - source_crop.left)
+                / (display_frame.bottom - display_frame.top);
+    }else{
+        h_scale_mul = (float) (source_crop.right - source_crop.left)
+                / (display_frame.right - display_frame.left);
+
+        v_scale_mul = (float) (source_crop.bottom - source_crop.top)
+                / (display_frame.bottom - display_frame.top);
+    }
+
+    is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
+    width = source_crop.right - source_crop.left;
+    height = source_crop.bottom - source_crop.top;
+    bpp = android::bytesPerPixel(format);
+    size = width * height * bpp;
+    is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
+
+#endif
 
   switch (sf_layer->transform) {
     case 0:
@@ -500,8 +551,11 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
 
       DrmHwcLayer &layer = display_contents.layers[j];
-
+#ifdef RK_HWC
+      ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
+#else
       ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);
+#endif
       if (ret) {
         ALOGE("Failed to init composition from layer %d", ret);
         return ret;

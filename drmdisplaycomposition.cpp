@@ -134,10 +134,46 @@ static size_t CountUsablePlanes(DrmCrtc *crtc,
              [=](DrmPlane *plane) { return plane->GetCrtcSupported(*crtc); });
 }
 
+#ifdef RK_HWC
+static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes, DrmHwcLayer* layer) {
+#else
 static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes) {
+#endif
+ uint64_t yuv_value,scale_value;
+
   for (auto iter = planes->begin(); iter != planes->end(); ++iter) {
     if ((*iter)->GetCrtcSupported(*crtc)) {
-      DrmPlane *plane = *iter;
+        DrmPlane *plane = *iter;
+#ifdef RK_HWC
+        if(layer != NULL) {
+            plane->yuv_property().value(&yuv_value);
+            plane->scale_property().value(&scale_value);
+            if(layer->is_yuv && (0==yuv_value))
+                continue;
+            if(layer->is_scale && (0==scale_value))
+                continue;
+
+            if(layer->group_id == 1)
+            {
+                /*If the layer is group in win2,then the plane is limited in win2 areas.*/
+                if(plane->id() < DRM_AREA2_0 || plane->id() > DRM_AREA2_3)
+                    continue;
+            }
+            else if(layer->group_id == 2)
+            {
+                /*If the layer is group in win3,then the plane is limited in win3 areas.*/
+                if(plane->id() < DRM_AREA3_0 || plane->id() > DRM_AREA3_3)
+                    continue;
+            }
+            else
+            {
+                /*If the layer doesn't group in win2 or win3,then it cann't use the mul-areas.*/
+                if((plane->id() > DRM_AREA2_0 && plane->id() < DRM_AREA3_0) ||
+                    (plane->id() > DRM_AREA3_0 ))
+                    continue;
+             }
+      }
+#endif
       planes->erase(iter);
       return plane;
     }
@@ -145,6 +181,80 @@ static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes) {
   return NULL;
 }
 
+#ifdef RK_HWC
+static int is_vertical_intersect(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
+{
+    if(rec2->top == rec1->top)
+        return 1;
+    else if(rec2->top < rec1->top)
+    {
+        if(rec2->bottom > rec1->top)
+            return 1;
+        else
+            return 0;
+    }
+    else
+    {
+        if(rec1->bottom > rec2->top)
+            return 1;
+        else
+            return 0;
+    }
+    return 0;
+}
+
+static int is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
+{
+    if(layer_one->format != layer_two->format)
+    {
+        return 0;
+    }
+    if(layer_one->alpha!= layer_two->alpha)
+    {
+        return 0;
+    }
+    if(layer_one->is_scale || layer_two->is_scale )
+    {
+        return 0;
+    }
+    if(is_vertical_intersect(&layer_one->display_frame,&layer_two->display_frame))
+    {
+        return 0;
+    }
+    else
+        return 1;
+}
+
+
+static void ReservedPlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes,unsigned int id) {
+
+  for (auto iter = planes->begin(); iter != planes->end(); ++iter) {
+    if ((*iter)->GetCrtcSupported(*crtc)) {
+        DrmPlane *plane = *iter;
+        if(plane->id() == id)
+            plane->set_reserved(true);
+    }
+  }
+}
+
+static void ReservedPlane(DrmCrtc *crtc,
+                           std::vector<DrmPlane *> *primary_planes,
+                           std::vector<DrmPlane *> *overlay_planes,
+                           unsigned int id) {
+    ReservedPlane(crtc, primary_planes, id);
+    ReservedPlane(crtc, overlay_planes, id);
+}
+
+static DrmPlane *TakePlane(DrmCrtc *crtc,
+                           std::vector<DrmPlane *> *primary_planes,
+                           std::vector<DrmPlane *> *overlay_planes,
+                           DrmHwcLayer* layer) {
+  DrmPlane *plane = TakePlane(crtc, primary_planes, layer);
+  if (plane)
+    return plane;
+  return TakePlane(crtc, overlay_planes, layer);
+}
+#else
 static DrmPlane *TakePlane(DrmCrtc *crtc,
                            std::vector<DrmPlane *> *primary_planes,
                            std::vector<DrmPlane *> *overlay_planes) {
@@ -153,6 +263,7 @@ static DrmPlane *TakePlane(DrmCrtc *crtc,
     return plane;
   return TakePlane(crtc, overlay_planes);
 }
+#endif
 
 static std::vector<size_t> SetBitsToVector(uint64_t in, size_t *index_map) {
   std::vector<size_t> out;
@@ -336,37 +447,84 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   }
 
   if (use_squash_framebuffer)
+  {
+#ifdef RK_HWC
+    ReservedPlane(crtc_, primary_planes, overlay_planes, 0);
+#endif
     planes_can_use--;
+  }
 
   if (layers_remaining.size() > planes_can_use)
+  {
+#ifdef RK_HWC
+    ReservedPlane(crtc_, primary_planes, overlay_planes, 1);
+#endif
     planes_can_use--;
+  }
+
+#ifdef RK_HWC
+    /*Group layer*/
+    int group_id = 0;
+    size_t i;
+    for (i = 0; i < layers_remaining.size()-1; i++) {
+        DrmHwcLayer &layer_one = layers_[layers_remaining[i]];
+        for(size_t j = i+1; j < layers_remaining.size(); j++)
+        {
+            DrmHwcLayer &layer_two = layers_[layers_remaining[j]];
+            if(is_layer_combine(&layer_one,&layer_two))
+            {
+                group_id++;
+                layer_one.group_id = group_id;
+                layer_two.group_id = group_id;
+            }
+        }
+    }
+#endif
 
   size_t last_composition_layer = 0;
   for (last_composition_layer = 0;
        last_composition_layer < layers_remaining.size() && planes_can_use > 0;
        last_composition_layer++, planes_can_use--) {
+#ifdef RK_HWC
+    DrmHwcLayer &layer = layers_[layers_remaining[last_composition_layer]];
+    composition_planes_.emplace_back(
+        DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, &layer),
+                            crtc_, layers_remaining[last_composition_layer]});
+#else
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes),
                             crtc_, layers_remaining[last_composition_layer]});
+#endif
   }
 
   layers_remaining.erase(layers_remaining.begin(),
                          layers_remaining.begin() + last_composition_layer);
 
   if (layers_remaining.size() > 0) {
+#ifdef RK_HWC
+    composition_planes_.emplace_back(
+        DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, NULL),
+                            crtc_, DrmCompositionPlane::kSourcePreComp});
+#else
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes),
                             crtc_, DrmCompositionPlane::kSourcePreComp});
-
+#endif
     SeparateLayers(layers_.data(), layers_remaining.data(),
                    layers_remaining.size(), exclude_rects.data(),
                    exclude_rects.size(), pre_comp_regions_);
   }
 
   if (use_squash_framebuffer) {
+#ifdef RK_HWC
+    composition_planes_.emplace_back(
+        DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, NULL),
+                            crtc_, DrmCompositionPlane::kSourceSquash});
+#else
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes),
                             crtc_, DrmCompositionPlane::kSourceSquash});
+#endif
   }
 
   return CreateAndAssignReleaseFences();

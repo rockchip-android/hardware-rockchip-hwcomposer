@@ -26,6 +26,29 @@
 
 namespace android {
 
+#ifdef RK_HWC
+enum DrmWinType {
+        DRM_WIN0,
+        DRM_WIN1,
+        DRM_WIN2,
+        DRM_WIN3,
+        DRM_CURSOR,
+};
+
+enum DrmAreaType {
+        DRM_AREA0,
+        DRM_AREA1,
+        DRM_AREA2_0,
+        DRM_AREA2_1,
+        DRM_AREA2_2,
+        DRM_AREA2_3,
+        DRM_AREA3_0,
+        DRM_AREA3_1,
+        DRM_AREA3_2,
+        DRM_AREA3_3,
+};
+#endif
+
 class DrmResources;
 
 class DrmPlane {
@@ -53,6 +76,12 @@ class DrmPlane {
   const DrmProperty &src_h_property() const;
   const DrmProperty &rotation_property() const;
   const DrmProperty &alpha_property() const;
+  const DrmProperty &yuv_property() const;
+  const DrmProperty &scale_property() const;
+#ifdef RK_HWC
+  bool is_reserved();
+  void set_reserved(bool b_reserved);
+#endif
 
  private:
   DrmPlane(const DrmPlane &);
@@ -76,6 +105,13 @@ class DrmPlane {
   DrmProperty src_h_property_;
   DrmProperty rotation_property_;
   DrmProperty alpha_property_;
+
+#ifdef RK_HWC
+  /*rockchip*/
+  DrmProperty yuv_property_;
+  DrmProperty scale_property_;
+  bool b_reserved_;
+#endif
 };
 }
 
