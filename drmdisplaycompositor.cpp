@@ -584,6 +584,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   return ret;
 }
 
+#if RK_DRM_HWC_DEBUG
 static const char *RotatingToString(uint64_t rotating) {
   switch (rotating) {
     case (1 << DRM_REFLECT_X):
@@ -602,6 +603,7 @@ static const char *RotatingToString(uint64_t rotating) {
       return "<invalid>";
   }
 }
+#endif
 
 int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
   int ret = 0;
@@ -673,7 +675,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
     }
   }
 
+#if RK_DRM_HWC_DEBUG
   size_t index=0;
+#endif
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     DrmPlane *plane = comp_plane.plane;
     DrmCrtc *crtc = comp_plane.crtc;
@@ -804,6 +808,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
       break;
     }
 
+#if RK_DRM_HWC_DEBUG
     std::ostringstream out_log;
     out_log << "      [" << index << "]"
             << " plane=" << (plane ? plane->id() : -1)
@@ -815,7 +820,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
             << " source_crop[" << source_crop.left << ","
             << source_crop.top << "," << source_crop.right - source_crop.left
             << "," << source_crop.bottom - source_crop.top << "]";
-
+#endif
     if (plane->rotation_property().id()) {
       ret = drmModePropertySetAdd(pset, plane->id(),
                                   plane->rotation_property().id(), rotation);
@@ -824,7 +829,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
               plane->rotation_property().id(), plane->id());
         break;
       }
+#if RK_DRM_HWC_DEBUG
       out_log << " rotation=" << RotatingToString(rotation);
+#endif
     }
 
     if (plane->alpha_property().id()) {
@@ -835,10 +842,14 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
               plane->alpha_property().id(), plane->id());
         break;
       }
+#if RK_DRM_HWC_DEBUG
       out_log << " alpha=" << std::hex <<  alpha;
+#endif
     }
+#if RK_DRM_HWC_DEBUG
     out_log << "\n";
     ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
+#endif
   }
 
 out:

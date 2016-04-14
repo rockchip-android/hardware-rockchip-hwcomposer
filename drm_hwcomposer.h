@@ -37,6 +37,7 @@ bool hwc_import_bo_release(int fd, struct hwc_import_context *ctx,
 
 namespace android {
 
+#if RK_DRM_HWC_DEBUG
 enum LOG_LEVEL
 {
     //Log level flag
@@ -49,6 +50,7 @@ enum LOG_LEVEL
     DBG_SILENT = 1 << 6,
 };
 bool log_level(LOG_LEVEL log_level);
+#endif
 
 class Importer;
 
@@ -234,6 +236,7 @@ struct DrmHwcLayer {
   UniqueFd acquire_fence;
   OutputFd release_fence;
 
+#if RK_DRM_HWC
   bool is_yuv;
   bool is_scale;
   bool is_large;
@@ -248,7 +251,10 @@ struct DrmHwcLayer {
   void dump_drm_layer(int index, std::ostringstream *out) const;
   int InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                         const gralloc_module_t *gralloc);
-
+#else
+  int InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
+                        const gralloc_module_t *gralloc);
+#endif
 
 
   buffer_handle_t get_usable_handle() const {

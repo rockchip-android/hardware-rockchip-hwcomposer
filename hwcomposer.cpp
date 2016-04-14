@@ -45,12 +45,15 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 
+#if RK_DRM_HWC
 #include "gralloc_drm_handle.h"
+#endif
 
 #define UM_PER_INCH 25400
 
 namespace android {
 
+#if RK_DRM_HWC_DEBUG
 unsigned int g_log_level_;
 
 static int init_log_level()
@@ -60,6 +63,7 @@ static int init_log_level()
     g_log_level_ = atoi(value);
     return 0;
 }
+#endif
 
 class DummySwSyncTimeline {
  public:
@@ -271,7 +275,7 @@ void DrmHwcNativeHandle::Clear() {
   }
 }
 
-
+#if RK_DRM_HWC
 static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   if (!buffer) {
     *out << "buffer=<invalid>";
@@ -327,14 +331,19 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 
     *out << "\n";
 }
+#endif
 
+#if RK_DRM_HWC
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
     struct gralloc_drm_handle_t* drm_handle;
     DrmConnector *c;
     DrmMode mode;
     unsigned int size;
-
+#else
+int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
+                                    const gralloc_module_t *gralloc) {
+#endif
     sf_handle = sf_layer->handle;
     alpha = sf_layer->planeAlpha;
 
@@ -345,6 +354,7 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
 
+#if RK_DRM_HWC
     drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
     c = ctx->drm.GetConnectorForDisplay(0);
     if (!c) {
@@ -378,6 +388,7 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
     bpp = android::bytesPerPixel(format);
     size = width * height * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
+#endif
 
   switch (sf_layer->transform) {
     case 0:
@@ -453,11 +464,12 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
   buff[buff_len - 1] = '\0';
 }
 
-
+#if RK_DRM_HWC_DEBUG
 bool log_level(LOG_LEVEL log_level)
 {
     return g_log_level_ & log_level;
 }
+
 static void dump_layer(hwc_layer_1_t *layer, int index) {
     struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
     size_t i;
@@ -511,12 +523,15 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
         }
     }
 }
+#endif
 
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
 
+#if RK_DRM_HWC_DEBUG
   init_log_level();
+#endif
 
   for (int i = 0; i < (int)num_displays; ++i) {
     if (!display_contents[i])
@@ -538,9 +553,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int num_layers = display_contents[i]->numHwLayers;
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-
+#if RK_DRM_HWC_DEBUG
       dump_layer(layer,j);
-
+#endif
       if (!use_framebuffer_target) {
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
@@ -673,17 +688,21 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
 
       DrmHwcLayer &layer = display_contents.layers[j];
+#if RK_DRM_HWC
       ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
+#else
+      ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);
+#endif
 
       if (ret) {
         ALOGE("Failed to init composition from layer %d", ret);
         return ret;
       }
-
+#if RK_DRM_HWC_DEBUG
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);
       ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
-
+#endif
       map.layers.emplace_back(std::move(layer));
     }
   }
@@ -1053,8 +1072,9 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
 
+#if RK_DRM_HWC
   g_log_level_ = 0;
-
+#endif
   *dev = &ctx->device.common;
 
   return 0;
