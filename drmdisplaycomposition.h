@@ -54,6 +54,8 @@ struct DrmCompositionPlane {
   DrmPlane *plane;
   DrmCrtc *crtc;
   size_t source_layer;
+
+  void dump_drm_com_plane(int index, std::ostringstream *out) const;
 };
 
 class DrmDisplayComposition {

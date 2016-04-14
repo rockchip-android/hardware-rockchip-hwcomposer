@@ -128,7 +128,6 @@ int DrmPlane::Init() {
   if (ret)
     ALOGI("Could not get alpha property");
 
-#ifdef RK_HWC
   ret = drm_->GetPlaneProperty(*this, "yuv_support", &yuv_property_);
   if (ret)
     ALOGE("Could not get yuv_support property");
@@ -138,7 +137,6 @@ int DrmPlane::Init() {
     ALOGI("Could not get scale_support property");
 
   b_reserved_= false;
-#endif
 
   return 0;
 }
@@ -203,7 +201,6 @@ const DrmProperty &DrmPlane::alpha_property() const {
   return alpha_property_;
 }
 
-#ifdef RK_HWC
 const DrmProperty &DrmPlane::yuv_property() const {
   return yuv_property_;
 }
@@ -218,6 +215,5 @@ bool DrmPlane::is_reserved(){
 void DrmPlane::set_reserved(bool b_reserved) {
     b_reserved_ = b_reserved;
 }
-#endif
 
 }

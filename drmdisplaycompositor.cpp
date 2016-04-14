@@ -584,6 +584,25 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   return ret;
 }
 
+static const char *RotatingToString(uint64_t rotating) {
+  switch (rotating) {
+    case (1 << DRM_REFLECT_X):
+      return "DRM_REFLECT_X";
+    case (1 << DRM_REFLECT_Y):
+      return "DRM_REFLECT_Y";
+    case (1 << DRM_ROTATE_90):
+      return "DRM_ROTATE_90";
+    case (1 << DRM_ROTATE_180):
+      return "DRM_ROTATE_180";
+    case (1 << DRM_ROTATE_270):
+      return "DRM_ROTATE_270";
+    case (0):
+      return "DRM_ROTATE_0";
+    default:
+      return "<invalid>";
+  }
+}
+
 int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
   int ret = 0;
 
@@ -654,6 +673,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
     }
   }
 
+  size_t index=0;
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     DrmPlane *plane = comp_plane.plane;
     DrmCrtc *crtc = comp_plane.crtc;
@@ -784,6 +804,18 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
       break;
     }
 
+    std::ostringstream out_log;
+    out_log << "      [" << index << "]"
+            << " plane=" << (plane ? plane->id() : -1)
+            << " crct id=" << crtc->id()
+            << " fb id=" << fb_id
+            << " display_frame[" << display_frame.left << ","
+            << display_frame.top << "," << display_frame.right - display_frame.left
+            << "," << display_frame.bottom - display_frame.top << "]"
+            << " source_crop[" << source_crop.left << ","
+            << source_crop.top << "," << source_crop.right - source_crop.left
+            << "," << source_crop.bottom - source_crop.top << "]";
+
     if (plane->rotation_property().id()) {
       ret = drmModePropertySetAdd(pset, plane->id(),
                                   plane->rotation_property().id(), rotation);
@@ -792,6 +824,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
               plane->rotation_property().id(), plane->id());
         break;
       }
+      out_log << " rotation=" << RotatingToString(rotation);
     }
 
     if (plane->alpha_property().id()) {
@@ -802,7 +835,10 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
               plane->alpha_property().id(), plane->id());
         break;
       }
+      out_log << " alpha=" << std::hex <<  alpha;
     }
+    out_log << "\n";
+    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
   }
 
 out:

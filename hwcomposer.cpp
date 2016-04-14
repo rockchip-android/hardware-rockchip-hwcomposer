@@ -45,13 +45,21 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 
-#ifdef RK_HWC
 #include "gralloc_drm_handle.h"
-#endif
 
 #define UM_PER_INCH 25400
 
 namespace android {
+
+unsigned int g_log_level_;
+
+static int init_log_level()
+{
+    char value[PROPERTY_VALUE_MAX];
+    property_get("sys.hwc.log", value, "0");
+    g_log_level_ = atoi(value);
+    return 0;
+}
 
 class DummySwSyncTimeline {
  public:
@@ -263,17 +271,69 @@ void DrmHwcNativeHandle::Clear() {
   }
 }
 
-#ifdef RK_HWC
+
+static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
+  if (!buffer) {
+    *out << "buffer=<invalid>";
+    return;
+  }
+
+  *out << "buffer[w/h/format]=";
+  *out << buffer->width << "/" << buffer->height << "/" << buffer->format;
+}
+
+static const char *TransformToString(DrmHwcTransform transform) {
+  switch (transform) {
+    case DrmHwcTransform::kIdentity:
+      return "IDENTITY";
+    case DrmHwcTransform::kFlipH:
+      return "FLIPH";
+    case DrmHwcTransform::kFlipV:
+      return "FLIPV";
+    case DrmHwcTransform::kRotate90:
+      return "ROTATE90";
+    case DrmHwcTransform::kRotate180:
+      return "ROTATE180";
+    case DrmHwcTransform::kRotate270:
+      return "ROTATE270";
+    default:
+      return "<invalid>";
+  }
+}
+
+static const char *BlendingToString(DrmHwcBlending blending) {
+  switch (blending) {
+    case DrmHwcBlending::kNone:
+      return "NONE";
+    case DrmHwcBlending::kPreMult:
+      return "PREMULT";
+    case DrmHwcBlending::kCoverage:
+      return "COVERAGE";
+    default:
+      return "<invalid>";
+  }
+}
+
+void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
+    *out << "      [" << index << "] ";
+    DumpBuffer(buffer,out);
+
+    *out << " transform=" << TransformToString(transform)
+         << " blending[a=" << (int)alpha
+         << "]=" << BlendingToString(blending) << " source_crop";
+    source_crop.Dump(out);
+    *out << " display_frame";
+    display_frame.Dump(out);
+
+    *out << "\n";
+}
+
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
     struct gralloc_drm_handle_t* drm_handle;
     DrmConnector *c;
     DrmMode mode;
     unsigned int size;
-#else
-int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
-                                  const gralloc_module_t *gralloc) {
-#endif
 
     sf_handle = sf_layer->handle;
     alpha = sf_layer->planeAlpha;
@@ -285,7 +345,6 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
 
-#ifdef RK_HWC
     drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
     c = ctx->drm.GetConnectorForDisplay(0);
     if (!c) {
@@ -319,8 +378,6 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     bpp = android::bytesPerPixel(format);
     size = width * height * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
-
-#endif
 
   switch (sf_layer->transform) {
     case 0:
@@ -396,9 +453,70 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
   buff[buff_len - 1] = '\0';
 }
 
+
+bool log_level(LOG_LEVEL log_level)
+{
+    return g_log_level_ & log_level;
+}
+static void dump_layer(hwc_layer_1_t *layer, int index) {
+    struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
+    size_t i;
+
+    if(layer->flags & HWC_SKIP_LAYER)
+    {
+        ALOGD_IF(log_level(DBG_VERBOSE),"layer %p skipped", layer);
+    }
+    else
+    {
+        if(drm_handle)
+            ALOGD_IF(log_level(DBG_VERBOSE),"layer[%d]=%p, "
+                 "name=%s "
+                 "type=%d, "
+                 "hints=%08x, "
+                 "flags=%08x, "
+                 "handle=%p, "
+                 "format=0x%x, "
+                 "fd = %d, "
+                 "tr=%02x, "
+                 "blend=%04x, "
+                 "{%d,%d,%d,%d}, "
+                 "{%d,%d,%d,%d}",
+                 index,
+                 layer,
+                 layer->LayerName,
+                 layer->compositionType,
+                 layer->hints,
+                 layer->flags,
+                 layer->handle,
+                 drm_handle->format,
+                 drm_handle->prime_fd,
+                 layer->transform,
+                 layer->blending,
+                 layer->sourceCrop.left,
+                 layer->sourceCrop.top,
+                 layer->sourceCrop.right,
+                 layer->sourceCrop.bottom,
+                 layer->displayFrame.left,
+                 layer->displayFrame.top,
+                 layer->displayFrame.right,
+                 layer->displayFrame.bottom);
+
+        for (i = 0; i < layer->visibleRegionScreen.numRects; i++)
+        {
+            ALOGD_IF(log_level(DBG_VERBOSE),"\trect%d: {%d,%d,%d,%d}", i,
+                 layer->visibleRegionScreen.rects[i].left,
+                 layer->visibleRegionScreen.rects[i].top,
+                 layer->visibleRegionScreen.rects[i].right,
+                 layer->visibleRegionScreen.rects[i].bottom);
+        }
+    }
+}
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
+
+  init_log_level();
 
   for (int i = 0; i < (int)num_displays; ++i) {
     if (!display_contents[i])
@@ -415,9 +533,13 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       }
     }
 
+    //force go into GPU
+    use_framebuffer_target = true;
     int num_layers = display_contents[i]->numHwLayers;
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+      dump_layer(layer,j);
 
       if (!use_framebuffer_target) {
         if (layer->compositionType == HWC_FRAMEBUFFER)
@@ -551,15 +673,17 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
 
       DrmHwcLayer &layer = display_contents.layers[j];
-#ifdef RK_HWC
       ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
-#else
-      ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);
-#endif
+
       if (ret) {
         ALOGE("Failed to init composition from layer %d", ret);
         return ret;
       }
+
+      std::ostringstream out;
+      layer.dump_drm_layer(j,&out);
+      ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+
       map.layers.emplace_back(std::move(layer));
     }
   }
@@ -928,6 +1052,8 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.getActiveConfig = hwc_get_active_config;
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
+
+  g_log_level_ = 0;
 
   *dev = &ctx->device.common;
 
