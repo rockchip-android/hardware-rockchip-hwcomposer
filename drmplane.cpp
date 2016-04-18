@@ -28,7 +28,7 @@
 namespace android {
 
 DrmPlane::DrmPlane(DrmResources *drm, drmModePlanePtr p)
-    : drm_(drm), id_(p->plane_id), possible_crtc_mask_(p->possible_crtcs) {
+    : drm_(drm), id_(p->plane_id), possible_crtc_mask_(p->possible_crtcs), plane_(p) {
 }
 
 DrmPlane::~DrmPlane() {
@@ -219,4 +219,32 @@ void DrmPlane::set_reserved(bool b_reserved) {
     b_reserved_ = b_reserved;
 }
 #endif
+
+#if RK_DRM_HWC_DEBUG
+void DrmPlane::dump_plane(std::ostringstream *out) const {
+        unsigned int j;
+
+	    *out << plane_->plane_id << "\t"
+	         << plane_->crtc_id << "\t"
+	         << plane_->fb_id << "\t"
+	         << plane_->crtc_x << "\t"
+	         << plane_->crtc_y << "\t"
+	         << plane_->x << "\t"
+	         << plane_->y << "\t"
+	         << plane_->gamma_size << "\t"
+	         << std::hex << plane_->possible_crtcs << "\n";
+
+		if (!plane_->count_formats)
+			return;
+
+		*out << "  formats:";
+		for (j = 0; j < plane_->count_formats; j++)
+		    *out << &plane_->formats[j]; //printf(" %4.4s", (char *)&ovr->formats[j]);
+
+		*out << ("\n");
+
+		drm_->DumpPlaneProperty(*this,out);
+}
+#endif
+
 }

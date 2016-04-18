@@ -66,6 +66,10 @@ class DrmConnector {
   uint32_t mm_width() const;
   uint32_t mm_height() const;
 
+#if RK_DRM_HWC_DEBUG
+  void dump_connector(std::ostringstream *out) const;
+#endif
+
  private:
   DrmConnector(const DrmConnector &);
 
@@ -88,6 +92,8 @@ class DrmConnector {
   DrmProperty crtc_id_property_;
 
   std::vector<DrmEncoder *> possible_encoders_;
+
+  drmModeConnectorPtr connector_;
 };
 }
 

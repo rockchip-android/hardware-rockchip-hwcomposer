@@ -29,7 +29,7 @@ class DrmEncoder {
  public:
   typedef std::vector<DrmCrtc *>::const_iterator CrtcIter;
 
-  DrmEncoder(drmModeEncoderPtr e, DrmCrtc *current_crtc,
+  DrmEncoder(DrmResources *drm, drmModeEncoderPtr e, DrmCrtc *current_crtc,
              const std::vector<DrmCrtc *> &possible_crtcs);
   ~DrmEncoder();
 
@@ -40,16 +40,21 @@ class DrmEncoder {
 
   CrtcIter begin_possible_crtcs() const;
   CrtcIter end_possible_crtcs() const;
+#if RK_DRM_HWC_DEBUG
+  void dump_encoder(std::ostringstream *out) const;
+#endif
 
  private:
   DrmEncoder(const DrmEncoder &);
-
+  DrmResources *drm_;
   uint32_t id_;
   DrmCrtc *crtc_;
 
   uint32_t type_;
 
   std::vector<DrmCrtc *> possible_crtcs_;
+
+  drmModeEncoderPtr encoder_;
 };
 }
 

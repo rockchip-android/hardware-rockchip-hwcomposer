@@ -38,7 +38,8 @@ DrmConnector::DrmConnector(DrmResources *drm, drmModeConnectorPtr c,
       state_(c->connection),
       mm_width_(c->mmWidth),
       mm_height_(c->mmHeight),
-      possible_encoders_(possible_encoders) {
+      possible_encoders_(possible_encoders),
+      connector_(c) {
 }
 
 DrmConnector::~DrmConnector() {
@@ -153,4 +154,38 @@ uint32_t DrmConnector::mm_width() const {
 uint32_t DrmConnector::mm_height() const {
   return mm_height_;
 }
+
+#if RK_DRM_HWC_DEBUG
+void DrmConnector::dump_connector(std::ostringstream *out) const {
+    int j;
+
+    *out << connector_->connector_id << "\t"
+         << connector_->encoder_id << "\t"
+         << drm_->connector_status_str(connector_->connection) << "\t"
+         << drm_->connector_type_str(connector_->connector_type) << "\t"
+         << connector_->mmWidth << "\t"
+         << connector_->mmHeight << "\t"
+         << connector_->count_modes << "\t";
+
+		for (j = 0; j < connector_->count_encoders; j++) {
+			if(j > 0) {
+                *out << ", ";
+			} else {
+			    *out << "";
+			}
+			*out << connector_->encoders[j];
+	    }
+		*out << "\n";
+
+		if (connector_->count_modes) {
+			*out << "  modes:\n";
+			*out << "\tname refresh (Hz) hdisp hss hse htot vdisp "
+			       "vss vse vtot)\n";
+			for (j = 0; j < connector_->count_modes; j++)
+				drm_->dump_mode(&connector_->modes[j],out);
+		}
+
+		drm_->DumpConnectorProperty(*this,out);
+}
+#endif
 }

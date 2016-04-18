@@ -83,6 +83,10 @@ class DrmPlane {
   void set_reserved(bool b_reserved);
 #endif
 
+#if RK_DRM_HWC_DEBUG
+  void dump_plane(std::ostringstream *out) const;
+#endif
+
  private:
   DrmPlane(const DrmPlane &);
 
@@ -111,6 +115,8 @@ class DrmPlane {
   DrmProperty scale_property_;
   bool b_reserved_;
 #endif
+
+  drmModePlanePtr plane_;
 };
 }
 

@@ -44,6 +44,9 @@ class DrmCrtc {
 
   const DrmProperty &active_property() const;
   const DrmProperty &mode_property() const;
+#if RK_DRM_HWC_DEBUG
+  void dump_crtc(std::ostringstream *out) const;
+#endif
 
  private:
   DrmCrtc(const DrmCrtc &);
@@ -64,6 +67,8 @@ class DrmCrtc {
 
   DrmProperty active_property_;
   DrmProperty mode_property_;
+
+  drmModeCrtcPtr crtc_;
 };
 }
 

@@ -23,12 +23,14 @@
 
 namespace android {
 
-DrmEncoder::DrmEncoder(drmModeEncoderPtr e, DrmCrtc *current_crtc,
+DrmEncoder::DrmEncoder(DrmResources *drm, drmModeEncoderPtr e, DrmCrtc *current_crtc,
                        const std::vector<DrmCrtc *> &possible_crtcs)
-    : id_(e->encoder_id),
+    : drm_(drm),
+      id_(e->encoder_id),
       crtc_(current_crtc),
       type_(e->encoder_type),
-      possible_crtcs_(possible_crtcs) {
+      possible_crtcs_(possible_crtcs),
+      encoder_(e) {
 }
 
 DrmEncoder::~DrmEncoder() {
@@ -53,4 +55,14 @@ DrmEncoder::CrtcIter DrmEncoder::begin_possible_crtcs() const {
 DrmEncoder::CrtcIter DrmEncoder::end_possible_crtcs() const {
   return possible_crtcs_.end();
 }
+
+#if RK_DRM_HWC_DEBUG
+void DrmEncoder::dump_encoder(std::ostringstream *out) const {
+    *out << encoder_->encoder_id << "\t"
+         << encoder_->crtc_id << "\t"
+         << drm_->encoder_type_str(encoder_->encoder_type) << "\t"
+         << std::hex << encoder_->possible_crtcs << "\t"
+         << std::hex << encoder_->possible_clones << "\n";
+}
+#endif
 }

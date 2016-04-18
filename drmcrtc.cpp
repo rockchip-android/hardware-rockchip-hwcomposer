@@ -36,7 +36,8 @@ DrmCrtc::DrmCrtc(DrmResources *drm, drmModeCrtcPtr c, unsigned pipe)
       width_(c->width),
       height_(c->height),
       mode_(&c->mode),
-      mode_valid_(c->mode_valid) {
+      mode_valid_(c->mode_valid),
+      crtc_(c) {
 }
 
 DrmCrtc::~DrmCrtc() {
@@ -84,4 +85,20 @@ const DrmProperty &DrmCrtc::active_property() const {
 const DrmProperty &DrmCrtc::mode_property() const {
   return mode_property_;
 }
+
+#if RK_DRM_HWC_DEBUG
+void DrmCrtc::dump_crtc(std::ostringstream *out) const
+{
+	uint32_t j;
+
+	*out << crtc_->crtc_id << "\t"
+	     << crtc_->buffer_id << "\t"
+	     << "(" << crtc_->x << "," << crtc_->y << ")\t("
+	     << crtc_->width << "x" << crtc_->height << ")\n";
+
+	drm_->dump_mode(&crtc_->mode, out);
+
+	drm_->DumpCrtcProperty(*this,out);
+}
+#endif
 }

@@ -26,6 +26,8 @@
 #include <stdint.h>
 
 namespace android {
+#define type_name_define(res) \
+const char * res##_str(int type);
 
 class DrmResources {
  public:
@@ -62,6 +64,15 @@ class DrmResources {
 
   int CreatePropertyBlob(void *data, size_t length, uint32_t *blob_id);
   int DestroyPropertyBlob(uint32_t blob_id);
+#if RK_DRM_HWC_DEBUG
+  type_name_define(encoder_type);
+  type_name_define(connector_status);
+  type_name_define(connector_type);
+  int DumpPlaneProperty(const DrmPlane &plane, std::ostringstream *out);
+  int DumpCrtcProperty(const DrmCrtc &crtc, std::ostringstream *out);
+  int DumpConnectorProperty(const DrmConnector &connector, std::ostringstream *out);
+  void dump_mode(drmModeModeInfo *mode,std::ostringstream *out);
+#endif
 
  private:
   int TryEncoderForDisplay(int display, DrmEncoder *enc);
@@ -69,6 +80,13 @@ class DrmResources {
                   DrmProperty *property);
 
   int CreateDisplayPipe(DrmConnector *connector);
+
+#if RK_DRM_HWC_DEBUG
+  void dump_blob(uint32_t blob_id, std::ostringstream *out);
+  void dump_prop(drmModePropertyPtr prop,
+		      uint32_t prop_id, uint64_t value, std::ostringstream *out);
+  int DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostringstream *out);
+#endif
 
   int fd_;
   uint32_t mode_id_;
