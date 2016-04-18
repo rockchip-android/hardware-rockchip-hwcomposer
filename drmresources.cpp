@@ -93,6 +93,31 @@ int DrmResources::Init() {
   bool found_primary = false;
   int display_num = 1;
 
+#if RK_DRM_HWC_DEBUG
+    std::ostringstream out;
+    out <<"Frame buffers:\n";
+    out << "id\tsize\tpitch\n";
+    for (int i = 0; !ret && i < res->count_fbs; ++i) {
+        drmModeFBPtr fb = drmModeGetFB(fd_, res->fbs[i]);
+        if (!fb) {
+          ALOGE("Failed to get FB %d", res->fbs[i]);
+          ret = -ENODEV;
+          break;
+        }
+
+        out << fb->fb_id << "\t("
+            << fb->width << "x"
+            << fb->height << ")\t"
+            << fb->pitch << "\n";
+
+        drmModeFreeFB(fb);
+    }
+#endif
+
+#if RK_DRM_HWC_DEBUG
+  out << "CRTCs:\n";
+  out << "id\tfb\tpos\tsize\n";
+#endif
   for (int i = 0; !ret && i < res->count_crtcs; ++i) {
     drmModeCrtcPtr c = drmModeGetCrtc(fd_, res->crtcs[i]);
     if (!c) {
@@ -104,12 +129,8 @@ int DrmResources::Init() {
     DrmCrtc *crtc = new DrmCrtc(this, c, i);
 
 #if RK_DRM_HWC_DEBUG
-    std::ostringstream out;
-    out << "CRTCs:\n";
-	out << "id\tfb\tpos\tsize\n";
     crtc->dump_crtc(&out);
     out << "\n";
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
 #endif
 
     drmModeFreeCrtc(c);
@@ -129,6 +150,10 @@ int DrmResources::Init() {
     crtcs_.push_back(crtc);
   }
 
+#if RK_DRM_HWC_DEBUG
+  out << "Encoders:\n";
+  out << "id\tcrtc\ttype\tpossible crtcs\tpossible clones\t\n";
+#endif
   for (int i = 0; !ret && i < res->count_encoders; ++i) {
     drmModeEncoderPtr e = drmModeGetEncoder(fd_, res->encoders[i]);
     if (!e) {
@@ -149,13 +174,10 @@ int DrmResources::Init() {
     }
 
     DrmEncoder *enc = new DrmEncoder(this, e, current_crtc, possible_crtcs);
+
 #if RK_DRM_HWC_DEBUG
-    std::ostringstream out;
-	out << "Encoders:\n";
-	out << "id\tcrtc\ttype\tpossible crtcs\tpossible clones\t\n";
     enc->dump_encoder(&out);
     out << "\n";
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
 #endif
     drmModeFreeEncoder(e);
 
@@ -167,6 +189,10 @@ int DrmResources::Init() {
     encoders_.push_back(enc);
   }
 
+#if RK_DRM_HWC_DEBUG
+  out << "Connectors:\n";
+  out << "id\tencoder\tstatus\t\ttype\tsize (mm)\tmodes\tencoders\n";
+#endif
   for (int i = 0; !ret && i < res->count_connectors; ++i) {
     drmModeConnectorPtr c = drmModeGetConnector(fd_, res->connectors[i]);
     if (!c) {
@@ -191,13 +217,8 @@ int DrmResources::Init() {
         new DrmConnector(this, c, current_encoder, possible_encoders);
 
 #if RK_DRM_HWC_DEBUG
-    std::ostringstream out;
-	out << "Connectors:\n";
-	out << "id\tencoder\tstatus\t\ttype\tsize (mm)\tmodes\tencoders\n";
-
     conn->dump_connector(&out);
     out << "\n";
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
 #endif
 
     drmModeFreeConnector(c);
@@ -224,6 +245,7 @@ int DrmResources::Init() {
       ++display_num;
     }
   }
+
   if (res)
     drmModeFreeResources(res);
 
@@ -237,6 +259,10 @@ int DrmResources::Init() {
     return -ENOENT;
   }
 
+#if RK_DRM_HWC_DEBUG
+  out << "Planes:\n";
+  out << "id\tcrtc\tfb\tCRTC x,y\tx,y\tgamma size\tpossible crtcs\n";
+#endif
   for (uint32_t i = 0; i < plane_res->count_planes; ++i) {
     drmModePlanePtr p = drmModeGetPlane(fd_, plane_res->planes[i]);
     if (!p) {
@@ -248,13 +274,8 @@ int DrmResources::Init() {
     DrmPlane *plane = new DrmPlane(this, p);
 
 #if RK_DRM_HWC_DEBUG
-    std::ostringstream out;
-	out << "Planes:\n";
-	out << "id\tcrtc\tfb\tCRTC x,y\tx,y\tgamma size\tpossible crtcs\n";
-
     plane->dump_plane(&out);
     out << "\n";
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
 #endif
 
     drmModeFreePlane(p);
@@ -274,6 +295,11 @@ int DrmResources::Init() {
 
     planes_.push_back(plane);
   }
+#if RK_DRM_HWC_DEBUG
+  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+  out.str("");
+#endif
+
   drmModeFreePlaneResources(plane_res);
   if (ret)
     return ret;
