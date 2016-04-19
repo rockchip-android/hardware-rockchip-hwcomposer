@@ -551,11 +551,17 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     //force go into GPU
     use_framebuffer_target = true;
     int num_layers = display_contents[i]->numHwLayers;
+#if RK_DRM_HWC_DEBUG
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-#if RK_DRM_HWC_DEBUG
+
       dump_layer(layer,j);
+    }
 #endif
+
+    for (int j = 0; j < num_layers; j++) {
+      hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
       if (!use_framebuffer_target) {
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
