@@ -236,7 +236,7 @@ struct DrmHwcLayer {
   UniqueFd acquire_fence;
   OutputFd release_fence;
 
-#if 1
+#if RK_DRM_HWC
   bool is_yuv;
   bool is_scale;
   bool is_large;

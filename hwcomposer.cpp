@@ -45,7 +45,7 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 
-#if 1
+#if RK_DRM_HWC
 #include "gralloc_drm_handle.h"
 #endif
 
@@ -275,7 +275,7 @@ void DrmHwcNativeHandle::Clear() {
   }
 }
 
-#if 1
+#if RK_DRM_HWC
 static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   if (!buffer) {
     *out << "buffer=<invalid>";
@@ -333,7 +333,7 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 }
 #endif
 
-#if 1
+#if RK_DRM_HWC
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
     struct gralloc_drm_handle_t* drm_handle;
@@ -354,7 +354,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
 
-#if 1
+#if RK_DRM_HWC
     drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
     c = ctx->drm.GetConnectorForDisplay(0);
     if (!c) {
@@ -694,7 +694,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
 
       DrmHwcLayer &layer = display_contents.layers[j];
-#if 1
+#if RK_DRM_HWC
       ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
 #else
       ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);
@@ -1078,7 +1078,7 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
 
-#if 1
+#if RK_DRM_HWC
   g_log_level_ = 0;
 #endif
   *dev = &ctx->device.common;
