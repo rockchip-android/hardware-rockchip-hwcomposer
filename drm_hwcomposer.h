@@ -25,6 +25,7 @@
 #include "seperate_rects.h"
 #include "drmhwcgralloc.h"
 
+#define BLEND_MASK 0xFFFF
 struct hwc_import_context;
 
 int hwc_import_init(struct hwc_import_context **ctx);
@@ -230,13 +231,14 @@ struct DrmHwcLayer {
   DrmHwcBlending blending = DrmHwcBlending::kNone;
   uint8_t alpha = 0xff;
   DrmHwcRect<float> source_crop;
+  DrmHwcRect<int> isource_crop;
   DrmHwcRect<int> display_frame;
   std::vector<DrmHwcRect<int>> source_damage;
 
   UniqueFd acquire_fence;
   OutputFd release_fence;
 
-#if RK_DRM_HWC
+#if 0
   bool is_yuv;
   bool is_scale;
   bool is_large;
@@ -248,7 +250,6 @@ struct DrmHwcLayer {
   int bpp;
   int group_id;
 
-  void dump_drm_layer(int index, std::ostringstream *out) const;
   int InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                         const gralloc_module_t *gralloc);
 #else
@@ -256,6 +257,9 @@ struct DrmHwcLayer {
                         const gralloc_module_t *gralloc);
 #endif
 
+#if RK_DRM_HWC_DEBUG
+void dump_drm_layer(int index, std::ostringstream *out) const;
+#endif
 
   buffer_handle_t get_usable_handle() const {
     return handle.get() != NULL ? handle.get() : sf_handle;

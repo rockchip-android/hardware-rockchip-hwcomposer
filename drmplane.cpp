@@ -128,7 +128,7 @@ int DrmPlane::Init() {
   if (ret)
     ALOGI("Could not get alpha property");
 
-#if RK_DRM_HWC
+#if 0
   ret = drm_->GetPlaneProperty(*this, "yuv_support", &yuv_property_);
   if (ret)
     ALOGE("Could not get yuv_support property");
@@ -203,7 +203,7 @@ const DrmProperty &DrmPlane::alpha_property() const {
   return alpha_property_;
 }
 
-#if RK_DRM_HWC
+#if 0
 const DrmProperty &DrmPlane::yuv_property() const {
   return yuv_property_;
 }
@@ -239,7 +239,7 @@ void DrmPlane::dump_plane(std::ostringstream *out) const {
 
 		*out << "  formats:";
 		for (j = 0; j < plane_->count_formats; j++)
-		    *out << &plane_->formats[j]; //printf(" %4.4s", (char *)&ovr->formats[j]);
+		    *out << &plane_->formats[j] << " "; //printf(" %4.4s", (char *)&ovr->formats[j]);
 
 		*out << ("\n");
 

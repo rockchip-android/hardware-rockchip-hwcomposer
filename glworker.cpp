@@ -229,7 +229,7 @@ static std::string GenerateFragmentShader(int layer_count) {
       fragment_shader_stream << "  if (alphaCover > 0.5/255.0) {\n";
     // clang-format off
     fragment_shader_stream
-        << "  texSample = texture2D(uLayerTexture" << i << ",\n"
+        << "  texSample = texture(uLayerTexture" << i << ",\n"
         << "                        fTexCoords[" << i << "]);\n"
         << "  multRgb = texSample.rgb *\n"
         << "            max(texSample.a, uLayerPremult[" << i << "]);\n"

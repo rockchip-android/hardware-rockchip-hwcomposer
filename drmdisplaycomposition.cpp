@@ -134,7 +134,7 @@ static size_t CountUsablePlanes(DrmCrtc *crtc,
              [=](DrmPlane *plane) { return plane->GetCrtcSupported(*crtc); });
 }
 
-#if RK_DRM_HWC
+#if 0
 static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes, DrmHwcLayer* layer) {
  uint64_t yuv_value,scale_value;
 
@@ -485,7 +485,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 
   if (use_squash_framebuffer)
   {
-#if RK_DRM_HWC
+#if 0
     ReservedPlane(crtc_, primary_planes, overlay_planes, 0);
 #endif
     planes_can_use--;
@@ -493,13 +493,13 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 
   if (layers_remaining.size() > planes_can_use)
   {
-#if RK_DRM_HWC
+#if 0
     ReservedPlane(crtc_, primary_planes, overlay_planes, 1);
 #endif
     planes_can_use--;
   }
 
-#if RK_DRM_HWC
+#if 0
     /*Group layer*/
     int group_id = 0;
     size_t i;
@@ -520,7 +520,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   for (last_composition_layer = 0;
        last_composition_layer < layers_remaining.size() && planes_can_use > 0;
        last_composition_layer++, planes_can_use--) {
-#if RK_DRM_HWC
+#if 0
     DrmHwcLayer &layer = layers_[layers_remaining[last_composition_layer]];
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, &layer),
@@ -536,7 +536,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
                          layers_remaining.begin() + last_composition_layer);
 
   if (layers_remaining.size() > 0) {
-#if RK_DRM_HWC
+#if 0
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, NULL),
                             crtc_, DrmCompositionPlane::kSourcePreComp});
@@ -551,7 +551,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   }
 
   if (use_squash_framebuffer) {
-#if RK_DRM_HWC
+#if 0
     composition_planes_.emplace_back(
         DrmCompositionPlane{TakePlane(crtc_, primary_planes, overlay_planes, NULL),
                             crtc_, DrmCompositionPlane::kSourceSquash});
@@ -563,12 +563,12 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   }
 
 #if RK_DRM_HWC_DEBUG
-  i=0;
+  size_t j=0;
   for (const DrmCompositionPlane &plane : composition_planes_) {
     std::ostringstream out;
-    plane.dump_drm_com_plane(i,&out);
+    plane.dump_drm_com_plane(j,&out);
     ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
-    i++;
+    j++;
   }
 #endif
 

@@ -657,10 +657,13 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
     DrmCrtc *crtc = comp_plane.crtc;
 
     int fb_id = -1;
-    DrmHwcRect<int> display_frame;
-    DrmHwcRect<float> source_crop;
+    DrmHwcRect<int> display_frame = DrmHwcRect<int>(0, 0, 0, 0);
+    DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);;
+    DrmHwcRect<int> isource_crop = DrmHwcRect<int>(0, 0, 0, 0);;
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
+    int gralloc_buffer_usage=0;
+
     switch (comp_plane.source_layer) {
       case DrmCompositionPlane::kSourceNone:
         break;
@@ -698,6 +701,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
         fb_id = layer.buffer->fb_id;
         display_frame = layer.display_frame;
         source_crop = layer.source_crop;
+        isource_crop = layer.isource_crop;
+        gralloc_buffer_usage = layer.gralloc_buffer_usage;
         if (layer.blending == DrmHwcBlending::kPreMult)
           alpha = layer.alpha;
         switch (layer.transform) {
@@ -766,17 +771,33 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
         drmModePropertySetAdd(pset, plane->id(), plane->crtc_w_property().id(),
                               display_frame.right - display_frame.left) ||
         drmModePropertySetAdd(pset, plane->id(), plane->crtc_h_property().id(),
-                              display_frame.bottom - display_frame.top) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_x_property().id(),
-                              (int)(source_crop.left) << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_y_property().id(),
-                              (int)(source_crop.top) << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_w_property().id(),
-                              (int)(source_crop.right - source_crop.left)
-                                  << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_h_property().id(),
-                              (int)(source_crop.bottom - source_crop.top)
+                              display_frame.bottom - display_frame.top);
+        if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+        {
+            ret = ret ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_x_property().id(),
+                                  (int)(source_crop.left) << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_y_property().id(),
+                                  (int)(source_crop.top) << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_w_property().id(),
+                                  (int)(source_crop.right - source_crop.left)
+                                      << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_h_property().id(),
+                                  (int)(source_crop.bottom - source_crop.top)
                                   << 16);
+        } else {
+            ret = ret ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_x_property().id(),
+                                  isource_crop.left << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_y_property().id(),
+                                  isource_crop.top << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_w_property().id(),
+                                  (isource_crop.right - isource_crop.left)
+                                      << 16) ||
+            drmModePropertySetAdd(pset, plane->id(), plane->src_h_property().id(),
+                                  (isource_crop.bottom - isource_crop.top)
+                                      << 16);
+        }
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
       break;
@@ -790,10 +811,17 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp) {
             << " fb id=" << fb_id
             << " display_frame[" << display_frame.left << ","
             << display_frame.top << "," << display_frame.right - display_frame.left
-            << "," << display_frame.bottom - display_frame.top << "]"
-            << " source_crop[" << source_crop.left << ","
-            << source_crop.top << "," << source_crop.right - source_crop.left
-            << "," << source_crop.bottom - source_crop.top << "]";
+            << "," << display_frame.bottom - display_frame.top << "]";
+    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+    {
+         out_log << " source_crop[" << source_crop.left << ","
+                 << source_crop.top << "," << source_crop.right - source_crop.left
+                 << "," << source_crop.bottom - source_crop.top << "]";
+    } else {
+          out_log << " isource_crop[" << isource_crop.left << ","
+                 << isource_crop.top << "," << isource_crop.right - isource_crop.left
+                 << "," << isource_crop.bottom - isource_crop.top << "]";
+    }
 #endif
     if (plane->rotation_property().id()) {
       ret = drmModePropertySetAdd(pset, plane->id(),

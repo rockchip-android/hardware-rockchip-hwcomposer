@@ -107,7 +107,7 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   bo->width = gr_handle->width;
   bo->height = gr_handle->height;
   bo->format = ConvertHalFormatToDrm(gr_handle->format);
-  bo->pitches[0] = gr_handle->stride;
+  bo->pitches[0] = gr_handle->byte_stride;
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
@@ -115,6 +115,9 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
   if (ret) {
     ALOGE("could not create drm fb %d", ret);
+    ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",
+    drm_->fd(), bo->width, bo->height, gr_handle->format,bo->format,
+    gem_handle, bo->pitches[0], bo->fb_id);
     return ret;
   }
 

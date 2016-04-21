@@ -44,8 +44,8 @@
 #include <sw_sync.h>
 #include <sync/sync.h>
 #include <utils/Trace.h>
-
-#if RK_DRM_HWC
+#include <cutils/log.h>
+#if RK_DRM_HWC_DEBUG
 #include "gralloc_drm_handle.h"
 #endif
 
@@ -54,13 +54,13 @@
 namespace android {
 
 #if RK_DRM_HWC_DEBUG
-unsigned int g_log_level_;
-
+unsigned int g_log_level;
+unsigned int g_frame;
 static int init_log_level()
 {
     char value[PROPERTY_VALUE_MAX];
-    property_get("sys.hwc.log", value, "0");
-    g_log_level_ = atoi(value);
+    property_get("sys.hwc.log", value, "1");
+    g_log_level = atoi(value);
     return 0;
 }
 #endif
@@ -275,7 +275,7 @@ void DrmHwcNativeHandle::Clear() {
   }
 }
 
-#if RK_DRM_HWC
+#if RK_DRM_HWC_DEBUG
 static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   if (!buffer) {
     *out << "buffer=<invalid>";
@@ -283,7 +283,7 @@ static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   }
 
   *out << "buffer[w/h/format]=";
-  *out << buffer->width << "/" << buffer->height << "/" << buffer->format;
+  *out << buffer->width << "/" << buffer->height << "/" << std::hex << buffer->format;
 }
 
 static const char *TransformToString(DrmHwcTransform transform) {
@@ -325,7 +325,10 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
     *out << " transform=" << TransformToString(transform)
          << " blending[a=" << (int)alpha
          << "]=" << BlendingToString(blending) << " source_crop";
-    source_crop.Dump(out);
+    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+        source_crop.Dump(out);
+    else
+        isource_crop.Dump(out);
     *out << " display_frame";
     display_frame.Dump(out);
 
@@ -333,7 +336,8 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 }
 #endif
 
-#if RK_DRM_HWC
+
+#if 0
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
     struct gralloc_drm_handle_t* drm_handle;
@@ -344,17 +348,21 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
 int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
                                     const gralloc_module_t *gralloc) {
 #endif
+    struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(sf_layer->handle);
     sf_handle = sf_layer->handle;
     alpha = sf_layer->planeAlpha;
 
     source_crop = DrmHwcRect<float>(
       sf_layer->sourceCropf.left, sf_layer->sourceCropf.top,
       sf_layer->sourceCropf.right, sf_layer->sourceCropf.bottom);
+    isource_crop = DrmHwcRect<int>(
+      sf_layer->sourceCrop.left, sf_layer->sourceCrop.top,
+      sf_layer->sourceCrop.right, sf_layer->sourceCrop.bottom);
     display_frame = DrmHwcRect<int>(
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
 
-#if RK_DRM_HWC
+#if 0
     drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
     c = ctx->drm.GetConnectorForDisplay(0);
     if (!c) {
@@ -414,7 +422,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       return -EINVAL;
   }
 
-  switch (sf_layer->blending) {
+  switch (sf_layer->blending & BLEND_MASK) {
     case HWC_BLENDING_NONE:
       blending = DrmHwcBlending::kNone;
       break;
@@ -437,18 +445,19 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   if (ret)
     return ret;
 
+#if 1
+  gralloc_buffer_usage= drm_handle->usage;
+#else
   ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
                          handle.get(), &gralloc_buffer_usage);
   if (ret) {
     // TODO(zachr): Once GRALLOC_MODULE_PERFORM_GET_USAGE is implemented, remove
     // "ret = 0" and enable the error logging code.
     ret = 0;
-#if 0
     ALOGE("Failed to get usage for buffer %p (%d)", handle.get(), ret);
     return ret;
-#endif
   }
-
+#endif
   return 0;
 }
 
@@ -467,12 +476,14 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
 #if RK_DRM_HWC_DEBUG
 bool log_level(LOG_LEVEL log_level)
 {
-    return g_log_level_ & log_level;
+    return g_log_level & log_level;
 }
 
 static void dump_layer(hwc_layer_1_t *layer, int index) {
     struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
     size_t i;
+  std::ostringstream out;
+
 
     if(layer->flags & HWC_SKIP_LAYER)
     {
@@ -480,6 +491,8 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
     }
     else
     {
+
+#if 0
         if(drm_handle)
             ALOGD_IF(log_level(DBG_VERBOSE),"layer[%d]=%p, "
                  "name=%s "
@@ -491,8 +504,9 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
                  "fd = %d, "
                  "tr=%02x, "
                  "blend=%04x, "
-                 "{%d,%d,%d,%d}, "
-                 "{%d,%d,%d,%d}",
+                 "sourceCropf{%f,%f,%f,%f}, "
+                 "sourceCrop{%d,%d,%d,%d}, "
+                 "displayFrame{%d,%d,%d,%d}",
                  index,
                  layer,
                  layer->LayerName,
@@ -504,6 +518,10 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
                  drm_handle->prime_fd,
                  layer->transform,
                  layer->blending,
+                 layer->sourceCropf.left,
+                 layer->sourceCropf.top,
+                 layer->sourceCropf.right,
+                 layer->sourceCropf.bottom,
                  layer->sourceCrop.left,
                  layer->sourceCrop.top,
                  layer->sourceCrop.right,
@@ -521,6 +539,29 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
                  layer->visibleRegionScreen.rects[i].right,
                  layer->visibleRegionScreen.rects[i].bottom);
         }
+#endif
+
+        if(drm_handle)
+        {
+            out << "layer[" << index << "]=" << layer << ",name=" << layer->LayerName
+                << ",type=" << layer->compositionType << ",hints=" << layer->compositionType
+                << ",flags=" << layer->flags << ",handle=" << layer->handle << ",format=" << std::hex
+                << drm_handle->format << ",fd = " << drm_handle->prime_fd << ",transform=" << layer->transform
+                << ",blend=" << layer->blending << ",sourceCropf{" << layer->sourceCropf.left << ","
+                << layer->sourceCropf.top << "," << layer->sourceCropf.right << "," << layer->sourceCropf.bottom
+                << "},sourceCrop{" << layer->sourceCrop.left << "," << layer->sourceCrop.top << ","
+                << layer->sourceCrop.right << "," << layer->sourceCrop.bottom << "},displayFrame{"
+                << layer->displayFrame.left << "," << layer->displayFrame.top << ","
+                << layer->displayFrame.right << "," << layer->displayFrame.bottom << "},";
+        }
+        for (i = 0; i < layer->visibleRegionScreen.numRects; i++)
+        {
+            out << "rect[" << i << "]={" << layer->visibleRegionScreen.rects[i].left << ","
+                << layer->visibleRegionScreen.rects[i].top << "," << layer->visibleRegionScreen.rects[i].right
+                << "," << layer->visibleRegionScreen.rects[i].bottom << "},";
+        }
+        out << "\n";
+        ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
     }
 }
 #endif
@@ -549,9 +590,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 
     //force go into GPU
-    use_framebuffer_target = true;
+    //use_framebuffer_target = true;
     int num_layers = display_contents[i]->numHwLayers;
 #if RK_DRM_HWC_DEBUG
+    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start----------------------------",g_frame);
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
@@ -649,7 +691,6 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         indices_to_composite.push_back(j);
       if (sf_layer->compositionType == HWC_FRAMEBUFFER_TARGET)
         framebuffer_target_index = j;
-
       layer.acquire_fence.Set(sf_layer->acquireFenceFd);
       sf_layer->acquireFenceFd = -1;
 
@@ -692,9 +733,8 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     std::vector<size_t> &indices_to_composite = layers_indices[i];
     for (size_t j : indices_to_composite) {
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
-
       DrmHwcLayer &layer = display_contents.layers[j];
-#if RK_DRM_HWC
+#if 0
       ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
 #else
       ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);
@@ -743,7 +783,10 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_add_layer_to_retire_fence(layer, dc);
     }
   }
-
+#if RK_DRM_HWC_DEBUG
+ ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
+ g_frame++;
+#endif
   composition.reset(NULL);
 
   return ret;
@@ -821,7 +864,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
 
   DrmConnector *connector = ctx->drm.GetConnectorForDisplay(display);
   if (!connector) {
-    ALOGE("Failed to get connector for display %d", display);
+    ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
 
@@ -922,7 +965,7 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
 
   DrmConnector *c = ctx->drm.GetConnectorForDisplay(display);
   if (!c) {
-    ALOGE("Failed to get connector for display %d", display);
+    ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
   DrmMode mode;
@@ -1078,8 +1121,9 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
 
-#if RK_DRM_HWC
-  g_log_level_ = 0;
+#if RK_DRM_HWC_DEBUG
+  g_log_level = 0;
+  g_frame = 0;
 #endif
   *dev = &ctx->device.common;
 

@@ -95,7 +95,7 @@ int DrmResources::Init() {
 
 #if RK_DRM_HWC_DEBUG
     std::ostringstream out;
-    out <<"Frame buffers:\n";
+    out << "Frame buffers:\n";
     out << "id\tsize\tpitch\n";
     for (int i = 0; !ret && i < res->count_fbs; ++i) {
         drmModeFBPtr fb = drmModeGetFB(fd_, res->fbs[i]);
@@ -112,6 +112,9 @@ int DrmResources::Init() {
 
         drmModeFreeFB(fb);
     }
+
+  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  out.str("");
 #endif
 
 #if RK_DRM_HWC_DEBUG
@@ -151,6 +154,11 @@ int DrmResources::Init() {
   }
 
 #if RK_DRM_HWC_DEBUG
+  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  out.str("");
+#endif
+
+#if RK_DRM_HWC_DEBUG
   out << "Encoders:\n";
   out << "id\tcrtc\ttype\tpossible crtcs\tpossible clones\t\n";
 #endif
@@ -188,6 +196,11 @@ int DrmResources::Init() {
     }
     encoders_.push_back(enc);
   }
+#if RK_DRM_HWC_DEBUG
+  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  out.str("");
+#endif
+
 
 #if RK_DRM_HWC_DEBUG
   out << "Connectors:\n";
@@ -246,6 +259,11 @@ int DrmResources::Init() {
     }
   }
 
+#if RK_DRM_HWC_DEBUG
+  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  out.str("");
+#endif
+
   if (res)
     drmModeFreeResources(res);
 
@@ -296,7 +314,7 @@ int DrmResources::Init() {
     planes_.push_back(plane);
   }
 #if RK_DRM_HWC_DEBUG
-  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
   out.str("");
 #endif
 
@@ -675,8 +693,7 @@ void DrmResources::dump_prop(drmModePropertyPtr prop,
 		return;
 	}
 
-	printf(" %s:\n", prop->name);
-	*out << prop->name << ":\n";
+	*out << " " << prop->name << ":\n";
 
 	*out << "\t\tflags:";
 	if (prop->flags & DRM_MODE_PROP_PENDING)
@@ -739,6 +756,8 @@ void DrmResources::dump_prop(drmModePropertyPtr prop,
 		dump_blob(value, out);
 	else
 		*out << value;
+
+    *out << "\n";
 }
 
 int DrmResources::DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostringstream *out) {
