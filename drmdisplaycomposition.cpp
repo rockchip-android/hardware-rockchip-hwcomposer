@@ -417,6 +417,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     return -ENODEV;
   }
 
+#if USE_SQUASH
   bool use_squash_framebuffer = false;
   // Used to determine which layers were entirely squashed
   std::vector<int> layer_squash_area(layers_.size(), 0);
@@ -471,18 +472,21 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       }
     }
   }
-
+#endif
   std::vector<size_t> layers_remaining;
   for (size_t layer_index = 0; layer_index < layers_.size(); layer_index++) {
+  #if USE_SQUASH
     // Skip layers that were completely squashed
     if (layer_squash_area[layer_index] >=
         layers_[layer_index].display_frame.area()) {
       continue;
     }
+  #endif
 
     layers_remaining.push_back(layer_index);
   }
 
+#if USE_PRE_COMP
   if (use_squash_framebuffer)
   {
 #if 0
@@ -490,7 +494,9 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #endif
     planes_can_use--;
   }
+#endif
 
+#if USE_SQUASH
   if (layers_remaining.size() > planes_can_use)
   {
 #if 0
@@ -498,7 +504,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #endif
     planes_can_use--;
   }
-
+#endif
 #if 0
     /*Group layer*/
     int group_id = 0;
@@ -534,7 +540,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 
   layers_remaining.erase(layers_remaining.begin(),
                          layers_remaining.begin() + last_composition_layer);
-
+#if USE_PRE_COMP
   if (layers_remaining.size() > 0) {
 #if 0
     composition_planes_.emplace_back(
@@ -549,7 +555,9 @@ int DrmDisplayComposition::Plan(SquashState *squash,
                    layers_remaining.size(), exclude_rects.data(),
                    exclude_rects.size(), pre_comp_regions_);
   }
+#endif
 
+#if USE_SQUASH
   if (use_squash_framebuffer) {
 #if 0
     composition_planes_.emplace_back(
@@ -561,7 +569,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
                             crtc_, DrmCompositionPlane::kSourceSquash});
 #endif
   }
-
+#endif
 #if RK_DRM_HWC_DEBUG
   size_t j=0;
   for (const DrmCompositionPlane &plane : composition_planes_) {

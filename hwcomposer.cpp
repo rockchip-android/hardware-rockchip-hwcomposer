@@ -283,7 +283,7 @@ static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   }
 
   *out << "buffer[w/h/format]=";
-  *out << buffer->width << "/" << buffer->height << "/" << std::hex << buffer->format;
+  *out << buffer->width << "/" << buffer->height << "/" << std::hex << buffer->format << std::dec;
 }
 
 static const char *TransformToString(DrmHwcTransform transform) {
@@ -491,74 +491,39 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
     }
     else
     {
-
-#if 0
-        if(drm_handle)
-            ALOGD_IF(log_level(DBG_VERBOSE),"layer[%d]=%p, "
-                 "name=%s "
-                 "type=%d, "
-                 "hints=%08x, "
-                 "flags=%08x, "
-                 "handle=%p, "
-                 "format=0x%x, "
-                 "fd = %d, "
-                 "tr=%02x, "
-                 "blend=%04x, "
-                 "sourceCropf{%f,%f,%f,%f}, "
-                 "sourceCrop{%d,%d,%d,%d}, "
-                 "displayFrame{%d,%d,%d,%d}",
-                 index,
-                 layer,
-                 layer->LayerName,
-                 layer->compositionType,
-                 layer->hints,
-                 layer->flags,
-                 layer->handle,
-                 drm_handle->format,
-                 drm_handle->prime_fd,
-                 layer->transform,
-                 layer->blending,
-                 layer->sourceCropf.left,
-                 layer->sourceCropf.top,
-                 layer->sourceCropf.right,
-                 layer->sourceCropf.bottom,
-                 layer->sourceCrop.left,
-                 layer->sourceCrop.top,
-                 layer->sourceCrop.right,
-                 layer->sourceCrop.bottom,
-                 layer->displayFrame.left,
-                 layer->displayFrame.top,
-                 layer->displayFrame.right,
-                 layer->displayFrame.bottom);
-
-        for (i = 0; i < layer->visibleRegionScreen.numRects; i++)
-        {
-            ALOGD_IF(log_level(DBG_VERBOSE),"\trect%d: {%d,%d,%d,%d}", i,
-                 layer->visibleRegionScreen.rects[i].left,
-                 layer->visibleRegionScreen.rects[i].top,
-                 layer->visibleRegionScreen.rects[i].right,
-                 layer->visibleRegionScreen.rects[i].bottom);
-        }
-#endif
-
         if(drm_handle)
         {
-            out << "layer[" << index << "]=" << layer << ",name=" << layer->LayerName
-                << ",type=" << layer->compositionType << ",hints=" << layer->compositionType
-                << ",flags=" << layer->flags << ",handle=" << layer->handle << ",format=" << std::hex
-                << drm_handle->format << ",fd = " << drm_handle->prime_fd << ",transform=" << layer->transform
-                << ",blend=" << layer->blending << ",sourceCropf{" << layer->sourceCropf.left << ","
-                << layer->sourceCropf.top << "," << layer->sourceCropf.right << "," << layer->sourceCropf.bottom
-                << "},sourceCrop{" << layer->sourceCrop.left << "," << layer->sourceCrop.top << ","
-                << layer->sourceCrop.right << "," << layer->sourceCrop.bottom << "},displayFrame{"
-                << layer->displayFrame.left << "," << layer->displayFrame.top << ","
-                << layer->displayFrame.right << "," << layer->displayFrame.bottom << "},";
+            out << "layer[" << index << "]=" << layer
+                << ",name=" << layer->LayerName
+                << ",type=" << layer->compositionType
+                << ",hints=" << layer->compositionType
+                << ",flags=" << layer->flags
+                << ",handle=" << layer->handle
+                << ",format=0x" << std::hex << drm_handle->format
+                << ",fd = " << std::dec << drm_handle->prime_fd
+                << ",transform=0x" <<  std::hex << layer->transform
+                << ",blend=0x" << layer->blending
+                << ",sourceCropf{" << std::dec
+                    << layer->sourceCropf.left << "," << layer->sourceCropf.top << ","
+                    << layer->sourceCropf.right << "," << layer->sourceCropf.bottom
+                << "},sourceCrop{"
+                    << layer->sourceCrop.left << ","
+                    << layer->sourceCrop.top << ","
+                    << layer->sourceCrop.right << ","
+                    << layer->sourceCrop.bottom
+                << "},displayFrame{"
+                    << layer->displayFrame.left << ","
+                    << layer->displayFrame.top << ","
+                    << layer->displayFrame.right << ","
+                    << layer->displayFrame.bottom << "},";
         }
         for (i = 0; i < layer->visibleRegionScreen.numRects; i++)
         {
-            out << "rect[" << i << "]={" << layer->visibleRegionScreen.rects[i].left << ","
-                << layer->visibleRegionScreen.rects[i].top << "," << layer->visibleRegionScreen.rects[i].right
-                << "," << layer->visibleRegionScreen.rects[i].bottom << "},";
+            out << "rect[" << i << "]={"
+                << layer->visibleRegionScreen.rects[i].left << ","
+                << layer->visibleRegionScreen.rects[i].top << ","
+                << layer->visibleRegionScreen.rects[i].right << ","
+                << layer->visibleRegionScreen.rects[i].bottom << "},";
         }
         out << "\n";
         ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());

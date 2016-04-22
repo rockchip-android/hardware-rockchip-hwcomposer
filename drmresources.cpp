@@ -281,6 +281,7 @@ int DrmResources::Init() {
   out << "Planes:\n";
   out << "id\tcrtc\tfb\tCRTC x,y\tx,y\tgamma size\tpossible crtcs\n";
 #endif
+
   for (uint32_t i = 0; i < plane_res->count_planes; ++i) {
     drmModePlanePtr p = drmModeGetPlane(fd_, plane_res->planes[i]);
     if (!p) {
@@ -288,12 +289,13 @@ int DrmResources::Init() {
       ret = -ENODEV;
       break;
     }
-
     DrmPlane *plane = new DrmPlane(this, p);
 
 #if RK_DRM_HWC_DEBUG
     plane->dump_plane(&out);
     out << "\n";
+    ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+    out.str("");
 #endif
 
     drmModeFreePlane(p);
@@ -313,10 +315,6 @@ int DrmResources::Init() {
 
     planes_.push_back(plane);
   }
-#if RK_DRM_HWC_DEBUG
-  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
-  out.str("");
-#endif
 
   drmModeFreePlaneResources(plane_res);
   if (ret)
