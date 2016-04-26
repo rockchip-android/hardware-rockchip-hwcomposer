@@ -474,6 +474,37 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
 }
 
 #if RK_DRM_HWC_DEBUG
+//return property value of pcProperty
+static int hwc_get_int_property(const char* pcProperty,const char* default_value)
+{
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
+
+    if(pcProperty == NULL || default_value == NULL)
+    {
+        ALOGE("hwc_get_int_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, value, default_value);
+    new_value = atoi(value);
+
+    return new_value;
+}
+
+static int hwc_get_string_property(const char* pcProperty,const char* default_value,char* retult)
+{
+    if(pcProperty == NULL || default_value == NULL || retult == NULL)
+    {
+        ALOGE("hwc_get_string_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, retult, default_value);
+
+    return 0;
+}
+
 bool log_level(LOG_LEVEL log_level)
 {
     return g_log_level & log_level;
@@ -555,7 +586,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 
     //force go into GPU
-    //use_framebuffer_target = true;
+    if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0)
+        use_framebuffer_target = true;
+
     int num_layers = display_contents[i]->numHwLayers;
 #if RK_DRM_HWC_DEBUG
     ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start----------------------------",g_frame);

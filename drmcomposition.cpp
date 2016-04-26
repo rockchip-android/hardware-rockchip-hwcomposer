@@ -40,7 +40,8 @@ DrmComposition::DrmComposition(DrmResources *drm, Importer *importer)
        iter != drm_->end_planes(); ++iter) {
     if ((*iter)->type() == DRM_PLANE_TYPE_PRIMARY)
       primary_planes_.push_back(*iter);
-    else if (use_overlay_planes && (*iter)->type() == DRM_PLANE_TYPE_OVERLAY)
+    else if (use_overlay_planes && ((*iter)->type() == DRM_PLANE_TYPE_OVERLAY ||
+        (*iter)->type() == DRM_PLANE_TYPE_CURSOR))
       overlay_planes_.push_back(*iter);
   }
 }
