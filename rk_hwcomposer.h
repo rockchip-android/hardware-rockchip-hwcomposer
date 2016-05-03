@@ -66,34 +66,56 @@
 #define RGA_POLICY_MAX_SIZE  (5*1024*1024/2 ) //(2*1024*1024)//
 #define VIDEO_UI            (1)
 #define VIDEO_FULLSCREEN    (2)
-#define VIDEO_WIN1_UI_DISABLE     1
-#define RGA_USE_FENCE     1
+#define GPUDRAWCNT          (20)
+
 #ifdef USE_X86
+#define RGA_USE_FENCE     1
 #define VIDEO_USE_PPROT   1
 #define HOTPLUG_MODE      0
 #define ONLY_USE_ONE_VOP  1
-#else
+#define VIDEO_WIN1_UI_DISABLE     1
+#define VIRTUAL_UI_RESOLUTION     0
+#elif defined(TARGET_BOARD_PLATFORM_RK312X)
+#define RGA_USE_FENCE     0
+#define VIDEO_USE_PPROT   0
+#define HOTPLUG_MODE      1
+#define ONLY_USE_ONE_VOP  1
+#define VIDEO_WIN1_UI_DISABLE     1
+#define VIRTUAL_UI_RESOLUTION     0
+#elif defined(TARGET_BOARD_PLATFORM_RK322X)
+#define RGA_USE_FENCE     0
+#define VIDEO_USE_PPROT   0
+#define HOTPLUG_MODE      1
+#define ONLY_USE_ONE_VOP  1
+#define FORCE_REFRESH     1
+#define VIDEO_WIN1_UI_DISABLE     0
+#define VIRTUAL_UI_RESOLUTION     1
+#elif defined(TARGET_BOARD_PLATFORM_RK3188)
+#define RGA_USE_FENCE     1
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      0
 #define ONLY_USE_ONE_VOP  1
+#define VIDEO_WIN1_UI_DISABLE     1
+#define VIRTUAL_UI_RESOLUTION     0
 #endif
+
 #define IQIY_SPECIAL_PROCESS 0
 #define rkmALIGN(n, align) \
 ( \
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
 
-#define GHWC_VERSION  "2.50"
+#define GHWC_VERSION  "2.70"
 
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
 //Get version: busybox strings /system/lib/hw/hwcomposer.rk30board.so | busybox grep HWC_VERSION
 //HWC_VERSION Author:zxl Time:Tue Aug 12 17:27:36 2014 +0800 Version:1.17 Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-9533348.
-#define HWC_VERSION "HWC_VERSION  \
+/*#define HWC_VERSION "HWC_VERSION  \
 Author:huangds \
 Previous-Time: Mon Jan 19 11:34:09 2015 +0800 \
-Version:2.50 \
-Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."
+Version:2.54 \
+Branch&Previous-Commit:rk/rk312x/mid/4.4_r1/develop-a45e577."*/
 
 /* Set it to 1 to enable swap rectangle optimization;
  * Set it to 0 to disable. */
@@ -133,6 +155,7 @@ extern "C"
         HWC_RGA_TRSM_GPU_VOP,
         HWC_VOP_GPU,
         HWC_NODRAW_GPU_VOP,
+        HWC_GPU_NODRAW_VOP,
         HWC_RGA_GPU_VOP,
         HWC_GPU_VOP,
         HWC_CP_FB,
@@ -264,6 +287,22 @@ FenceMangrRga;
         bool HdmiOn;
     } htg_info_t;
 
+    typedef struct _threadPamaters
+    {
+        int count;
+        pthread_mutex_t mlk;
+        pthread_mutex_t mtx;
+        pthread_cond_t cond;
+    }threadPamaters;
+
+    typedef struct _lastStatus
+    {
+        int numLayers;
+        int ovleryLayer;
+        int fd[GPUDRAWCNT];
+        int alpha[GPUDRAWCNT];
+        hwc_rect_t drect[GPUDRAWCNT];
+    }lastStatus;
 
     typedef struct _hwcContext
     {
@@ -294,10 +333,12 @@ FenceMangrRga;
         ipp_device_t *ippDev;
         pthread_t hdmi_thread;
         pthread_mutex_t lock;
+        uint64_t        mTimeStamp;
         nsecs_t         mNextFakeVSync;
         float           fb_fps;
         NoDrawManager   NoDrMger;
         cmpType     composer_mode;
+        cmpType     last_composer_mode;
         unsigned int fbPhysical;
         unsigned int fbStride;
         int          fb_disp_ofset;
@@ -313,7 +354,12 @@ FenceMangrRga;
         char *pbakupbuf[bakupbufsize];
         /*hotplug info*/
         htg_info_t mHtg;
-
+        bool       mIsVirUiResolution;
+        bool       mIsBootanimExit;
+        bool       mIsFirstCallbackToHotplug;
+#if FORCE_REFRESH
+        threadPamaters mRefresh;
+#endif
 #if ENABLE_HWC_WORMHOLE
         /* Splited composition area queue. */
         hwcArea *                        compositionArea;
@@ -326,18 +372,23 @@ FenceMangrRga;
         bool    IsRk3188;
         bool    IsRk3126;
         bool    IsRk3128;
+        bool    IsRk322x;
+        bool    IsRkBox;
         int     IsInput;
         int     mFbFd;
         int     mFbBase;
         int     vui_fd;
         int     vui_hide;
         int     videoCnt;
+        int     bootCount;
+        int     scaleFd;
         bool     vop_mbshake;
         bool     Is_video;
         bool     Is_Lvideo;        
         bool     Is_bypp;
         bool     Is_Secure;
         bool    special_app;
+        int      isStereo;
         int      Is_debug;
     	int           iommuEn;
         alloc_device_t  *mAllocDev;
@@ -352,6 +403,7 @@ FenceMangrRga;
         int membk_index;
         unsigned long phy_addr;
         struct private_handle_t fbhandle ;
+        lastStatus mLastStatus;
     }
     hwcContext;
 

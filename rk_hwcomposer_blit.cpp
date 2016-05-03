@@ -485,14 +485,25 @@ hwcBlit(
     {
         RGA_set_src_vir_info(&Rga_Request, handle->phy_addr, handle->phy_addr +(handle->width * handle->height ),  \
                                  handle->phy_addr +(handle->width * handle->height ), srcStride, srcHeight, srcFormat, 0);
+        #if defined(TARGET_BOARD_PLATFORM_RK312X)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
+        #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, 0, dstFd, 0, 0);
+        #endif
     }
     else
     {
+        #if defined(TARGET_BOARD_PLATFORM_RK312X)
+        RGA_set_src_vir_info(&Rga_Request, srchnd->share_fd, reinterpret_cast<int>(srchnd->base),  0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
+        #else
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);        
+        #endif
     }
     LOGV("RGA src:fd=%d,base=%p,src_vir_w = %d, src_vir_h = %d,srcLogical=%x,srcFormat=%d", srchnd->share_fd, srchnd->base, \
          srcStride, srcHeight, srcLogical, srcFormat);
@@ -1136,8 +1147,13 @@ hwcDim(
     }
     else*/
     {
+        #if defined(TARGET_BOARD_PLATFORM_RK312X)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
+        #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
+        #endif
     }
 
     /* Go through all visible regions (clip rectangles?). */
@@ -1340,8 +1356,13 @@ hwcClear(
     }
     else*/
     {
+        #if defined(TARGET_BOARD_PLATFORM_RK312X)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
+        #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
+        #endif
     }
 
     /* Go through all visible regions (clip rectangles?). */

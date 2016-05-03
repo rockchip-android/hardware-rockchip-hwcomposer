@@ -81,7 +81,11 @@ void rk_check_hdmi_uevents(const char *buf,int len)
 #ifdef USE_X86
     if(!strcmp(buf, "change@/devices/soc0/e0000000.noc/ef010000.l2_noc/e1000000.ahb_per/vop0"))
 #else
+#ifdef RK322X_BOX
+	if (strstr(buf, "change@/devices/vop"))
+#else
     if (!strcmp(buf, "change@/devices/virtual/display/HDMI"))
+#endif
 #endif
     {
         int type,flag,fbx;
@@ -93,7 +97,11 @@ void rk_check_hdmi_uevents(const char *buf,int len)
             handle_hotplug_event(g_hdmi_mode,1);
         else
 #endif
+#ifdef RK322X_BOX
+            handle_hotplug_event(flag,0);
+#else
             handle_hotplug_event(g_hdmi_mode,0);
+#endif
     }
 }
 
@@ -115,11 +123,10 @@ void  *rk_hwc_hdmi_thread(void *arg)
     uevent_init();
     fds[0].fd = uevent_get_fd();
     fds[0].events = POLLIN;
-    timeout = 200;//ms
     memset(uevent_desc, 0, sizeof(uevent_desc));
     do
     {
-        err = poll(fds, 1, timeout);
+        err = poll(fds, 1, -1);
         if (err == -1)
         {
             if (errno != EINTR)
