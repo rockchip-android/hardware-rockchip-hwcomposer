@@ -26,8 +26,19 @@
 #include <stdint.h>
 
 namespace android {
+#if RK_DRM_HWC_DEBUG
 #define type_name_define(res) \
 const char * res##_str(int type);
+#endif
+
+#if RK_DRM_HWC
+typedef struct tagPlaneGroup{
+        bool     bUse;
+        uint32_t zpos;
+        uint64_t share_id;
+        std::vector<DrmPlane *> planes;
+}PlaneGroup;
+#endif
 
 class DrmResources {
  public:
@@ -74,6 +85,10 @@ class DrmResources {
   void dump_mode(drmModeModeInfo *mode,std::ostringstream *out);
 #endif
 
+#if RK_DRM_HWC
+std::vector<PlaneGroup *>& GetPlaneGroups();
+#endif
+
  private:
   int TryEncoderForDisplay(int display, DrmEncoder *enc);
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
@@ -95,6 +110,9 @@ class DrmResources {
   std::vector<DrmEncoder *> encoders_;
   std::vector<DrmCrtc *> crtcs_;
   std::vector<DrmPlane *> planes_;
+#if RK_DRM_HWC
+  std::vector<PlaneGroup *> plane_groups_;
+#endif
   DrmCompositor compositor_;
 };
 }

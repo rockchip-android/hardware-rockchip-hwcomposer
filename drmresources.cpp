@@ -30,6 +30,7 @@
 
 #include <cutils/log.h>
 #include <cutils/properties.h>
+#include <drm_fourcc.h>
 
 namespace android {
 
@@ -52,6 +53,16 @@ DrmResources::~DrmResources() {
     delete *iter;
   crtcs_.clear();
 
+#if RK_DRM_HWC
+  for (std::vector<PlaneGroup *>::const_iterator iter = plane_groups_.begin();
+       iter != plane_groups_.end(); ++iter)
+  {
+    (*iter)->planes.clear();
+    delete *iter;
+  }
+  plane_groups_.clear();
+#endif
+
   for (std::vector<DrmPlane *>::const_iterator iter = planes_.begin();
        iter != planes_.end(); ++iter)
     delete *iter;
@@ -60,6 +71,13 @@ DrmResources::~DrmResources() {
   if (fd_ >= 0)
     close(fd_);
 }
+
+#if RK_DRM_HWC
+bool SortByZpos(const PlaneGroup* planeGroup1,const PlaneGroup* planeGroup2)
+{
+    return planeGroup1->zpos < planeGroup2->zpos;
+}
+#endif
 
 int DrmResources::Init() {
   char path[PROPERTY_VALUE_MAX];
@@ -298,8 +316,6 @@ int DrmResources::Init() {
     out.str("");
 #endif
 
-    drmModeFreePlane(p);
-
     if (!plane) {
       ALOGE("Allocate plane %d failed", plane_res->planes[i]);
       ret = -ENOMEM;
@@ -312,10 +328,67 @@ int DrmResources::Init() {
       delete plane;
       break;
     }
+#if RK_DRM_HWC
+    uint64_t share_id,zpos;
+    plane->share_id_property().value(&share_id);
+    plane->zpos_property().value(&zpos);
+    std::vector<PlaneGroup *> ::const_iterator iter;
+    for (iter = plane_groups_.begin();
+       iter != plane_groups_.end(); ++iter)
+    {
+        if((*iter)->share_id == share_id /*&& (*iter)->zpos == zpos*/)
+        {
+            (*iter)->planes.push_back(plane);
+            break;
+        }
+    }
+    if(iter == plane_groups_.end())
+    {
+        PlaneGroup* plane_group = new PlaneGroup();
+        plane_group->bUse= false;
+        plane_group->zpos = zpos;
+        plane_group->share_id = share_id;
+        plane_group->planes.push_back(plane);
+        plane_groups_.push_back(plane_group);
+    }
+
+	for (uint32_t j = 0; j < p->count_formats; j++) {
+		if (p->formats[j] == DRM_FORMAT_NV12 ||
+		    p->formats[j] == DRM_FORMAT_NV21) {
+			plane->set_yuv(true);
+		}
+    }
+#endif
+    drmModeFreePlane(p);
 
     planes_.push_back(plane);
   }
-
+#if RK_DRM_HWC && RK_DRM_HWC_DEBUG
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
+           iter != plane_groups_.end(); ++iter)
+    {
+        ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
+            (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
+        for(std::vector<DrmPlane *> ::const_iterator iter_plane = (*iter)->planes.begin();
+           iter_plane != (*iter)->planes.end(); ++iter_plane)
+        {
+            ALOGD("\tPlane id=%d",(*iter_plane)->id());
+        }
+    }
+    ALOGD("--------------------sort plane--------------------");
+    std::sort(plane_groups_.begin(),plane_groups_.end(),SortByZpos);
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
+           iter != plane_groups_.end(); ++iter)
+    {
+        ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
+            (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
+        for(std::vector<DrmPlane *> ::const_iterator iter_plane = (*iter)->planes.begin();
+           iter_plane != (*iter)->planes.end(); ++iter_plane)
+        {
+            ALOGD("\tPlane id=%d",(*iter_plane)->id());
+        }
+    }
+#endif
   drmModeFreePlaneResources(plane_res);
   if (ret)
     return ret;
@@ -816,4 +889,10 @@ int DrmResources::GetConnectorProperty(const DrmConnector &connector,
   return GetProperty(connector.id(), DRM_MODE_OBJECT_CONNECTOR, prop_name,
                      property);
 }
+
+#if RK_DRM_HWC
+std::vector<PlaneGroup *>& DrmResources::GetPlaneGroups() {
+    return plane_groups_;
+}
+#endif
 }

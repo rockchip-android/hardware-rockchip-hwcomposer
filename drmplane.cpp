@@ -128,16 +128,26 @@ int DrmPlane::Init() {
   if (ret)
     ALOGI("Could not get alpha property");
 
-#if 0
-  ret = drm_->GetPlaneProperty(*this, "yuv_support", &yuv_property_);
+#if RK_DRM_HWC
+  ret = drm_->GetPlaneProperty(*this, "ZPOS", &zpos_property_);
   if (ret)
-    ALOGE("Could not get yuv_support property");
+    ALOGE("Could not get ZPOS property");
 
-  ret = drm_->GetPlaneProperty(*this, "scale_support", &scale_property_);
+  ret = drm_->GetPlaneProperty(*this, "SHARE_ID", &share_id_property_);
   if (ret)
-    ALOGI("Could not get scale_support property");
+    ALOGE("Could not get SHARE_ID property");
 
+  ret = drm_->GetPlaneProperty(*this, "SHARE_FLAGS", &share_flags_property_);
+  if (ret)
+    ALOGE("Could not get SHARE_FLAGS property");
+
+ /* ret = drm_->GetPlaneProperty(*this, "scale_support", &scale_property_);
+  if (ret)
+    ALOGE("Could not get scale_support property");
+*/
   b_reserved_= false;
+  b_use_ = false;
+  b_yuv_ = false;
 #endif
 
   return 0;
@@ -203,14 +213,42 @@ const DrmProperty &DrmPlane::alpha_property() const {
   return alpha_property_;
 }
 
-#if 0
-const DrmProperty &DrmPlane::yuv_property() const {
-  return yuv_property_;
+#if RK_DRM_HWC
+
+bool DrmPlane::get_yuv(){
+       return b_yuv_;
 }
 
+void DrmPlane::set_yuv(bool b_yuv)
+{
+    b_yuv_=b_yuv;
+}
+
+bool DrmPlane::is_use(){
+    return b_use_;
+}
+
+void DrmPlane::set_use(bool b_use)
+{
+    b_use_ = b_use;
+}
+
+const DrmProperty &DrmPlane::zpos_property() const {
+  return zpos_property_;
+}
+
+const DrmProperty &DrmPlane::share_id_property() const {
+  return share_id_property_;
+}
+
+const DrmProperty &DrmPlane::share_flags_property() const {
+  return share_flags_property_;
+}
+
+/*
 const DrmProperty &DrmPlane::scale_property() const {
   return scale_property_;
-}
+}*/
 
 bool DrmPlane::is_reserved(){
   return b_reserved_;

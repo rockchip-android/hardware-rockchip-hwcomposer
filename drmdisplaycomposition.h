@@ -25,6 +25,7 @@
 
 #include <sstream>
 #include <vector>
+#include <map>
 
 #include <hardware/gralloc.h>
 #include <hardware/hardware.h>
@@ -137,6 +138,14 @@ class DrmDisplayComposition {
 
   int CreateAndAssignReleaseFences();
 
+#if RK_DRM_HWC
+  bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
+                               std::vector<size_t>& layers_remaining,
+                               uint64_t* zpos,
+                               std::vector<DrmPlane *> *primary_planes,
+                               std::vector<DrmPlane *> *overlay_planes);
+#endif
+
   DrmResources *drm_ = NULL;
   DrmCrtc *crtc_ = NULL;
   Importer *importer_ = NULL;
@@ -156,6 +165,12 @@ class DrmDisplayComposition {
   std::vector<DrmCompositionRegion> squash_regions_;
   std::vector<DrmCompositionRegion> pre_comp_regions_;
   std::vector<DrmCompositionPlane> composition_planes_;
+
+#if RK_DRM_HWC
+  typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
+  typedef LayerMap::iterator LayerMapIter;
+  LayerMap layer_map_;
+#endif
 
   uint64_t frame_no_ = 0;
 };

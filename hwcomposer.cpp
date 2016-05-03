@@ -337,10 +337,9 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 #endif
 
 
-#if 0
+#if RK_DRM_HWC
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
-    struct gralloc_drm_handle_t* drm_handle;
     DrmConnector *c;
     DrmMode mode;
     unsigned int size;
@@ -362,8 +361,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
 
-#if 0
-    drm_handle =(struct gralloc_drm_handle_t*)sf_handle;
+#if RK_DRM_HWC
     c = ctx->drm.GetConnectorForDisplay(0);
     if (!c) {
         ALOGE("Failed to get DrmConnector for display %d", 0);
@@ -376,18 +374,37 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     else
         is_yuv = false;
 
-    if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
-        ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
-        h_scale_mul = (float) (source_crop.bottom - source_crop.top)
-                / (display_frame.right - display_frame.left);
-        v_scale_mul = (float) (source_crop.right - source_crop.left)
-                / (display_frame.bottom - display_frame.top);
-    }else{
-        h_scale_mul = (float) (source_crop.right - source_crop.left)
-                / (display_frame.right - display_frame.left);
+    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+    {
+        if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
+            ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
+            h_scale_mul = (float) (source_crop.bottom - source_crop.top)
+                    / (display_frame.right - display_frame.left);
+            v_scale_mul = (float) (source_crop.right - source_crop.left)
+                    / (display_frame.bottom - display_frame.top);
+        }else{
+            h_scale_mul = (float) (source_crop.right - source_crop.left)
+                    / (display_frame.right - display_frame.left);
 
-        v_scale_mul = (float) (source_crop.bottom - source_crop.top)
-                / (display_frame.bottom - display_frame.top);
+            v_scale_mul = (float) (source_crop.bottom - source_crop.top)
+                    / (display_frame.bottom - display_frame.top);
+        }
+    }
+    else
+    {
+        if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
+            ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
+            h_scale_mul = (float) (isource_crop.bottom - isource_crop.top)
+                    / (display_frame.right - display_frame.left);
+            v_scale_mul = (float) (isource_crop.right - isource_crop.left)
+                    / (display_frame.bottom - display_frame.top);
+        }else{
+            h_scale_mul = (float) (isource_crop.right - isource_crop.left)
+                    / (display_frame.right - display_frame.left);
+
+            v_scale_mul = (float) (isource_crop.bottom - isource_crop.top)
+                    / (display_frame.bottom - display_frame.top);
+        }
     }
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
@@ -396,6 +413,13 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     bpp = android::bytesPerPixel(format);
     size = width * height * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
+    name=sf_layer->LayerName;
+
+    ALOGV("InitFromHwcLayer layer name=%s,isource_crop(%d,%d,%d,%d)",sf_layer->LayerName,
+    isource_crop.left,isource_crop.top,isource_crop.right,isource_crop.bottom);
+    ALOGV("\tsourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
+    source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
+    ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large",h_scale_mul,v_scale_mul,is_scale,is_large);
 #endif
 
   switch (sf_layer->transform) {
@@ -562,6 +586,15 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
 }
 #endif
 
+#if RK_DRM_HWC
+static bool check_layer(hwc_layer_1_t * Layer) {
+    if (Layer->flags & HWC_SKIP_LAYER){
+        return false;
+    }
+    return true;
+}
+#endif
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
@@ -601,7 +634,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-
+#if RK_DRM_HWC
+      if(!use_framebuffer_target && !check_layer(layer) )
+        use_framebuffer_target = true;
+#endif
       if (!use_framebuffer_target) {
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
@@ -732,7 +768,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     for (size_t j : indices_to_composite) {
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
       DrmHwcLayer &layer = display_contents.layers[j];
-#if 0
+#if RK_DRM_HWC
       ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer, ctx->gralloc);
 #else
       ret = layer.InitFromHwcLayer(sf_layer, ctx->importer, ctx->gralloc);

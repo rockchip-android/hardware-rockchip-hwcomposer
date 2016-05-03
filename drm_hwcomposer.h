@@ -238,17 +238,20 @@ struct DrmHwcLayer {
   UniqueFd acquire_fence;
   OutputFd release_fence;
 
-#if 0
+#if RK_DRM_HWC
   bool is_yuv;
   bool is_scale;
   bool is_large;
-  int h_scale_mul;
-  int v_scale_mul;
+  float h_scale_mul;
+  float v_scale_mul;
   int format;
   int width;
   int height;
   int bpp;
   int group_id;
+  int share_id;
+  std::string name;
+  size_t index;
 
   int InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                         const gralloc_module_t *gralloc);

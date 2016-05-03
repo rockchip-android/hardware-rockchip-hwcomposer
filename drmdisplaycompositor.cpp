@@ -489,6 +489,7 @@ int DrmDisplayCompositor::DisablePlanes(DrmDisplayComposition *display_comp) {
         drmModePropertySetAdd(pset, plane->id(), plane->crtc_property().id(),
                               0) ||
         drmModePropertySetAdd(pset, plane->id(), plane->fb_property().id(), 0);
+
     if (ret) {
       ALOGE("Failed to add plane %d disable to pset", plane->id());
       drmModePropertySetFree(pset);

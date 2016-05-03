@@ -26,7 +26,7 @@
 
 namespace android {
 
-#if 0
+#if RK_DRM_HWC
 enum DrmWinType {
         DRM_WIN0,
         DRM_WIN1,
@@ -76,9 +76,15 @@ class DrmPlane {
   const DrmProperty &src_h_property() const;
   const DrmProperty &rotation_property() const;
   const DrmProperty &alpha_property() const;
-#if 0
-  const DrmProperty &yuv_property() const;
-  const DrmProperty &scale_property() const;
+#if RK_DRM_HWC
+  bool is_use();
+  void set_use(bool b_use);
+  bool get_yuv();
+  void set_yuv(bool b_yuv);
+  const DrmProperty &zpos_property() const;
+  const DrmProperty &share_id_property() const;
+  const DrmProperty &share_flags_property() const;
+ // const DrmProperty &scale_property() const;
   bool is_reserved();
   void set_reserved(bool b_reserved);
 #endif
@@ -110,10 +116,14 @@ class DrmPlane {
   DrmProperty rotation_property_;
   DrmProperty alpha_property_;
 
-#if 0
-  DrmProperty yuv_property_;
-  DrmProperty scale_property_;
+#if RK_DRM_HWC
+  DrmProperty zpos_property_;
+  DrmProperty share_id_property_;
+  DrmProperty share_flags_property_;
+ // DrmProperty scale_property_;
   bool b_reserved_;
+  bool b_use_;
+  bool b_yuv_;
 #endif
 
   drmModePlanePtr plane_;
