@@ -36,26 +36,27 @@ typedef struct tagPlaneGroup{
         bool     bUse;
         uint32_t zpos;
         uint64_t share_id;
-        std::vector<DrmPlane *> planes;
+        std::vector<DrmPlane*> planes;
 }PlaneGroup;
 #endif
 
 class DrmResources {
  public:
-  typedef std::vector<DrmConnector *>::const_iterator ConnectorIter;
-  typedef std::vector<DrmPlane *>::const_iterator PlaneIter;
-
   DrmResources();
-  ~DrmResources();
 
   int Init();
 
-  int fd() const;
+  int fd() const {
+    return fd_.get();
+  }
 
-  ConnectorIter begin_connectors() const;
-  ConnectorIter end_connectors() const;
-  PlaneIter begin_planes() const;
-  PlaneIter end_planes() const;
+  const std::vector<std::unique_ptr<DrmConnector>> &connectors() const {
+    return connectors_;
+  }
+
+  const std::vector<std::unique_ptr<DrmPlane>> &planes() const {
+    return planes_;
+  }
 
   DrmConnector *GetConnectorForDisplay(int display) const;
   DrmCrtc *GetCrtcForDisplay(int display) const;
@@ -99,17 +100,17 @@ std::vector<PlaneGroup *>& GetPlaneGroups();
 #if RK_DRM_HWC_DEBUG
   void dump_blob(uint32_t blob_id, std::ostringstream *out);
   void dump_prop(drmModePropertyPtr prop,
-		      uint32_t prop_id, uint64_t value, std::ostringstream *out);
+                     uint32_t prop_id, uint64_t value, std::ostringstream *out);
   int DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostringstream *out);
 #endif
 
-  int fd_;
-  uint32_t mode_id_;
+  UniqueFd fd_;
+  uint32_t mode_id_ = 0;
 
-  std::vector<DrmConnector *> connectors_;
-  std::vector<DrmEncoder *> encoders_;
-  std::vector<DrmCrtc *> crtcs_;
-  std::vector<DrmPlane *> planes_;
+  std::vector<std::unique_ptr<DrmConnector>> connectors_;
+  std::vector<std::unique_ptr<DrmEncoder>> encoders_;
+  std::vector<std::unique_ptr<DrmCrtc>> crtcs_;
+  std::vector<std::unique_ptr<DrmPlane>> planes_;
 #if RK_DRM_HWC
   std::vector<PlaneGroup *> plane_groups_;
 #endif

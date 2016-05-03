@@ -34,42 +34,7 @@
 
 namespace android {
 
-DrmResources::DrmResources() : fd_(-1), mode_id_(0), compositor_(this) {
-}
-
-DrmResources::~DrmResources() {
-  for (std::vector<DrmConnector *>::const_iterator iter = connectors_.begin();
-       iter != connectors_.end(); ++iter)
-    delete *iter;
-  connectors_.clear();
-
-  for (std::vector<DrmEncoder *>::const_iterator iter = encoders_.begin();
-       iter != encoders_.end(); ++iter)
-    delete *iter;
-  encoders_.clear();
-
-  for (std::vector<DrmCrtc *>::const_iterator iter = crtcs_.begin();
-       iter != crtcs_.end(); ++iter)
-    delete *iter;
-  crtcs_.clear();
-
-#if RK_DRM_HWC
-  for (std::vector<PlaneGroup *>::const_iterator iter = plane_groups_.begin();
-       iter != plane_groups_.end(); ++iter)
-  {
-    (*iter)->planes.clear();
-    delete *iter;
-  }
-  plane_groups_.clear();
-#endif
-
-  for (std::vector<DrmPlane *>::const_iterator iter = planes_.begin();
-       iter != planes_.end(); ++iter)
-    delete *iter;
-  planes_.clear();
-
-  if (fd_ >= 0)
-    close(fd_);
+DrmResources::DrmResources() : compositor_(this) {
 }
 
 #if RK_DRM_HWC
@@ -84,25 +49,25 @@ int DrmResources::Init() {
   property_get("hwc.drm.device", path, "/dev/dri/card0");
 
   /* TODO: Use drmOpenControl here instead */
-  fd_ = open(path, O_RDWR);
-  if (fd_ < 0) {
+  fd_.Set(open(path, O_RDWR));
+  if (fd() < 0) {
     ALOGE("Failed to open dri- %s", strerror(-errno));
     return -ENODEV;
   }
 
-  int ret = drmSetClientCap(fd_, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+  int ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
   if (ret) {
     ALOGE("Failed to set universal plane cap %d", ret);
     return ret;
   }
 
-  ret = drmSetClientCap(fd_, DRM_CLIENT_CAP_ATOMIC, 1);
+  ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_ATOMIC, 1);
   if (ret) {
     ALOGE("Failed to set atomic cap %d", ret);
     return ret;
   }
 
-  drmModeResPtr res = drmModeGetResources(fd_);
+  drmModeResPtr res = drmModeGetResources(fd());
   if (!res) {
     ALOGE("Failed to get DrmResources resources");
     return -ENODEV;
@@ -116,7 +81,7 @@ int DrmResources::Init() {
     out << "Frame buffers:\n";
     out << "id\tsize\tpitch\n";
     for (int i = 0; !ret && i < res->count_fbs; ++i) {
-        drmModeFBPtr fb = drmModeGetFB(fd_, res->fbs[i]);
+        drmModeFBPtr fb = drmModeGetFB(fd(), res->fbs[i]);
         if (!fb) {
           ALOGE("Failed to get FB %d", res->fbs[i]);
           ret = -ENODEV;
@@ -140,14 +105,14 @@ int DrmResources::Init() {
   out << "id\tfb\tpos\tsize\n";
 #endif
   for (int i = 0; !ret && i < res->count_crtcs; ++i) {
-    drmModeCrtcPtr c = drmModeGetCrtc(fd_, res->crtcs[i]);
+    drmModeCrtcPtr c = drmModeGetCrtc(fd(), res->crtcs[i]);
     if (!c) {
       ALOGE("Failed to get crtc %d", res->crtcs[i]);
       ret = -ENODEV;
       break;
     }
 
-    DrmCrtc *crtc = new DrmCrtc(this, c, i);
+    std::unique_ptr<DrmCrtc> crtc(new DrmCrtc(this, c, i));
 
 #if RK_DRM_HWC_DEBUG
     crtc->dump_crtc(&out);
@@ -156,19 +121,12 @@ int DrmResources::Init() {
 
     drmModeFreeCrtc(c);
 
-    if (!crtc) {
-      ALOGE("Failed to allocate crtc %d", res->crtcs[i]);
-      ret = -ENOMEM;
-      break;
-    }
-
     ret = crtc->Init();
     if (ret) {
       ALOGE("Failed to initialize crtc %d", res->crtcs[i]);
-      delete crtc;
       break;
     }
-    crtcs_.push_back(crtc);
+    crtcs_.emplace_back(std::move(crtc));
   }
 
 #if RK_DRM_HWC_DEBUG
@@ -181,7 +139,7 @@ int DrmResources::Init() {
   out << "id\tcrtc\ttype\tpossible crtcs\tpossible clones\t\n";
 #endif
   for (int i = 0; !ret && i < res->count_encoders; ++i) {
-    drmModeEncoderPtr e = drmModeGetEncoder(fd_, res->encoders[i]);
+    drmModeEncoderPtr e = drmModeGetEncoder(fd(), res->encoders[i]);
     if (!e) {
       ALOGE("Failed to get encoder %d", res->encoders[i]);
       ret = -ENODEV;
@@ -190,29 +148,25 @@ int DrmResources::Init() {
 
     std::vector<DrmCrtc *> possible_crtcs;
     DrmCrtc *current_crtc = NULL;
-    for (std::vector<DrmCrtc *>::const_iterator iter = crtcs_.begin();
-         iter != crtcs_.end(); ++iter) {
-      if ((1 << (*iter)->pipe()) & e->possible_crtcs)
-        possible_crtcs.push_back(*iter);
+    for (auto &crtc : crtcs_) {
+      if ((1 << crtc->pipe()) & e->possible_crtcs)
+        possible_crtcs.push_back(crtc.get());
 
-      if ((*iter)->id() == e->crtc_id)
-        current_crtc = (*iter);
+      if (crtc->id() == e->crtc_id)
+        current_crtc = crtc.get();
     }
 
-    DrmEncoder *enc = new DrmEncoder(this, e, current_crtc, possible_crtcs);
+    std::unique_ptr<DrmEncoder> enc(
+        new DrmEncoder(this, e, current_crtc, possible_crtcs));
 
 #if RK_DRM_HWC_DEBUG
     enc->dump_encoder(&out);
     out << "\n";
 #endif
+
     drmModeFreeEncoder(e);
 
-    if (!enc) {
-      ALOGE("Failed to allocate enc %d", res->encoders[i]);
-      ret = -ENOMEM;
-      break;
-    }
-    encoders_.push_back(enc);
+    encoders_.emplace_back(std::move(enc));
   }
 #if RK_DRM_HWC_DEBUG
   ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
@@ -225,7 +179,7 @@ int DrmResources::Init() {
   out << "id\tencoder\tstatus\t\ttype\tsize (mm)\tmodes\tencoders\n";
 #endif
   for (int i = 0; !ret && i < res->count_connectors; ++i) {
-    drmModeConnectorPtr c = drmModeGetConnector(fd_, res->connectors[i]);
+    drmModeConnectorPtr c = drmModeGetConnector(fd(), res->connectors[i]);
     if (!c) {
       ALOGE("Failed to get connector %d", res->connectors[i]);
       ret = -ENODEV;
@@ -235,17 +189,16 @@ int DrmResources::Init() {
     std::vector<DrmEncoder *> possible_encoders;
     DrmEncoder *current_encoder = NULL;
     for (int j = 0; j < c->count_encoders; ++j) {
-      for (std::vector<DrmEncoder *>::const_iterator iter = encoders_.begin();
-           iter != encoders_.end(); ++iter) {
-        if ((*iter)->id() == c->encoders[j])
-          possible_encoders.push_back((*iter));
-        if ((*iter)->id() == c->encoder_id)
-          current_encoder = *iter;
+      for (auto &encoder : encoders_) {
+        if (encoder->id() == c->encoders[j])
+          possible_encoders.push_back(encoder.get());
+        if (encoder->id() == c->encoder_id)
+          current_encoder = encoder.get();
       }
     }
 
-    DrmConnector *conn =
-        new DrmConnector(this, c, current_encoder, possible_encoders);
+    std::unique_ptr<DrmConnector> conn(
+        new DrmConnector(this, c, current_encoder, possible_encoders));
 
 #if RK_DRM_HWC_DEBUG
     conn->dump_connector(&out);
@@ -254,19 +207,11 @@ int DrmResources::Init() {
 
     drmModeFreeConnector(c);
 
-    if (!conn) {
-      ALOGE("Failed to allocate conn %d", res->connectors[i]);
-      ret = -ENOMEM;
-      break;
-    }
-
     ret = conn->Init();
     if (ret) {
       ALOGE("Init connector %d failed", res->connectors[i]);
-      delete conn;
       break;
     }
-    connectors_.push_back(conn);
 
     if (conn->built_in() && !found_primary) {
       conn->set_display(0);
@@ -275,6 +220,8 @@ int DrmResources::Init() {
       conn->set_display(display_num);
       ++display_num;
     }
+
+    connectors_.emplace_back(std::move(conn));
   }
 
 #if RK_DRM_HWC_DEBUG
@@ -289,7 +236,7 @@ int DrmResources::Init() {
   if (ret)
     return ret;
 
-  drmModePlaneResPtr plane_res = drmModeGetPlaneResources(fd_);
+  drmModePlaneResPtr plane_res = drmModeGetPlaneResources(fd());
   if (!plane_res) {
     ALOGE("Failed to get plane resources");
     return -ENOENT;
@@ -301,13 +248,14 @@ int DrmResources::Init() {
 #endif
 
   for (uint32_t i = 0; i < plane_res->count_planes; ++i) {
-    drmModePlanePtr p = drmModeGetPlane(fd_, plane_res->planes[i]);
+    drmModePlanePtr p = drmModeGetPlane(fd(), plane_res->planes[i]);
     if (!p) {
       ALOGE("Failed to get plane %d", plane_res->planes[i]);
       ret = -ENODEV;
       break;
     }
-    DrmPlane *plane = new DrmPlane(this, p);
+
+    std::unique_ptr<DrmPlane> plane(new DrmPlane(this, p));
 
 #if RK_DRM_HWC_DEBUG
     plane->dump_plane(&out);
@@ -316,16 +264,9 @@ int DrmResources::Init() {
     out.str("");
 #endif
 
-    if (!plane) {
-      ALOGE("Allocate plane %d failed", plane_res->planes[i]);
-      ret = -ENOMEM;
-      break;
-    }
-
     ret = plane->Init();
     if (ret) {
       ALOGE("Init plane %d failed", plane_res->planes[i]);
-      delete plane;
       break;
     }
 #if RK_DRM_HWC
@@ -338,7 +279,7 @@ int DrmResources::Init() {
     {
         if((*iter)->share_id == share_id /*&& (*iter)->zpos == zpos*/)
         {
-            (*iter)->planes.push_back(plane);
+            (*iter)->planes.push_back(plane.get());
             break;
         }
     }
@@ -348,28 +289,29 @@ int DrmResources::Init() {
         plane_group->bUse= false;
         plane_group->zpos = zpos;
         plane_group->share_id = share_id;
-        plane_group->planes.push_back(plane);
+        plane_group->planes.push_back(plane.get());
         plane_groups_.push_back(plane_group);
     }
 
-	for (uint32_t j = 0; j < p->count_formats; j++) {
-		if (p->formats[j] == DRM_FORMAT_NV12 ||
-		    p->formats[j] == DRM_FORMAT_NV21) {
-			plane->set_yuv(true);
-		}
+       for (uint32_t j = 0; j < p->count_formats; j++) {
+               if (p->formats[j] == DRM_FORMAT_NV12 ||
+                   p->formats[j] == DRM_FORMAT_NV21) {
+                       plane->set_yuv(true);
+               }
     }
 #endif
     drmModeFreePlane(p);
 
-    planes_.push_back(plane);
+    planes_.emplace_back(std::move(plane));
   }
+
 #if RK_DRM_HWC && RK_DRM_HWC_DEBUG
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
         ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
-        for(std::vector<DrmPlane *> ::const_iterator iter_plane = (*iter)->planes.begin();
+        for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
         {
             ALOGD("\tPlane id=%d",(*iter_plane)->id());
@@ -382,13 +324,14 @@ int DrmResources::Init() {
     {
         ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
-        for(std::vector<DrmPlane *> ::const_iterator iter_plane = (*iter)->planes.begin();
+        for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
         {
             ALOGD("\tPlane id=%d",(*iter_plane)->id());
         }
     }
 #endif
+
   drmModeFreePlaneResources(plane_res);
   if (ret)
     return ret;
@@ -397,59 +340,36 @@ int DrmResources::Init() {
   if (ret)
     return ret;
 
-  for (auto i = begin_connectors(); i != end_connectors(); ++i) {
-    ret = CreateDisplayPipe(*i);
+  for (auto &conn : connectors_) {
+    ret = CreateDisplayPipe(conn.get());
     if (ret) {
-      ALOGE("Failed CreateDisplayPipe %d with %d", (*i)->id(), ret);
+      ALOGE("Failed CreateDisplayPipe %d with %d", conn->id(), ret);
       return ret;
     }
   }
   return 0;
 }
 
-int DrmResources::fd() const {
-  return fd_;
-}
-
-DrmResources::ConnectorIter DrmResources::begin_connectors() const {
-  return connectors_.begin();
-}
-
-DrmResources::ConnectorIter DrmResources::end_connectors() const {
-  return connectors_.end();
-}
-
 DrmConnector *DrmResources::GetConnectorForDisplay(int display) const {
-  for (ConnectorIter iter = connectors_.begin(); iter != connectors_.end();
-       ++iter) {
-    if ((*iter)->display() == display)
-      return *iter;
+  for (auto &conn : connectors_) {
+    if (conn->display() == display)
+      return conn.get();
   }
   return NULL;
 }
 
 DrmCrtc *DrmResources::GetCrtcForDisplay(int display) const {
-  for (std::vector<DrmCrtc *>::const_iterator iter = crtcs_.begin();
-       iter != crtcs_.end(); ++iter) {
-    if ((*iter)->display() == display)
-      return *iter;
+  for (auto &crtc : crtcs_) {
+    if (crtc->display() == display)
+      return crtc.get();
   }
   return NULL;
 }
 
-DrmResources::PlaneIter DrmResources::begin_planes() const {
-  return planes_.begin();
-}
-
-DrmResources::PlaneIter DrmResources::end_planes() const {
-  return planes_.end();
-}
-
 DrmPlane *DrmResources::GetPlane(uint32_t id) const {
-  for (std::vector<DrmPlane *>::const_iterator iter = planes_.begin();
-       iter != planes_.end(); ++iter) {
-    if ((*iter)->id() == id)
-      return *iter;
+  for (auto &plane : planes_) {
+    if (plane->id() == id)
+      return plane.get();
   }
   return NULL;
 }
@@ -467,15 +387,14 @@ int DrmResources::TryEncoderForDisplay(int display, DrmEncoder *enc) {
   }
 
   /* Try to find a possible crtc which will work */
-  for (DrmEncoder::CrtcIter iter = enc->begin_possible_crtcs();
-       iter != enc->end_possible_crtcs(); ++iter) {
+  for (DrmCrtc *crtc : enc->possible_crtcs()) {
     /* We've already tried this earlier */
-    if (*iter == enc->crtc())
+    if (crtc == enc->crtc())
       continue;
 
-    if ((*iter)->can_bind(display)) {
-      enc->set_crtc(*iter);
-      (*iter)->set_display(display);
+    if (crtc->can_bind(display)) {
+      enc->set_crtc(crtc);
+      crtc->set_display(display);
       return 0;
     }
   }
@@ -497,11 +416,10 @@ int DrmResources::CreateDisplayPipe(DrmConnector *connector) {
     }
   }
 
-  for (DrmConnector::EncoderIter iter = connector->begin_possible_encoders();
-       iter != connector->end_possible_encoders(); ++iter) {
-    int ret = TryEncoderForDisplay(display, *iter);
+  for (DrmEncoder *enc : connector->possible_encoders()) {
+    int ret = TryEncoderForDisplay(display, enc);
     if (!ret) {
-      connector->set_encoder(*iter);
+      connector->set_encoder(enc);
       return 0;
     } else if (ret != -EAGAIN) {
       ALOGE("Could not set mode %d/%d", display, ret);
@@ -520,7 +438,7 @@ int DrmResources::CreatePropertyBlob(void *data, size_t length,
   create_blob.length = length;
   create_blob.data = (__u64)data;
 
-  int ret = drmIoctl(fd_, DRM_IOCTL_MODE_CREATEPROPBLOB, &create_blob);
+  int ret = drmIoctl(fd(), DRM_IOCTL_MODE_CREATEPROPBLOB, &create_blob);
   if (ret) {
     ALOGE("Failed to create mode property blob %d", ret);
     return ret;
@@ -536,7 +454,7 @@ int DrmResources::DestroyPropertyBlob(uint32_t blob_id) {
   struct drm_mode_destroy_blob destroy_blob;
   memset(&destroy_blob, 0, sizeof(destroy_blob));
   destroy_blob.blob_id = (__u32)blob_id;
-  int ret = drmIoctl(fd_, DRM_IOCTL_MODE_DESTROYPROPBLOB, &destroy_blob);
+  int ret = drmIoctl(fd(), DRM_IOCTL_MODE_DESTROYPROPBLOB, &destroy_blob);
   if (ret) {
     ALOGE("Failed to destroy mode property blob %ld/%d", blob_id, ret);
     return ret;
@@ -595,7 +513,7 @@ int DrmResources::GetProperty(uint32_t obj_id, uint32_t obj_type,
                               const char *prop_name, DrmProperty *property) {
   drmModeObjectPropertiesPtr props;
 
-  props = drmModeObjectGetProperties(fd_, obj_id, obj_type);
+  props = drmModeObjectGetProperties(fd(), obj_id, obj_type);
   if (!props) {
     ALOGE("Failed to get properties for %d/%x", obj_id, obj_type);
     return -ENODEV;
@@ -603,7 +521,7 @@ int DrmResources::GetProperty(uint32_t obj_id, uint32_t obj_type,
 
   bool found = false;
   for (int i = 0; !found && (size_t)i < props->count_props; ++i) {
-    drmModePropertyPtr p = drmModeGetProperty(fd_, props->props[i]);
+    drmModePropertyPtr p = drmModeGetProperty(fd(), props->props[i]);
     if (!strcmp(p->name, prop_name)) {
       property->Init(p, props->prop_values[i]);
       found = true;
@@ -736,7 +654,7 @@ void DrmResources::dump_blob(uint32_t blob_id, std::ostringstream *out) {
 	unsigned char *blob_data;
 	drmModePropertyBlobPtr blob;
 
-	blob = drmModeGetPropertyBlob(fd_, blob_id);
+	blob = drmModeGetPropertyBlob(fd(), blob_id);
 	if (!blob) {
 		*out << "\n";
 		return;
@@ -835,7 +753,7 @@ int DrmResources::DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostrings
   drmModePropertyPtr* prop_info;
   drmModeObjectPropertiesPtr props;
 
-  props = drmModeObjectGetProperties(fd_, obj_id, obj_type);
+  props = drmModeObjectGetProperties(fd(), obj_id, obj_type);
   if (!props) {
     ALOGE("Failed to get properties for %d/%x", obj_id, obj_type);
     return -ENODEV;
@@ -848,7 +766,7 @@ int DrmResources::DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostrings
 
   *out << "  props:\n";
   for (int i = 0;(size_t)i < props->count_props; ++i) {
-    prop_info[i] = drmModeGetProperty(fd_, props->props[i]);
+    prop_info[i] = drmModeGetProperty(fd(), props->props[i]);
 
     dump_prop(prop_info[i],props->props[i],props->prop_values[i],out);
 

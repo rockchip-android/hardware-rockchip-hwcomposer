@@ -37,21 +37,22 @@ LOCAL_C_INCLUDES := \
 	system/core/libsync/include \
 
 LOCAL_SRC_FILES := \
+	autolock.cpp \
 	drmresources.cpp \
-        drmcomposition.cpp \
-        drmcompositor.cpp \
-        drmcompositorworker.cpp \
+	drmcomposition.cpp \
+	drmcompositor.cpp \
+	drmcompositorworker.cpp \
 	drmconnector.cpp \
 	drmcrtc.cpp \
-        drmdisplaycomposition.cpp \
-        drmdisplaycompositor.cpp \
+	drmdisplaycomposition.cpp \
+	drmdisplaycompositor.cpp \
 	drmencoder.cpp \
 	drmmode.cpp \
 	drmplane.cpp \
 	drmproperty.cpp \
 	glworker.cpp \
 	hwcomposer.cpp \
-	seperate_rects.cpp \
+	separate_rects.cpp \
 	virtualcompositorworker.cpp \
 	vsyncworker.cpp \
 	worker.cpp

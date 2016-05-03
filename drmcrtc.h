@@ -30,7 +30,8 @@ class DrmResources;
 class DrmCrtc {
  public:
   DrmCrtc(DrmResources *drm, drmModeCrtcPtr c, unsigned pipe);
-  ~DrmCrtc();
+  DrmCrtc(const DrmCrtc &) = delete;
+  DrmCrtc &operator=(const DrmCrtc &) = delete;
 
   int Init();
 
@@ -49,8 +50,6 @@ class DrmCrtc {
 #endif
 
  private:
-  DrmCrtc(const DrmCrtc &);
-
   DrmResources *drm_;
 
   uint32_t id_;

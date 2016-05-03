@@ -27,28 +27,27 @@ namespace android {
 
 class DrmEncoder {
  public:
-  typedef std::vector<DrmCrtc *>::const_iterator CrtcIter;
-
   DrmEncoder(DrmResources *drm, drmModeEncoderPtr e, DrmCrtc *current_crtc,
              const std::vector<DrmCrtc *> &possible_crtcs);
-  ~DrmEncoder();
+  DrmEncoder(const DrmEncoder &) = delete;
+  DrmEncoder &operator=(const DrmEncoder &) = delete;
 
   uint32_t id() const;
 
   DrmCrtc *crtc() const;
   void set_crtc(DrmCrtc *crtc);
 
-  CrtcIter begin_possible_crtcs() const;
-  CrtcIter end_possible_crtcs() const;
+  const std::vector<DrmCrtc *> &possible_crtcs() const {
+    return possible_crtcs_;
+  }
 #if RK_DRM_HWC_DEBUG
   void dump_encoder(std::ostringstream *out) const;
 #endif
 
  private:
-  DrmEncoder(const DrmEncoder &);
-  DrmResources *drm_;
   uint32_t id_;
   DrmCrtc *crtc_;
+  DrmResources *drm_;
 
   uint32_t type_;
 

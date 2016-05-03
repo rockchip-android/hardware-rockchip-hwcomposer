@@ -14,28 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_DRM_COMPOSITOR_WORKER_H_
-#define ANDROID_DRM_COMPOSITOR_WORKER_H_
-
-#include "worker.h"
+#include <pthread.h>
 
 namespace android {
 
-class DrmDisplayCompositor;
-
-class DrmCompositorWorker : public Worker {
+class AutoLock {
  public:
-  DrmCompositorWorker(DrmDisplayCompositor *compositor);
-  ~DrmCompositorWorker() override;
+  AutoLock(pthread_mutex_t *mutex, const char *const name)
+      : mutex_(mutex), name_(name) {
+  }
+  ~AutoLock() {
+    if (locked_)
+      Unlock();
+  }
 
-  int Init();
+  AutoLock(const AutoLock &rhs) = delete;
+  AutoLock &operator=(const AutoLock &rhs) = delete;
 
- protected:
-  void Routine() override;
+  int Lock();
+  int Unlock();
 
-  DrmDisplayCompositor *compositor_;
-  bool did_squash_all_ = false;
+ private:
+  pthread_mutex_t *const mutex_;
+  bool locked_ = false;
+  const char *const name_;
 };
 }
-
-#endif

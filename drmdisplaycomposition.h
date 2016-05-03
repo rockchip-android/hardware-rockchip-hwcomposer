@@ -17,8 +17,8 @@
 #ifndef ANDROID_DRM_DISPLAY_COMPOSITION_H_
 #define ANDROID_DRM_DISPLAY_COMPOSITION_H_
 
-#include "drm_hwcomposer.h"
 #include "drmcrtc.h"
+#include "drmhwcomposer.h"
 #include "drmplane.h"
 #include "glworker.h"
 #include "importer.h"
@@ -105,6 +105,10 @@ class DrmDisplayComposition {
     return composition_planes_;
   }
 
+  bool geometry_changed() const {
+    return geometry_changed_;
+  }
+
   uint64_t frame_no() const {
     return frame_no_;
   }
@@ -136,6 +140,9 @@ class DrmDisplayComposition {
 
   int IncreaseTimelineToPoint(int point);
 
+  void EmplaceCompositionPlane(size_t source_layer,
+                               std::vector<DrmPlane *> *primary_planes,
+                               std::vector<DrmPlane *> *overlay_planes);
   int CreateAndAssignReleaseFences();
 
 #if RK_DRM_HWC

@@ -22,7 +22,8 @@
 
 #include <hardware/hardware.h>
 #include <hardware/hwcomposer.h>
-#include "seperate_rects.h"
+#include "autofd.h"
+#include "separate_rects.h"
 #include "drmhwcgralloc.h"
 
 #define BLEND_MASK 0xFFFF
@@ -54,79 +55,6 @@ bool log_level(LOG_LEVEL log_level);
 #endif
 
 class Importer;
-
-class UniqueFd {
- public:
-  UniqueFd() = default;
-  UniqueFd(int fd) : fd_(fd) {
-  }
-  UniqueFd(UniqueFd &&rhs) {
-    fd_ = rhs.fd_;
-    rhs.fd_ = -1;
-  }
-
-  UniqueFd &operator=(UniqueFd &&rhs) {
-    Set(rhs.Release());
-    return *this;
-  }
-
-  ~UniqueFd() {
-    if (fd_ >= 0)
-      close(fd_);
-  }
-
-  int Release() {
-    int old_fd = fd_;
-    fd_ = -1;
-    return old_fd;
-  }
-
-  int Set(int fd) {
-    if (fd_ >= 0)
-      close(fd_);
-    fd_ = fd;
-    return fd_;
-  }
-
-  void Close() {
-    if (fd_ >= 0)
-      close(fd_);
-    fd_ = -1;
-  }
-
-  int get() {
-    return fd_;
-  }
-
- private:
-  int fd_ = -1;
-};
-
-struct OutputFd {
-  OutputFd() = default;
-  OutputFd(int *fd) : fd_(fd) {
-  }
-  OutputFd(OutputFd &&rhs) {
-    fd_ = rhs.fd_;
-    rhs.fd_ = NULL;
-  }
-
-  OutputFd &operator=(OutputFd &&rhs);
-
-  int Set(int fd) {
-    if (*fd_ >= 0)
-      close(*fd_);
-    *fd_ = fd;
-    return fd;
-  }
-
-  int get() {
-    return *fd_;
-  }
-
- private:
-  int *fd_ = NULL;
-};
 
 class DrmHwcBuffer {
  public:
@@ -205,15 +133,15 @@ class DrmHwcNativeHandle {
 };
 
 template <typename T>
-using DrmHwcRect = seperate_rects::Rect<T>;
+using DrmHwcRect = separate_rects::Rect<T>;
 
-enum class DrmHwcTransform : uint32_t {
+enum DrmHwcTransform {
   kIdentity = 0,
-  kFlipH = HWC_TRANSFORM_FLIP_H,
-  kFlipV = HWC_TRANSFORM_FLIP_V,
-  kRotate90 = HWC_TRANSFORM_ROT_90,
-  kRotate180 = HWC_TRANSFORM_ROT_180,
-  kRotate270 = HWC_TRANSFORM_ROT_270,
+  kFlipH = 1 << 0,
+  kFlipV = 1 << 1,
+  kRotate90 = 1 << 2,
+  kRotate180 = 1 << 3,
+  kRotate270 = 1 << 4,
 };
 
 enum class DrmHwcBlending : int32_t {
@@ -227,7 +155,7 @@ struct DrmHwcLayer {
   int gralloc_buffer_usage = 0;
   DrmHwcBuffer buffer;
   DrmHwcNativeHandle handle;
-  DrmHwcTransform transform = DrmHwcTransform::kIdentity;
+  uint32_t transform;
   DrmHwcBlending blending = DrmHwcBlending::kNone;
   uint8_t alpha = 0xff;
   DrmHwcRect<float> source_crop;
@@ -266,6 +194,11 @@ void dump_drm_layer(int index, std::ostringstream *out) const;
 
   buffer_handle_t get_usable_handle() const {
     return handle.get() != NULL ? handle.get() : sf_handle;
+  }
+
+  bool protected_usage() const {
+    return (gralloc_buffer_usage & GRALLOC_USAGE_PROTECTED) ==
+           GRALLOC_USAGE_PROTECTED;
   }
 };
 
