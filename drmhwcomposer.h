@@ -27,6 +27,10 @@
 #include "drmhwcgralloc.h"
 
 #define BLEND_MASK 0xFFFF
+
+/*hwc version*/
+#define GHWC_VERSION                    "0.01"
+
 struct hwc_import_context;
 
 int hwc_import_init(struct hwc_import_context **ctx);

@@ -65,6 +65,25 @@ static int init_log_level()
 }
 #endif
 
+#if RK_DRM_HWC
+int hwc_init_version()
+{
+    char acVersion[50];
+    memset(acVersion,0,sizeof(acVersion));
+    if(sizeof(GHWC_VERSION) > 12) {
+        strncpy(acVersion,GHWC_VERSION,12);
+    } else {
+        strcpy(acVersion,GHWC_VERSION);
+    }
+
+    strcat(acVersion,"-rk3399");
+
+    property_set("sys.ghwc.version", acVersion);
+    ALOGD(RK_GRAPHICS_VER);
+    return 0;
+}
+#endif
+
 class DummySwSyncTimeline {
  public:
   int Init() {
@@ -1172,6 +1191,11 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   g_log_level = 0;
   g_frame = 0;
 #endif
+
+#if RK_DRM_HWC
+  hwc_init_version();
+#endif
+
   *dev = &ctx->device.common;
   ctx.release();
 

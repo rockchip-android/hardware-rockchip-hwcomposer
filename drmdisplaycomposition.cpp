@@ -632,6 +632,8 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       }
     }
   }
+#else
+    squash = squash;
 #endif
 
 #if RK_DRM_HWC

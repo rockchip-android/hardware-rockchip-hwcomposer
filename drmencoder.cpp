@@ -25,9 +25,9 @@ namespace android {
 
 DrmEncoder::DrmEncoder(DrmResources *drm, drmModeEncoderPtr e, DrmCrtc *current_crtc,
                        const std::vector<DrmCrtc *> &possible_crtcs)
-    : drm_(drm),
-      id_(e->encoder_id),
+    : id_(e->encoder_id),
       crtc_(current_crtc),
+      drm_(drm),
       type_(e->encoder_type),
       possible_crtcs_(possible_crtcs),
       encoder_(e) {
