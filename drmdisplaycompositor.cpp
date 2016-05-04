@@ -574,6 +574,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   }
 
   for (DrmCompositionPlane &comp_plane : comp_planes) {
+    comp_plane.source_layer_bk = comp_plane.source_layer;
     switch (comp_plane.source_layer) {
       case DrmCompositionPlane::kSourceSquash:
         comp_plane.source_layer = squash_layer_index;
@@ -708,6 +709,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
           ALOGE("Expected a valid framebuffer for pset");
           break;
         }
+#if RK_DRM_HWC_DEBUG
+        DumpLayer(comp_plane.source_layer,&layer);
+#endif
         fb_id = layer.buffer->fb_id;
         display_frame = layer.display_frame;
         source_crop = layer.source_crop;
@@ -770,7 +774,10 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                               display_frame.right - display_frame.left) ||
         drmModePropertySetAdd(pset, plane->id(), plane->crtc_h_property().id(),
                               display_frame.bottom - display_frame.top);
-        if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+        if((gralloc_buffer_usage & GRALLOC_USAGE_HW_FB) ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourceNone ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourcePreComp ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourceSquash)
         {
             ret = ret ||
             drmModePropertySetAdd(pset, plane->id(), plane->src_x_property().id(),
@@ -810,7 +817,10 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << " display_frame[" << display_frame.left << ","
             << display_frame.top << "," << display_frame.right - display_frame.left
             << "," << display_frame.bottom - display_frame.top << "]";
-    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
+    if((gralloc_buffer_usage & GRALLOC_USAGE_HW_FB) ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourceNone ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourcePreComp ||
+            comp_plane.source_layer_bk == DrmCompositionPlane::kSourceSquash)
     {
          out_log << " source_crop[" << source_crop.left << ","
                  << source_crop.top << "," << source_crop.right - source_crop.left
@@ -820,6 +830,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                  << isource_crop.top << "," << isource_crop.right - isource_crop.left
                  << "," << isource_crop.bottom - isource_crop.top << "]";
     }
+    index++;
 #endif
     if (plane->rotation_property().id()) {
       ret = drmModePropertySetAdd(pset, plane->id(),
@@ -1003,6 +1014,7 @@ int DrmDisplayCompositor::Composite() {
         ALOGE("Failed to prepare frame for display %d", display_);
         return ret;
       }
+
       if (composition->geometry_changed()) {
         // Send the composition to the kernel to ensure we can commit it. This
         // is just a test, it won't actually commit the frame. If rejected,
@@ -1188,7 +1200,10 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
 
   for (DrmCompositionPlane &plane : dst->composition_planes())
     if (plane.source_layer == DrmCompositionPlane::kSourcePreComp)
+    {
+      plane.source_layer_bk = plane.source_layer;
       plane.source_layer = pre_comp_layer_index;
+    }
 
   return 0;
 

@@ -119,7 +119,7 @@ int DrmDisplayComposition::SetDisplayMode(const DrmMode &display_mode) {
 
 int DrmDisplayComposition::AddPlaneDisable(DrmPlane *plane) {
   composition_planes_.emplace_back(
-      DrmCompositionPlane{plane, crtc_, DrmCompositionPlane::kSourceNone});
+      DrmCompositionPlane{plane, crtc_, DrmCompositionPlane::kSourceNone, DrmCompositionPlane::kSourceNone});
   return 0;
 }
 
@@ -137,12 +137,13 @@ static size_t CountUsablePlanes(DrmCrtc *crtc,
 #if RK_DRM_HWC
 static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes, DrmHwcLayer* layer) {
 // uint64_t scale_value;
- bool b_yuv_support;
+  bool b_yuv_support;
 
+  layer=layer;
   for (auto iter = planes->begin(); iter != planes->end(); ++iter) {
     if ((*iter)->GetCrtcSupported(*crtc)) {
         DrmPlane *plane = *iter;
-
+#if 0
         if(layer != NULL) {
             b_yuv_support = plane->get_yuv();
       //    plane->scale_property().value(&scale_value);
@@ -172,7 +173,7 @@ static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes, DrmHw
             }
 
       }
-
+#endif
       planes->erase(iter);
       return plane;
     }
@@ -249,7 +250,7 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 (*iter_plane)->id(),(*iter_layer)->index);
                             //Find the match plane for layer,it will be commit.
                             composition_planes_.emplace_back(
-                                DrmCompositionPlane{(*iter_plane),crtc_, (*iter_layer)->index});
+                                DrmCompositionPlane{(*iter_plane),crtc_, (*iter_layer)->index, (*iter_layer)->index});
                             //remove the assigned layer from layers_remaining index.
                             for(std::vector<size_t>::iterator iter_index = layers_remaining.begin();
                                 !layers_remaining.empty() && iter_index != layers_remaining.end();++iter_index)
@@ -414,7 +415,7 @@ void DrmDisplayComposition::EmplaceCompositionPlane(
     return;
   }
   composition_planes_.emplace_back(
-      DrmCompositionPlane{plane, crtc_, source_layer});
+      DrmCompositionPlane{plane, crtc_, source_layer, source_layer});
 }
 
 static std::vector<size_t> SetBitsToVector(uint64_t in, size_t *index_map) {
@@ -636,7 +637,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     squash = squash;
 #endif
 
-#if RK_DRM_HWC
+#if USE_MULTI_AREAS
   std::vector<size_t> layers_remaining;
   for (size_t layer_index = 0; layer_index < layers_.size(); layer_index++) {
       layers_remaining.push_back(layer_index);
@@ -682,7 +683,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     planes_can_use--;  // Reserve one for pre-compositing
 #endif
 
-#if RK_DRM_HWC
+#if USE_MULTI_AREAS
     /*Group layer*/
     int zpos = 0;
     size_t i;
@@ -810,6 +811,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     EmplaceCompositionPlane(DrmCompositionPlane::kSourceSquash, primary_planes,
                             overlay_planes);
   }
+
 #endif
 
 #if RK_DRM_HWC_DEBUG

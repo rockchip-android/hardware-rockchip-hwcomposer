@@ -44,6 +44,8 @@ bool hwc_import_bo_release(int fd, struct hwc_import_context *ctx,
 namespace android {
 
 #if RK_DRM_HWC_DEBUG
+struct DrmHwcLayer;
+
 enum LOG_LEVEL
 {
     //Log level flag
@@ -56,6 +58,7 @@ enum LOG_LEVEL
     DBG_SILENT = 1 << 6,
 };
 bool log_level(LOG_LEVEL log_level);
+int DumpLayer(int layer_index,DrmHwcLayer *layer);
 #endif
 
 class Importer;

@@ -320,11 +320,10 @@ static void ConstructCommand(const DrmHwcLayer *layers,
 
     float tex_width = layer.buffer->width;
     float tex_height = layer.buffer->height;
-    DrmHwcRect<float> crop_rect(layer.source_crop.left / tex_width,
-                                layer.source_crop.top / tex_height,
-                                layer.source_crop.right / tex_width,
-                                layer.source_crop.bottom / tex_height);
-
+    DrmHwcRect<float> crop_rect(layer.isource_crop.left / tex_width,
+                                layer.isource_crop.top / tex_height,
+                                layer.isource_crop.right / tex_width,
+                                layer.isource_crop.bottom / tex_height);
     float crop_size[2] = {crop_rect.bounds[2] - crop_rect.bounds[0],
                           crop_rect.bounds[3] - crop_rect.bounds[1]};
 
@@ -432,8 +431,8 @@ static int CreateTextureFromHandle(EGLDisplay egl_display,
   glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)image);
   glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
   out->image.reset(egl_display, image);

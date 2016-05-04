@@ -63,6 +63,74 @@ static int init_log_level()
     g_log_level = atoi(value);
     return 0;
 }
+
+/**
+ * @brief Dump Layer data.
+ *
+ * @param layer_index   layer index
+ * @param layer 		layer data
+ * @return 				Errno no
+ */
+int DumpLayer(int layer_index,DrmHwcLayer *layer)
+{
+    buffer_handle_t handle = layer->get_usable_handle();
+    char pro_value[PROPERTY_VALUE_MAX];
+
+    property_get("sys.dump",pro_value,0);
+
+    if(!strcmp(pro_value,"true"))
+    {
+
+        static int test = 0;
+        static int DumpSurfaceCount = 0;
+        int32_t SrcStride = 4 ;
+        FILE * pfile = NULL;
+        char layername[100] ;
+        const gralloc_module_t *gralloc;
+        unsigned int *cpu_addr;
+        int i;
+
+        int ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID,
+                          (const hw_module_t **)&gralloc);
+        if (ret) {
+            ALOGE("Failed to open gralloc module");
+            return ret;
+        }
+
+        gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(handle);
+        if (!gr_handle)
+            return -EINVAL;
+
+        struct gralloc_drm_bo_t *gralloc_bo = gr_handle->data;
+        if (!gralloc_bo) {
+            ALOGE("Could not get drm bo from handle");
+            return -EINVAL;
+        }
+
+        if (test == 0) {
+            system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
+
+            test = 1;
+
+            DumpSurfaceCount++;
+            sprintf(layername,"/data/dump/dmlayer%d_%d_%d_%d_%d.bin",layer_index, DumpSurfaceCount,
+                    gr_handle->width,gr_handle->height,SrcStride);
+            gralloc->lock(gralloc, handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
+                            0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
+            pfile = fopen(layername,"wb");
+            if(pfile)
+            {
+                fwrite((const void *)cpu_addr,(size_t)(SrcStride * gr_handle->width*gr_handle->height),1,pfile);
+                fclose(pfile);
+                ALOGE(" dump surface layername %s,w:%d,h:%d,formatsize :%d",layername,gr_handle->width,gr_handle->height,SrcStride);
+            }
+
+            gralloc->unlock(gralloc, handle);
+        }
+    }
+    return 0;
+}
+
 #endif
 
 #if RK_DRM_HWC
