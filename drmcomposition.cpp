@@ -36,12 +36,12 @@ DrmComposition::DrmComposition(DrmResources *drm, Importer *importer)
   property_get("hwc.drm.use_overlay_planes", use_overlay_planes_prop, "1");
   bool use_overlay_planes = atoi(use_overlay_planes_prop);
 
-  for (auto &plane : drm->planes()) {
+  for (auto &plane : drm->sort_planes()) {
     if (plane->type() == DRM_PLANE_TYPE_PRIMARY)
-      primary_planes_.push_back(plane.get());
+      primary_planes_.push_back(plane);
     else if (use_overlay_planes && (plane->type() == DRM_PLANE_TYPE_OVERLAY ||
             plane->type() == DRM_PLANE_TYPE_CURSOR))
-      overlay_planes_.push_back(plane.get());
+      overlay_planes_.push_back(plane);
   }
 }
 

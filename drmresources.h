@@ -58,6 +58,12 @@ class DrmResources {
     return planes_;
   }
 
+#if RK_DRM_HWC
+   const std::vector<DrmPlane*> &sort_planes() const {
+    return sort_planes_;
+  }
+#endif
+
   DrmConnector *GetConnectorForDisplay(int display) const;
   DrmCrtc *GetCrtcForDisplay(int display) const;
   DrmPlane *GetPlane(uint32_t id) const;
@@ -112,6 +118,7 @@ std::vector<PlaneGroup *>& GetPlaneGroups();
   std::vector<std::unique_ptr<DrmCrtc>> crtcs_;
   std::vector<std::unique_ptr<DrmPlane>> planes_;
 #if RK_DRM_HWC
+  std::vector<DrmPlane*> sort_planes_;
   std::vector<PlaneGroup *> plane_groups_;
 #endif
   DrmCompositor compositor_;

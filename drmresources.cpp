@@ -38,6 +38,15 @@ DrmResources::DrmResources() : compositor_(this) {
 }
 
 #if RK_DRM_HWC
+
+bool PlaneSortByZpos(const DrmPlane* plane1,const DrmPlane* plane2)
+{
+    uint64_t zpos1,zpos2;
+    plane1->zpos_property().value(&zpos1);
+    plane2->zpos_property().value(&zpos2);
+    return zpos1 < zpos2;
+}
+
 bool SortByZpos(const PlaneGroup* planeGroup1,const PlaneGroup* planeGroup2)
 {
     return planeGroup1->zpos < planeGroup2->zpos;
@@ -309,10 +318,23 @@ int DrmResources::Init() {
 #endif
     drmModeFreePlane(p);
 
+    sort_planes_.emplace_back(plane.get());
     planes_.emplace_back(std::move(plane));
   }
 
-#if RK_DRM_HWC && RK_DRM_HWC_DEBUG
+#if RK_DRM_HWC
+  std::sort(sort_planes_.begin(),sort_planes_.end(),PlaneSortByZpos);
+#endif
+#if RK_DRM_HWC_DEBUG
+    for (std::vector<DrmPlane*>::const_iterator iter= sort_planes_.begin();
+       iter != sort_planes_.end(); ++iter) {
+       uint64_t share_id,zpos;
+       (*iter)->share_id_property().value(&share_id);
+       (*iter)->zpos_property().value(&zpos);
+       ALOGD("sort_planes_ share_id=%d,zpos=%d",share_id,zpos);
+    }
+#endif
+#if RK_DRM_HWC_DEBUG
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
@@ -325,7 +347,11 @@ int DrmResources::Init() {
         }
     }
     ALOGD("--------------------sort plane--------------------");
+#endif
+#if RK_DRM_HWC
     std::sort(plane_groups_.begin(),plane_groups_.end(),SortByZpos);
+#endif
+#if RK_DRM_HWC_DEBUG
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {

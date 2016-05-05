@@ -456,6 +456,8 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
             v_scale_mul = (float) (source_crop.bottom - source_crop.top)
                     / (display_frame.bottom - display_frame.top);
         }
+        width = source_crop.right - source_crop.left;
+        height = source_crop.bottom - source_crop.top;
     }
     else
     {
@@ -472,11 +474,12 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
             v_scale_mul = (float) (isource_crop.bottom - isource_crop.top)
                     / (display_frame.bottom - display_frame.top);
         }
+        width = isource_crop.right - isource_crop.left;
+        height = isource_crop.bottom - isource_crop.top;
     }
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
-    width = source_crop.right - source_crop.left;
-    height = source_crop.bottom - source_crop.top;
+
     bpp = android::bytesPerPixel(format);
     size = width * height * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
@@ -682,6 +685,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       }
       mode = c->active_mode();
     }
+
+    //force go into GPU
+    if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0)
+        use_framebuffer_target = true;
 
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
     // handle all layers in between the first and last skip layers. So find the

@@ -402,6 +402,7 @@ int DrmDisplayCompositor::PrepareFramebuffer(
   pre_comp_layer.sf_handle = fb.buffer()->handle;
   pre_comp_layer.blending = DrmHwcBlending::kPreMult;
   pre_comp_layer.source_crop = DrmHwcRect<float>(0, 0, width, height);
+  pre_comp_layer.isource_crop = DrmHwcRect<int>(0, 0, width, height);
   pre_comp_layer.display_frame = DrmHwcRect<int>(0, 0, width, height);
   ret = pre_comp_layer.buffer.ImportBuffer(fb.buffer()->handle,
                                            display_comp->importer());
@@ -547,6 +548,8 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
       squash_layer.sf_handle = fb.buffer()->handle;
       squash_layer.blending = DrmHwcBlending::kPreMult;
       squash_layer.source_crop = DrmHwcRect<float>(
+          0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
+      squash_layer.isource_crop = DrmHwcRect<int>(
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
       squash_layer.display_frame = DrmHwcRect<int>(
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
