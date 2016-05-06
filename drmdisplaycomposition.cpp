@@ -167,7 +167,7 @@ static DrmPlane *TakePlane(DrmCrtc *crtc,
     //loop plane groups.
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
         iter != plane_groups.end(); ++iter) {
-        //find the match zpos plane group
+        //find the useful plane group
         if(!(*iter)->bUse) {
              //loop plane
             for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
@@ -265,6 +265,8 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             }
 
                             layer_vector.erase(iter_layer);
+                            //It need plus one because it delete one layer before.
+                            iter_layer--;
 
                             (*iter_plane)->set_use(true);
 
@@ -279,6 +281,7 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                     ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
                     *zpos=(*iter)->zpos+1;
+                    (*iter)->bUse = true;
                     return true;
                 }
             }
@@ -431,7 +434,7 @@ void DrmDisplayComposition::EmplaceCompositionPlane(
 
   if (plane == NULL) {
     ALOGE(
-        "Failed to add composition plane because there are no planes "
+        "EmplaceCompositionPlane: Failed to add composition plane because there are no planes "
         "remaining");
     return;
   }
@@ -593,78 +596,23 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   if (type_ != DRM_COMPOSITION_TYPE_FRAME)
     return 0;
 
+#if RK_DRM_HWC
+  std::vector<size_t> layers_remaining_bk;
+  std::vector<PlaneGroup *>& plane_groups=drm_->GetPlaneGroups();
+#endif
+
+#if USE_MULTI_AREAS
+  size_t planes_can_use = plane_groups.size();
+#else
   size_t planes_can_use =
       CountUsablePlanes(crtc_, primary_planes, overlay_planes);
+#endif
+
   if (planes_can_use == 0) {
     ALOGE("Display %d has no usable planes", crtc_->display());
     return -ENODEV;
   }
 
-#if USE_SQUASH
-  bool use_squash_framebuffer = false;
-  // Used to determine which layers were entirely squashed
-  std::vector<int> layer_squash_area(layers_.size(), 0);
-  // Used to avoid rerendering regions that were squashed
-  std::vector<DrmHwcRect<int>> exclude_rects;
-  if (squash != NULL && planes_can_use >= 3) {
-    if (geometry_changed_) {
-      squash->Init(layers_.data(), layers_.size());
-    } else {
-      std::vector<bool> changed_regions;
-      squash->GenerateHistory(layers_.data(), layers_.size(), changed_regions);
-
-      std::vector<bool> stable_regions;
-      squash->StableRegionsWithMarginalHistory(changed_regions, stable_regions);
-
-      // Only if SOME region is stable
-      use_squash_framebuffer =
-          std::find(stable_regions.begin(), stable_regions.end(), true) !=
-          stable_regions.end();
-
-      squash->RecordHistory(layers_.data(), layers_.size(), changed_regions);
-
-      // Changes in which regions are squashed triggers a rerender via
-      // squash_regions.
-      bool render_squash = squash->RecordAndCompareSquashed(stable_regions);
-
-      for (size_t region_index = 0; region_index < stable_regions.size();
-           region_index++) {
-        const SquashState::Region &region = squash->regions()[region_index];
-        if (!stable_regions[region_index])
-          continue;
-
-        exclude_rects.emplace_back(region.rect);
-
-        if (render_squash) {
-          squash_regions_.emplace_back();
-          squash_regions_.back().frame = region.rect;
-        }
-
-        int frame_area = region.rect.area();
-        // Source layers are sorted front to back i.e. top layer has lowest
-        // index.
-        for (size_t layer_index = layers_.size();
-             layer_index-- > 0;  // Yes, I double checked this
-             /* See condition */) {
-          if (!region.layer_refs[layer_index])
-            continue;
-          layer_squash_area[layer_index] += frame_area;
-          if (render_squash)
-            squash_regions_.back().source_layers.push_back(layer_index);
-        }
-      }
-    }
-  }
-#else
-    squash = squash;
-#endif
-
-#if USE_MULTI_AREAS
-  std::vector<size_t> layers_remaining;
-  for (size_t layer_index = 0; layer_index < layers_.size(); layer_index++) {
-      layers_remaining.push_back(layer_index);
-  }
-#else
   // All protected layers get first usage of planes
   std::vector<size_t> layers_remaining;
   for (size_t layer_index = 0; layer_index < layers_.size(); layer_index++) {
@@ -685,30 +633,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     ALOGE("Protected layers consumed all hardware planes");
     return CreateAndAssignReleaseFences();
   }
-#endif
-
-#if USE_SQUASH
-  std::vector<size_t> layers_remaining_if_squash;
-  for (size_t layer_index : layers_remaining) {
-    if (layer_squash_area[layer_index] <
-        layers_[layer_index].display_frame.area())
-      layers_remaining_if_squash.push_back(layer_index);
-  }
-
-  if (use_squash_framebuffer) {
-    if (planes_can_use > 1 || layers_remaining_if_squash.size() == 0) {
-      layers_remaining = std::move(layers_remaining_if_squash);
-      planes_can_use--;  // Reserve plane for squashing
-    } else {
-      use_squash_framebuffer = false;  // The squash buffer is still rendered
-    }
-  }
-#endif
-
-#if USE_PRE_COMP
-  if (layers_remaining.size() > planes_can_use)
-    planes_can_use--;  // Reserve one for pre-compositing
-#endif
 
 #if USE_MULTI_AREAS
     /*Group layer*/
@@ -779,32 +703,143 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #if RK_DRM_HWC_DEBUG
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
-        log_level(DBG_DEBUG),"layer map id=%d,size=%d",iter->first,iter->second.size());
+        ALOGD_IF(log_level(DBG_DEBUG),"layer map id=%d,size=%d",iter->first,iter->second.size());
         for(std::vector<DrmHwcLayer*>::const_iterator iter_layer = iter->second.begin();
             iter_layer != iter->second.end();++iter_layer)
         {
-             log_level(DBG_DEBUG),"\tlayer name=%s",(*iter_layer)->name.c_str());
+             ALOGD_IF(log_level(DBG_DEBUG),"\tlayer name=%s",(*iter_layer)->name.c_str());
         }
   }
 #endif
 
   uint64_t last_zpos=0;
+  std::vector<DrmPlane *> primary_planes_bk = *primary_planes;
+  std::vector<DrmPlane *> overlay_planes_bk = *overlay_planes;
+  size_t planes_can_use_bk = planes_can_use;
+  bool bMatch = false;
+  layers_remaining_bk = layers_remaining;
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
-        bool bMatch=MatchPlane(iter->second,layers_remaining,&last_zpos,primary_planes,overlay_planes);
+        bMatch = MatchPlane(iter->second,layers_remaining,&last_zpos,primary_planes,overlay_planes);
         if(!bMatch)
         {
             ALOGD("Cann't find the match plane for layer group %d",iter->first);
+            break;
         }
+        else
+            planes_can_use--;
   }
 
+  //If it cann't match any layer after area assign process or
+  //all planes is used up but still has layer remaining,we need rollback the area assign process.
+  if(!bMatch || (planes_can_use==0 && layers_remaining.size() > 0))
+  {
+        //restore layers_remaining
+        layers_remaining = layers_remaining_bk;
+        *primary_planes = primary_planes_bk;
+        *overlay_planes = overlay_planes_bk;
+        planes_can_use = planes_can_use_bk;
 
+        ALOGD_IF(log_level(DBG_DEBUG),"restore layer size=%d,primary size=%d,overlay size=%d",
+                layers_remaining.size(),primary_planes->size(),overlay_planes->size());
+
+        //set use flag to false.
+        for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+           iter != plane_groups.end(); ++iter) {
+            (*iter)->bUse=false;
+
+            for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
+                iter_plane != (*iter)->planes.end(); ++iter_plane) {
+                (*iter_plane)->set_use(false);
+            }
+        }
+  }
+#endif
+
+#if USE_SQUASH
+  bool use_squash_framebuffer = false;
+  // Used to determine which layers were entirely squashed
+  std::vector<int> layer_squash_area(layers_.size(), 0);
+  // Used to avoid rerendering regions that were squashed
+  std::vector<DrmHwcRect<int>> exclude_rects;
+  if (squash != NULL && planes_can_use >= 3) {
+    if (geometry_changed_) {
+      squash->Init(layers_.data(), layers_.size());
+    } else {
+      std::vector<bool> changed_regions;
+      squash->GenerateHistory(layers_.data(), layers_.size(), changed_regions);
+
+      std::vector<bool> stable_regions;
+      squash->StableRegionsWithMarginalHistory(changed_regions, stable_regions);
+
+      // Only if SOME region is stable
+      use_squash_framebuffer =
+          std::find(stable_regions.begin(), stable_regions.end(), true) !=
+          stable_regions.end();
+
+      squash->RecordHistory(layers_.data(), layers_.size(), changed_regions);
+
+      // Changes in which regions are squashed triggers a rerender via
+      // squash_regions.
+      bool render_squash = squash->RecordAndCompareSquashed(stable_regions);
+
+      for (size_t region_index = 0; region_index < stable_regions.size();
+           region_index++) {
+        const SquashState::Region &region = squash->regions()[region_index];
+        if (!stable_regions[region_index])
+          continue;
+
+        exclude_rects.emplace_back(region.rect);
+
+        if (render_squash) {
+          squash_regions_.emplace_back();
+          squash_regions_.back().frame = region.rect;
+        }
+
+        int frame_area = region.rect.area();
+        // Source layers are sorted front to back i.e. top layer has lowest
+        // index.
+        for (size_t layer_index = layers_.size();
+             layer_index-- > 0;  // Yes, I double checked this
+             /* See condition */) {
+          if (!region.layer_refs[layer_index])
+            continue;
+          layer_squash_area[layer_index] += frame_area;
+          if (render_squash)
+            squash_regions_.back().source_layers.push_back(layer_index);
+        }
+      }
+    }
+  }
+
+  std::vector<size_t> layers_remaining_if_squash;
+  for (size_t layer_index : layers_remaining) {
+    if (layer_squash_area[layer_index] <
+        layers_[layer_index].display_frame.area())
+      layers_remaining_if_squash.push_back(layer_index);
+  }
+
+  if (use_squash_framebuffer) {
+    if (planes_can_use > 1 || layers_remaining_if_squash.size() == 0) {
+      layers_remaining = std::move(layers_remaining_if_squash);
+      planes_can_use--;  // Reserve plane for squashing
+    } else {
+      use_squash_framebuffer = false;  // The squash buffer is still rendered
+    }
+  }
 #else
+    UN_USED(squash);
+#endif
+
+#if USE_PRE_COMP
+  if (layers_remaining.size() > planes_can_use)
+    planes_can_use--;  // Reserve one for pre-compositing
+#endif
 
   // Whatever planes that are not reserved get assigned a layer
   size_t last_composition_layer = 0;
 #if RK_DRM_HWC
-  std::vector<size_t> layers_remaining_bk(layers_remaining);
+  layers_remaining_bk = layers_remaining;
   for (last_composition_layer = 0;
        last_composition_layer < layers_remaining_bk.size() && planes_can_use > 0;
        last_composition_layer++, planes_can_use--) {
@@ -819,13 +854,10 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     EmplaceCompositionPlane(layers_remaining[last_composition_layer],
                             primary_planes, overlay_planes);
   }
-#endif
-
-#if !RK_DRM_HWC
   layers_remaining.erase(layers_remaining.begin(),
                          layers_remaining.begin() + last_composition_layer);
 #endif
-#endif
+
 #if USE_PRE_COMP
   if (layers_remaining.size() > 0) {
 #if RK_DRM_HWC
@@ -855,7 +887,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #endif
 
 #if RK_DRM_HWC
-    std::vector<PlaneGroup *>& plane_groups=drm_->GetPlaneGroups();
     //set use flag to false.
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
