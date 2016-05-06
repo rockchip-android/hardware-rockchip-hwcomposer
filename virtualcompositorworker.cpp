@@ -94,6 +94,8 @@ void VirtualCompositorWorker::QueueComposite(hwc_display_contents_1_t *dc) {
 }
 
 void VirtualCompositorWorker::Routine() {
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------VirtualCompositorWorker Routine start----------------------------");
+
   int ret = Lock();
   if (ret) {
     ALOGE("Failed to lock worker, %d", ret);
@@ -125,6 +127,8 @@ void VirtualCompositorWorker::Routine() {
   }
 
   Compose(std::move(composition));
+
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------VirtualCompositorWorker Routine end----------------------------");
 }
 
 int VirtualCompositorWorker::CreateNextTimelineFence() {

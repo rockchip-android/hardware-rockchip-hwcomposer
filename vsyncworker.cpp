@@ -136,6 +136,7 @@ int VSyncWorker::SyntheticWaitVBlank(int64_t *timestamp) {
 }
 
 void VSyncWorker::Routine() {
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------VSyncWorker Routine start----------------------------");
   int ret = Lock();
   if (ret) {
     ALOGE("Failed to lock worker %d", ret);
@@ -199,5 +200,7 @@ void VSyncWorker::Routine() {
   if (procs && procs->vsync)
     procs->vsync(procs, display, timestamp);
   last_timestamp_ = timestamp;
+
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------VSyncWorker Routine end----------------------------");
 }
 }

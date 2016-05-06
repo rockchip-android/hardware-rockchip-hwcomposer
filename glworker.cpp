@@ -587,7 +587,9 @@ int GLWorkerCompositor::Composite(DrmHwcLayer *layers,
 
     if (layers_used_indices.count(layer_index) == 0)
       continue;
-
+#if RK_DRM_HWC
+    ALOGD_IF(log_level(DBG_DEBUG),"Squash layer name=%s",layer->name.c_str());
+#endif
     ret = CreateTextureFromHandle(egl_display_, layer->get_usable_handle(),
                                   &layer_textures.back());
 

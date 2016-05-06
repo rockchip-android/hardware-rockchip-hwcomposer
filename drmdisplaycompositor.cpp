@@ -201,6 +201,8 @@ void DrmDisplayCompositor::FrameWorker::QueueFrame(
 }
 
 void DrmDisplayCompositor::FrameWorker::Routine() {
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------FrameWorker Routine start----------------------------");
+
   int ret = Lock();
   if (ret) {
     ALOGE("Failed to lock worker, %d", ret);
@@ -232,6 +234,8 @@ void DrmDisplayCompositor::FrameWorker::Routine() {
   }
 
   compositor_->ApplyFrame(std::move(frame.composition), frame.status);
+
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------FrameWorker Routine end----------------------------");
 }
 
 DrmDisplayCompositor::DrmDisplayCompositor()
@@ -862,7 +866,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
 #if RK_DRM_HWC_DEBUG
     out_log << "\n";
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
+    ALOGD_IF(log_level(DBG_INFO),"%s",out_log.str().c_str());
 #endif
   }
 

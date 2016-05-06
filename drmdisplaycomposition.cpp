@@ -223,11 +223,11 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
     //loop plane groups.
     for (iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
-       ALOGD_IF(log_level(DBG_VERBOSE),"line=%d,last zpos=%d,plane group zpos=%d,plane group bUse=%d",__LINE__,*zpos,(*iter)->zpos,(*iter)->bUse);
+       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,plane group zpos=%d,plane group bUse=%d",__LINE__,*zpos,(*iter)->zpos,(*iter)->bUse);
         //find the match zpos plane group
         if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
         {
-            ALOGD_IF(log_level(DBG_VERBOSE),"line=%d,combine_layer_count=%d,planes size=%d",__LINE__,combine_layer_count,(*iter)->planes.size());
+            ALOGD_IF(log_level(DBG_DEBUG),"line=%d,combine_layer_count=%d,planes size=%d",__LINE__,combine_layer_count,(*iter)->planes.size());
             //find the match combine layer count with plane size.
             if(combine_layer_count <= (*iter)->planes.size())
             {
@@ -239,14 +239,14 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                     for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
                         !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
                     {
-                        ALOGD_IF(log_level(DBG_VERBOSE),"line=%d,plane is_use=%d",__LINE__,(*iter_plane)->is_use());
+                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,plane is_use=%d",__LINE__,(*iter_plane)->is_use());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc_))
                         {
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
                                 continue;
 
-                            ALOGD_IF(log_level(DBG_VERBOSE),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
+                            ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
                             //Find the match plane for layer,it will be commit.
                             composition_planes_.emplace_back(
@@ -271,7 +271,7 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 }
                 if(layer_vector.size()==0)
                 {
-                    ALOGD_IF(log_level(DBG_VERBOSE),"line=%d all match",__LINE__);
+                    ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
                     *zpos=(*iter)->zpos+1;
                     return true;
@@ -308,7 +308,7 @@ static bool is_not_hor_intersect(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
 #else
 static bool is_not_intersect(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
 {
-    ALOGD_IF(log_level(DBG_VERBOSE),"is_not_intersect: rec1[%d,%d,%d,%d],rec2[%d,%d,%d,%d]",rec1->left,rec1->top,
+    ALOGD_IF(log_level(DBG_DEBUG),"is_not_intersect: rec1[%d,%d,%d,%d],rec2[%d,%d,%d,%d]",rec1->left,rec1->top,
         rec1->right,rec1->bottom,rec2->left,rec2->top,rec2->right,rec2->bottom);
     if (rec1->left >= rec2->left && rec1->left <= rec2->right) {
         if (rec1->top >= rec2->top && rec1->top <= rec2->bottom) {
@@ -339,8 +339,8 @@ static bool is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
         || layer_one->is_scale || layer_two->is_scale
         || !is_not_intersect(&layer_one->display_frame,&layer_two->display_frame))
     {
-        ALOGD_IF(log_level(DBG_VERBOSE),"is_layer_combine layer one alpha=%d,is_scale=%d",layer_one->alpha,layer_one->is_scale);
-        ALOGD_IF(log_level(DBG_VERBOSE),"is_layer_combine layer two alpha=%d,is_scale=%d",layer_two->alpha,layer_two->is_scale);
+        ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer one alpha=%d,is_scale=%d",layer_one->alpha,layer_one->is_scale);
+        ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer two alpha=%d,is_scale=%d",layer_two->alpha,layer_two->is_scale);
         return false;
     }
 
@@ -691,7 +691,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     bool is_combine = false;
     layer_map_.clear();
 
-    ALOGD_IF(log_level(DBG_VERBOSE),"layers_remaining.size()=%d",layers_remaining.size());
+    ALOGD_IF(log_level(DBG_DEBUG),"layers_remaining.size()=%d",layers_remaining.size());
     for (i = 0; i < layers_remaining.size();) {
         sort_cnt=0;
         if(i == 0)
@@ -752,11 +752,11 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #if RK_DRM_HWC_DEBUG
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
-        ALOGD("layer map id=%d,size=%d",iter->first,iter->second.size());
+        log_level(DBG_DEBUG),"layer map id=%d,size=%d",iter->first,iter->second.size());
         for(std::vector<DrmHwcLayer*>::const_iterator iter_layer = iter->second.begin();
             iter_layer != iter->second.end();++iter_layer)
         {
-             ALOGD("\tlayer name=%s",(*iter_layer)->name.c_str());
+             log_level(DBG_DEBUG),"\tlayer name=%s",(*iter_layer)->name.c_str());
         }
   }
 #endif
@@ -819,7 +819,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   for (const DrmCompositionPlane &plane : composition_planes_) {
     std::ostringstream out;
     plane.dump_drm_com_plane(j,&out);
-    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+    ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
     j++;
   }
 #endif

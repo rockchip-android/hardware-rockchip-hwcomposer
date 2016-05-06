@@ -45,7 +45,7 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 #include <cutils/log.h>
-#if RK_DRM_HWC_DEBUG
+#if RK_DRM_HWC_DEBUG | RK_DRM_HWC
 #include "gralloc_drm_handle.h"
 #endif
 
@@ -59,6 +59,7 @@ unsigned int g_frame;
 static int init_log_level()
 {
     char value[PROPERTY_VALUE_MAX];
+    int iValue;
     property_get("sys.hwc.log", value, "1");
     g_log_level = atoi(value);
     return 0;
@@ -564,42 +565,6 @@ static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
 }
 
 #if RK_DRM_HWC_DEBUG
-//return property value of pcProperty
-static int hwc_get_int_property(const char* pcProperty,const char* default_value)
-{
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
-
-    if(pcProperty == NULL || default_value == NULL)
-    {
-        ALOGE("hwc_get_int_property: invalid param");
-        return -1;
-    }
-
-    property_get(pcProperty, value, default_value);
-    new_value = atoi(value);
-
-    return new_value;
-}
-
-static int hwc_get_string_property(const char* pcProperty,const char* default_value,char* retult)
-{
-    if(pcProperty == NULL || default_value == NULL || retult == NULL)
-    {
-        ALOGE("hwc_get_string_property: invalid param");
-        return -1;
-    }
-
-    property_get(pcProperty, retult, default_value);
-
-    return 0;
-}
-
-bool log_level(LOG_LEVEL log_level)
-{
-    return g_log_level & log_level;
-}
-
 static void dump_layer(hwc_layer_1_t *layer, int index) {
     struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
     size_t i;
@@ -608,7 +573,7 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
 
     if(layer->flags & HWC_SKIP_LAYER)
     {
-        ALOGD_IF(log_level(DBG_VERBOSE),"layer %p skipped", layer);
+        ALOGD_IF(log_level(DBG_INFO),"layer %p skipped", layer);
     }
     else
     {
@@ -647,12 +612,43 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
                 << layer->visibleRegionScreen.rects[i].bottom << "},";
         }
         out << "\n";
-        ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+        ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
     }
 }
 #endif
 
 #if RK_DRM_HWC
+//return property value of pcProperty
+static int hwc_get_int_property(const char* pcProperty,const char* default_value)
+{
+    char value[PROPERTY_VALUE_MAX];
+    int new_value = 0;
+
+    if(pcProperty == NULL || default_value == NULL)
+    {
+        ALOGE("hwc_get_int_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, value, default_value);
+    new_value = atoi(value);
+
+    return new_value;
+}
+
+static int hwc_get_string_property(const char* pcProperty,const char* default_value,char* retult)
+{
+    if(pcProperty == NULL || default_value == NULL || retult == NULL)
+    {
+        ALOGE("hwc_get_string_property: invalid param");
+        return -1;
+    }
+
+    property_get(pcProperty, retult, default_value);
+
+    return 0;
+}
+
 static bool check_layer(hwc_layer_1_t * Layer) {
     if (Layer->flags & HWC_SKIP_LAYER){
         return false;
@@ -660,6 +656,16 @@ static bool check_layer(hwc_layer_1_t * Layer) {
     return true;
 }
 #endif
+
+bool log_level(LOG_LEVEL log_level)
+{
+#if RK_DRM_HWC_DEBUG
+    return g_log_level & log_level;
+#else
+    UN_USED(log_level);
+    return 0;
+#endif
+}
 
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
@@ -685,18 +691,18 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       }
       mode = c->active_mode();
     }
-
+#if RK_DRM_HWC
     //force go into GPU
     if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0)
         use_framebuffer_target = true;
-
+#endif
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
     // handle all layers in between the first and last skip layers. So find the
     // outer indices and mark everything in between as HWC_FRAMEBUFFER
     std::pair<int, int> skip_layer_indices(-1, -1);
     int num_layers = display_contents[i]->numHwLayers;
 #if RK_DRM_HWC_DEBUG
-    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start----------------------------",g_frame);
+    ALOGD_IF(log_level(DBG_INFO),"----------------------------frame=%d start----------------------------",g_frame);
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
@@ -898,7 +904,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);
-      ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+      ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
 #endif
       map.layers.emplace_back(std::move(layer));
     }
@@ -935,7 +941,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     }
   }
 #if RK_DRM_HWC_DEBUG
- ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
+ ALOGD_IF(log_level(DBG_INFO),"----------------------------frame=%d end----------------------------",g_frame);
  g_frame++;
 #endif
   composition.reset(NULL);
@@ -1206,6 +1212,11 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     ALOGE("Invalid module name- %s", name);
     return -EINVAL;
   }
+#if RK_DRM_HWC_DEBUG
+  g_log_level = 0;
+  g_frame = 0;
+  init_log_level();
+#endif
 
   std::unique_ptr<hwc_context_t> ctx(new hwc_context_t());
   if (!ctx) {
@@ -1262,10 +1273,7 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
 
-#if RK_DRM_HWC_DEBUG
-  g_log_level = 0;
-  g_frame = 0;
-#endif
+
 
 #if RK_DRM_HWC
   hwc_init_version();

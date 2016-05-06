@@ -42,6 +42,8 @@ int DrmCompositorWorker::Init() {
 }
 
 void DrmCompositorWorker::Routine() {
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------DrmCompositorWorker Routine start----------------------------");
+
   int ret;
   if (!compositor_->HaveQueuedComposites()) {
     ret = Lock();
@@ -83,5 +85,7 @@ void DrmCompositorWorker::Routine() {
   if (ret)
     ALOGE("Failed to composite! %d", ret);
   did_squash_all_ = false;
+
+  ALOGD_IF(log_level(DBG_INFO),"----------------------------DrmCompositorWorker Routine end----------------------------");
 }
 }

@@ -112,7 +112,7 @@ int DrmResources::Init() {
         drmModeFreeFB(fb);
     }
 
-  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
   out.str("");
 #endif
 
@@ -146,7 +146,7 @@ int DrmResources::Init() {
   }
 
 #if RK_DRM_HWC_DEBUG
-  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
   out.str("");
 #endif
 
@@ -185,7 +185,7 @@ int DrmResources::Init() {
     encoders_.emplace_back(std::move(enc));
   }
 #if RK_DRM_HWC_DEBUG
-  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
   out.str("");
 #endif
 
@@ -241,7 +241,7 @@ int DrmResources::Init() {
   }
 
 #if RK_DRM_HWC_DEBUG
-  ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+  ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
   out.str("");
 #endif
 
@@ -276,7 +276,7 @@ int DrmResources::Init() {
 #if RK_DRM_HWC_DEBUG
     plane->dump_plane(&out);
     out << "\n";
-    ALOGD_IF(RK_DRM_HWC_DEBUG,"%s",out.str().c_str());
+    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
     out.str("");
 #endif
 
@@ -315,52 +315,51 @@ int DrmResources::Init() {
                        plane->set_yuv(true);
                }
     }
+    sort_planes_.emplace_back(plane.get());
 #endif
     drmModeFreePlane(p);
 
-    sort_planes_.emplace_back(plane.get());
     planes_.emplace_back(std::move(plane));
   }
 
 #if RK_DRM_HWC
   std::sort(sort_planes_.begin(),sort_planes_.end(),PlaneSortByZpos);
 #endif
-#if RK_DRM_HWC_DEBUG
+#if RK_DRM_HWC & RK_DRM_HWC_DEBUG
     for (std::vector<DrmPlane*>::const_iterator iter= sort_planes_.begin();
        iter != sort_planes_.end(); ++iter) {
        uint64_t share_id,zpos;
        (*iter)->share_id_property().value(&share_id);
        (*iter)->zpos_property().value(&zpos);
-       ALOGD("sort_planes_ share_id=%d,zpos=%d",share_id,zpos);
+       ALOGD_IF(log_level(DBG_VERBOSE),"sort_planes_ share_id=%d,zpos=%d",share_id,zpos);
     }
-#endif
-#if RK_DRM_HWC_DEBUG
+
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
-        ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
+        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
         for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
         {
-            ALOGD("\tPlane id=%d",(*iter_plane)->id());
+            ALOGD_IF(log_level(DBG_VERBOSE),"\tPlane id=%d",(*iter_plane)->id());
         }
     }
-    ALOGD("--------------------sort plane--------------------");
+    ALOGD_IF(log_level(DBG_VERBOSE),"--------------------sort plane--------------------");
 #endif
 #if RK_DRM_HWC
     std::sort(plane_groups_.begin(),plane_groups_.end(),SortByZpos);
 #endif
-#if RK_DRM_HWC_DEBUG
+#if RK_DRM_HWC & RK_DRM_HWC_DEBUG
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
-        ALOGD("Plane groups: zpos=%d,share_id=%d,plane size=%d",
+        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
         for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
         {
-            ALOGD("\tPlane id=%d",(*iter_plane)->id());
+            ALOGD_IF(log_level(DBG_VERBOSE),"\tPlane id=%d",(*iter_plane)->id());
         }
     }
 #endif

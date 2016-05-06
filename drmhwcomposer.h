@@ -43,21 +43,29 @@ bool hwc_import_bo_release(int fd, struct hwc_import_context *ctx,
 
 namespace android {
 
-#if RK_DRM_HWC_DEBUG
-struct DrmHwcLayer;
-
+#define UN_USED(arg)     (arg=arg)
 enum LOG_LEVEL
 {
-    //Log level flag
+    //Log level flag 
+    /*0*/
     DBG_VERBOSE = 1 << 0,
+    /*2*/
     DBG_DEBUG = 1 << 1,
+    /*4*/
     DBG_INFO = 1 << 2,
+    /*8*/
     DBG_WARN = 1 << 3,
+    /*16*/
     DBG_ERROR = 1 << 4,
+    /*32*/
     DBG_FETAL = 1 << 5,
+    /*64*/
     DBG_SILENT = 1 << 6,
 };
 bool log_level(LOG_LEVEL log_level);
+
+#if RK_DRM_HWC_DEBUG
+struct DrmHwcLayer;
 int DumpLayer(int layer_index,DrmHwcLayer *layer);
 #endif
 
