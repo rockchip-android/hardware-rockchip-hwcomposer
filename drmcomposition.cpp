@@ -148,6 +148,7 @@ int DrmComposition::DisableUnusedPlanes() {
     for (std::vector<DrmPlane *>::iterator iter = primary_planes_.begin();
          iter != primary_planes_.end(); ++iter) {
       if ((*iter)->GetCrtcSupported(*crtc)) {
+        ALOGD_IF(log_level(DBG_DEBUG),"DisableUnusedPlanes primary plane id=%d",(*iter)->id());
         comp->AddPlaneDisable(*iter);
         primary_planes_.erase(iter);
         break;
@@ -156,6 +157,7 @@ int DrmComposition::DisableUnusedPlanes() {
     for (std::vector<DrmPlane *>::iterator iter = overlay_planes_.begin();
          iter != overlay_planes_.end();) {
       if ((*iter)->GetCrtcSupported(*crtc)) {
+        ALOGD_IF(log_level(DBG_DEBUG),"DisableUnusedPlanes verlay plane id=%d",(*iter)->id());
         comp->AddPlaneDisable(*iter);
         iter = overlay_planes_.erase(iter);
       } else {

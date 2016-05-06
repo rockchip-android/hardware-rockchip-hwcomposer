@@ -141,15 +141,21 @@ class DrmDisplayComposition {
 
   int IncreaseTimelineToPoint(int point);
 
-  void EmplaceCompositionPlane(size_t source_layer,
-                               std::vector<DrmPlane *> *primary_planes,
-                               std::vector<DrmPlane *> *overlay_planes);
+
   int CreateAndAssignReleaseFences();
 
 #if RK_DRM_HWC
+  void EmplaceCompositionPlane(size_t source_layer,
+                                                    std::vector<size_t>& layers_remaining,
+                                                    std::vector<DrmPlane *> *primary_planes,
+                                                    std::vector<DrmPlane *> *overlay_planes);
   bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                std::vector<size_t>& layers_remaining,
                                uint64_t* zpos,
+                               std::vector<DrmPlane *> *primary_planes,
+                               std::vector<DrmPlane *> *overlay_planes);
+#else
+  void EmplaceCompositionPlane(size_t source_layer,
                                std::vector<DrmPlane *> *primary_planes,
                                std::vector<DrmPlane *> *overlay_planes);
 #endif

@@ -77,12 +77,12 @@ int DrmResources::Init() {
   }
 
   //Open Multi-area support.
-  /*ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_SHARE_PLANES, 1);
+  ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_SHARE_PLANES, 1);
   if (ret) {
     ALOGE("Failed to set share planes %d", ret);
     return ret;
   }
-*/
+
   drmModeResPtr res = drmModeGetResources(fd());
   if (!res) {
     ALOGE("Failed to get DrmResources resources");

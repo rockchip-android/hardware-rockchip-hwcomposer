@@ -135,78 +135,83 @@ static size_t CountUsablePlanes(DrmCrtc *crtc,
 }
 
 #if RK_DRM_HWC
-static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes, DrmHwcLayer* layer) {
-// uint64_t scale_value;
-  bool b_yuv_support;
-
-  layer=layer;
-  for (auto iter = planes->begin(); iter != planes->end(); ++iter) {
-    if ((*iter)->GetCrtcSupported(*crtc)) {
-        DrmPlane *plane = *iter;
-#if 0
-        if(layer != NULL) {
-            b_yuv_support = plane->get_yuv();
-      //    plane->scale_property().value(&scale_value);
-            if(layer->is_yuv && !b_yuv_support)
-                continue;
-      //    if(layer->is_scale && (0==scale_value))
-      //        continue;
-
-            if(layer->group_id == 1)
-            {
-                /*If the layer is group in win2,then the plane is limited in win2 areas.*/
-                if(plane->id() < DRM_AREA2_0 || plane->id() > DRM_AREA2_3)
-                    continue;
-            }
-            else if(layer->group_id == 2)
-            {
-                /*If the layer is group in win3,then the plane is limited in win3 areas.*/
-                if(plane->id() < DRM_AREA3_0 || plane->id() > DRM_AREA3_3)
-                    continue;
-            }
-            else
-            {
-                /*If the layer doesn't group in win2 or win3,then it cann't use the mul-areas.*/
-                if((plane->id() > DRM_AREA2_0 && plane->id() < DRM_AREA3_0) ||
-                    (plane->id() > DRM_AREA3_0 ))
-                    continue;
-            }
-
-      }
-#endif
-      planes->erase(iter);
-      return plane;
+bool EraseFromPlanes(uint32_t id,std::vector<DrmPlane *> *planes)
+{
+    for (auto iter = planes->begin(); iter != planes->end(); ++iter) {
+        if((*iter)->id()== id) {
+           planes->erase(iter);
+           return true;
+        }
     }
-  }
-  return NULL;
+    return false;
+}
+
+bool ErasePlane(uint32_t id,std::vector<DrmPlane *> *primary_planes,std::vector<DrmPlane *> *overlay_planes)
+{
+
+    if(!EraseFromPlanes(id,primary_planes))
+        return EraseFromPlanes(id,overlay_planes);
+
+    return true;
 }
 
 static DrmPlane *TakePlane(DrmCrtc *crtc,
-                           std::vector<DrmPlane *> *primary_planes,
-                           std::vector<DrmPlane *> *overlay_planes,
-                           DrmHwcLayer* layer) {
-  DrmPlane *plane = TakePlane(crtc, primary_planes, layer);
-  if (plane)
-    return plane;
-  return TakePlane(crtc, overlay_planes, layer);
-}
+                                DrmResources *drm,
+                                std::vector<size_t>& layers_remaining,
+                                std::vector<DrmPlane *> *primary_planes,
+                                std::vector<DrmPlane *> *overlay_planes,
+                                DrmHwcLayer* layer) {
+    bool b_yuv;
+    std::vector<PlaneGroup *>& plane_groups=drm->GetPlaneGroups();
 
-void ErasePlane(uint32_t id,std::vector<DrmPlane *> *primary_planes,std::vector<DrmPlane *> *overlay_planes)
-{
-    for (auto iter = primary_planes->begin(); iter != primary_planes->end(); ++iter) {
-        if((*iter)->id()== id) {
-           primary_planes->erase(iter);
-           return;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+        iter != plane_groups.end(); ++iter) {
+        //find the match zpos plane group
+        if(!(*iter)->bUse) {
+             //loop plane
+            for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
+                !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane) {
+                    if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
+                    {
+                        //if layer is valid,then judge whether it suit for the plane.
+                        //otherwise,only get a plane from the plane group.
+                        if(layer)
+                        {
+                            b_yuv  = (*iter_plane)->get_yuv();
+                            if(layer->is_yuv && !b_yuv)
+                                continue;
+
+                            ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
+                                    layer->name.c_str(),(*iter_plane)->id(),layer->index);
+
+                            //remove the assigned layer from layers_remaining index.
+                            for(std::vector<size_t>::iterator iter_index = layers_remaining.begin();
+                                !layers_remaining.empty() && iter_index != layers_remaining.end();++iter_index)
+                            {
+                                if(*iter_index == layer->index)
+                                    layers_remaining.erase(iter_index);
+                            }
+                        }
+
+                        (*iter_plane)->set_use(true);
+                        (*iter)->bUse = true;
+                        //erase the plane from primary_planes or overlay_planes
+                        ErasePlane((*iter_plane)->id(),primary_planes,overlay_planes);
+                        return *iter_plane;
+                    }
+                }
         }
     }
 
-    for (auto iter = overlay_planes->begin(); iter != overlay_planes->end(); ++iter) {
-        if((*iter)->id()== id) {
-           overlay_planes->erase(iter);
-           return;
-        }
-    }
+    if(layer)
+        ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: cann't match layer=%s,layer->index=%d",
+            layer->name.c_str(),layer->index);
+
+    return NULL;
 }
+
+
 
 //According to zpos and combine layer count,find the suitable plane.
 bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
@@ -367,6 +372,33 @@ static void ReservedPlane(DrmCrtc *crtc,
     ReservedPlane(crtc, overlay_planes, id);
 }
 
+void DrmDisplayComposition::EmplaceCompositionPlane(
+    size_t source_layer,
+    std::vector<size_t>& layers_remaining,
+    std::vector<DrmPlane *> *primary_planes,
+    std::vector<DrmPlane *> *overlay_planes) {
+
+  DrmPlane *plane;
+  DrmHwcLayer* layer;
+  if(source_layer == DrmCompositionPlane::kSourceNone ||
+     source_layer == DrmCompositionPlane::kSourceSquash ||
+     source_layer == DrmCompositionPlane::kSourcePreComp)
+     layer = NULL;
+  else
+     layer = &layers_[source_layer];
+
+  plane = TakePlane(crtc_, drm_, layers_remaining, primary_planes, overlay_planes, layer);
+
+  if (plane == NULL) {
+    ALOGE(
+        "Failed to add composition plane because there are no planes "
+        "remaining");
+    return;
+  }
+  composition_planes_.emplace_back(
+      DrmCompositionPlane{plane, crtc_, source_layer, source_layer});
+}
+
 #else
 
 static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes) {
@@ -389,25 +421,14 @@ static DrmPlane *TakePlane(DrmCrtc *crtc, std::vector<DrmPlane *> *planes) {
     return TakePlane(crtc, overlay_planes);
 }
 
-
-#endif
-
 void DrmDisplayComposition::EmplaceCompositionPlane(
-    size_t source_layer, std::vector<DrmPlane *> *primary_planes,
+    size_t source_layer,
+    std::vector<DrmPlane *> *primary_planes,
     std::vector<DrmPlane *> *overlay_planes) {
-#if RK_DRM_HWC
-  DrmPlane *plane;
-  DrmHwcLayer* layer;
-  if(source_layer == DrmCompositionPlane::kSourceNone ||
-     source_layer == DrmCompositionPlane::kSourceSquash ||
-     source_layer == DrmCompositionPlane::kSourcePreComp)
-     layer = NULL;
-  else
-     layer = &layers_[source_layer];
-  plane = TakePlane(crtc_, primary_planes, overlay_planes,layer);
-#else
+
+
   DrmPlane *plane = TakePlane(crtc_, primary_planes, overlay_planes);
-#endif
+
   if (plane == NULL) {
     ALOGE(
         "Failed to add composition plane because there are no planes "
@@ -417,6 +438,7 @@ void DrmDisplayComposition::EmplaceCompositionPlane(
   composition_planes_.emplace_back(
       DrmCompositionPlane{plane, crtc_, source_layer, source_layer});
 }
+#endif
 
 static std::vector<size_t> SetBitsToVector(uint64_t in, size_t *index_map) {
   std::vector<size_t> out;
@@ -647,10 +669,15 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   std::vector<size_t> layers_remaining;
   for (size_t layer_index = 0; layer_index < layers_.size(); layer_index++) {
     if (!layers_[layer_index].protected_usage() || planes_can_use == 0) {
+      layers_[layer_index].index = layer_index;
       layers_remaining.push_back(layer_index);
       continue;
     }
-    EmplaceCompositionPlane(layer_index, primary_planes, overlay_planes);
+ #if RK_DRM_HWC
+    EmplaceCompositionPlane(layer_index, layers_remaining, primary_planes, overlay_planes);
+ #else
+    EmplaceCompositionPlane(layer_index, primary_planes, overlay_planes)
+ #endif
     planes_can_use--;
   }
 
@@ -771,6 +798,63 @@ int DrmDisplayComposition::Plan(SquashState *squash,
         }
   }
 
+
+#else
+
+  // Whatever planes that are not reserved get assigned a layer
+  size_t last_composition_layer = 0;
+#if RK_DRM_HWC
+  std::vector<size_t> layers_remaining_bk(layers_remaining);
+  for (last_composition_layer = 0;
+       last_composition_layer < layers_remaining_bk.size() && planes_can_use > 0;
+       last_composition_layer++, planes_can_use--) {
+    EmplaceCompositionPlane(layers_remaining_bk[last_composition_layer],layers_remaining,
+                            primary_planes, overlay_planes);
+
+  }
+#else
+  for (last_composition_layer = 0;
+       last_composition_layer < layers_remaining.size() && planes_can_use > 0;
+       last_composition_layer++, planes_can_use--) {
+    EmplaceCompositionPlane(layers_remaining[last_composition_layer],
+                            primary_planes, overlay_planes);
+  }
+#endif
+
+#if !RK_DRM_HWC
+  layers_remaining.erase(layers_remaining.begin(),
+                         layers_remaining.begin() + last_composition_layer);
+#endif
+#endif
+#if USE_PRE_COMP
+  if (layers_remaining.size() > 0) {
+#if RK_DRM_HWC
+    EmplaceCompositionPlane(DrmCompositionPlane::kSourcePreComp, layers_remaining, primary_planes,
+                            overlay_planes);
+#else
+    EmplaceCompositionPlane(DrmCompositionPlane::kSourcePreComp, primary_planes,
+                            overlay_planes);
+#endif
+    SeparateLayers(layers_.data(), layers_remaining.data(),
+                   layers_remaining.size(), exclude_rects.data(),
+                   exclude_rects.size(), pre_comp_regions_);
+  }
+#endif
+
+#if USE_SQUASH
+  if (use_squash_framebuffer) {
+#if RK_DRM_HWC
+    EmplaceCompositionPlane(DrmCompositionPlane::kSourceSquash, layers_remaining, primary_planes,
+                            overlay_planes);
+#else
+    EmplaceCompositionPlane(DrmCompositionPlane::kSourceSquash, primary_planes,
+                            overlay_planes);
+#endif
+  }
+
+#endif
+
+#if RK_DRM_HWC
     std::vector<PlaneGroup *>& plane_groups=drm_->GetPlaneGroups();
     //set use flag to false.
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
@@ -782,36 +866,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
             (*iter_plane)->set_use(false);
         }
     }
-#else
-
-  // Whatever planes that are not reserved get assigned a layer
-  size_t last_composition_layer = 0;
-  for (last_composition_layer = 0;
-       last_composition_layer < layers_remaining.size() && planes_can_use > 0;
-       last_composition_layer++, planes_can_use--) {
-    EmplaceCompositionPlane(layers_remaining[last_composition_layer],
-                            primary_planes, overlay_planes);
-  }
-
-  layers_remaining.erase(layers_remaining.begin(),
-                         layers_remaining.begin() + last_composition_layer);
-#endif
-#if USE_PRE_COMP
-  if (layers_remaining.size() > 0) {
-    EmplaceCompositionPlane(DrmCompositionPlane::kSourcePreComp, primary_planes,
-                            overlay_planes);
-    SeparateLayers(layers_.data(), layers_remaining.data(),
-                   layers_remaining.size(), exclude_rects.data(),
-                   exclude_rects.size(), pre_comp_regions_);
-  }
-#endif
-
-#if USE_SQUASH
-  if (use_squash_framebuffer) {
-    EmplaceCompositionPlane(DrmCompositionPlane::kSourceSquash, primary_planes,
-                            overlay_planes);
-  }
-
 #endif
 
 #if RK_DRM_HWC_DEBUG
