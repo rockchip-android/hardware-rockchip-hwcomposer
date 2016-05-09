@@ -32,6 +32,9 @@
 #include <cutils/properties.h>
 #include <drm_fourcc.h>
 
+//you can define it in external/libdrm/include/drm/drm.h
+#define DRM_CLIENT_CAP_SHARE_PLANES     4
+
 namespace android {
 
 DrmResources::DrmResources() : compositor_(this) {
