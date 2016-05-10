@@ -79,6 +79,8 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
       return DRM_FORMAT_BGR565;
     case HAL_PIXEL_FORMAT_YV12:
       return DRM_FORMAT_YVU420;
+    case HAL_PIXEL_FORMAT_YCrCb_NV12:
+      return DRM_FORMAT_NV12;
     default:
       ALOGE("Cannot convert hal format to drm format %u", hal_format);
       return -EINVAL;
