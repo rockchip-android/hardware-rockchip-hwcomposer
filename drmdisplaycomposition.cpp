@@ -496,7 +496,7 @@ static void SeparateLayers(DrmHwcLayer *layers, size_t *used_layers,
 
 #if RK_DRM_HWC_DEBUG
 void DrmCompositionPlane::dump_drm_com_plane(int index, std::ostringstream *out) const {
-    *out << "      [" << index << "]"
+    *out << "DrmCompositionPlane[" << index << "]"
          << " plane=" << (plane ? plane->id() : -1)
          << " source_layer=";
     if (source_layer <= DrmCompositionPlane::kSourceLayerMax) {
@@ -904,7 +904,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   for (const DrmCompositionPlane &plane : composition_planes_) {
     std::ostringstream out;
     plane.dump_drm_com_plane(j,&out);
-    ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
+    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
     j++;
   }
 #endif

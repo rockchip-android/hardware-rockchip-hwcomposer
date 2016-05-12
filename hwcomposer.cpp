@@ -46,6 +46,7 @@
 #include <utils/Trace.h>
 #include <cutils/log.h>
 #if RK_DRM_HWC_DEBUG | RK_DRM_HWC
+#include <drm_fourcc.h>
 #include "gralloc_drm_handle.h"
 #endif
 
@@ -60,7 +61,7 @@ static int init_log_level()
 {
     char value[PROPERTY_VALUE_MAX];
     int iValue;
-    property_get("sys.hwc.log", value, "1");
+    property_get("sys.hwc.log", value, "0");
     g_log_level = atoi(value);
     return 0;
 }
@@ -72,21 +73,19 @@ static int init_log_level()
  * @param layer 		layer data
  * @return 				Errno no
  */
-int DumpLayer(int layer_index,DrmHwcLayer *layer)
+int DumpLayer(const char* layer_name,buffer_handle_t handle)
 {
-    buffer_handle_t handle = layer->get_usable_handle();
     char pro_value[PROPERTY_VALUE_MAX];
 
     property_get("sys.dump",pro_value,0);
 
-    if(!strcmp(pro_value,"true"))
+    if(handle && !strcmp(pro_value,"true"))
     {
-
-        static int test = 0;
+        //static int test = 0;
         static int DumpSurfaceCount = 0;
         int32_t SrcStride = 4 ;
         FILE * pfile = NULL;
-        char layername[100] ;
+        char data_name[100] ;
         const gralloc_module_t *gralloc;
         unsigned int *cpu_addr;
         int i;
@@ -108,28 +107,57 @@ int DumpLayer(int layer_index,DrmHwcLayer *layer)
             return -EINVAL;
         }
 
-        if (test == 0) {
+        //if (test == 0) {
             system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
 
-            test = 1;
+          //  test = 1;
 
             DumpSurfaceCount++;
-            sprintf(layername,"/data/dump/dmlayer%d_%d_%d_%d_%d.bin",layer_index, DumpSurfaceCount,
+            sprintf(data_name,"/data/dump/dmlayer%d_%d_%d_%d.bin", DumpSurfaceCount,
                     gr_handle->width,gr_handle->height,SrcStride);
             gralloc->lock(gralloc, handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
                             0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
-            pfile = fopen(layername,"wb");
+            pfile = fopen(data_name,"wb");
             if(pfile)
             {
                 fwrite((const void *)cpu_addr,(size_t)(SrcStride * gr_handle->width*gr_handle->height),1,pfile);
                 fclose(pfile);
-                ALOGE(" dump surface layername %s,w:%d,h:%d,formatsize :%d",layername,gr_handle->width,gr_handle->height,SrcStride);
+                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,size :%d",layer_name,data_name,gr_handle->width,gr_handle->height,SrcStride);
             }
 
             gralloc->unlock(gralloc, handle);
-        }
+        //}
     }
     return 0;
+}
+
+static unsigned int HWC_Clockms(void)
+{
+	struct timespec t = { .tv_sec = 0, .tv_nsec = 0 };
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (unsigned int)(t.tv_sec * 1000 + t.tv_nsec / 1000000);
+}
+
+static void hwc_dump_fps(void)
+{
+	static unsigned int n_frames = 0;
+	static unsigned int lastTime = 0;
+
+	++n_frames;
+
+	if (property_get_bool("sys.hwc.fps", 0))
+	{
+		unsigned int time = HWC_Clockms();
+		unsigned int intv = time - lastTime;
+		if (intv >= HWC_DEBUG_FPS_INTERVAL_MS)
+		{
+			unsigned int fps = n_frames * 1000 / intv;
+			ALOGD_IF(log_level(DBG_DEBUG),"fps %u", fps);
+
+			n_frames = 0;
+			lastTime = time;
+		}
+	}
 }
 
 #endif
@@ -345,6 +373,28 @@ void DrmHwcNativeHandle::Clear() {
 }
 
 #if RK_DRM_HWC_DEBUG
+
+static const char *DrmFormatToString(uint32_t drm_format) {
+  switch (drm_format) {
+    case DRM_FORMAT_BGR888:
+      return "DRM_FORMAT_BGR888";
+    case DRM_FORMAT_ARGB8888:
+      return "DRM_FORMAT_ARGB8888";
+    case DRM_FORMAT_XBGR8888:
+      return "DRM_FORMAT_XBGR8888";
+    case DRM_FORMAT_ABGR8888:
+      return "DRM_FORMAT_ABGR8888";
+    case DRM_FORMAT_BGR565:
+      return "DRM_FORMAT_BGR565";
+    case DRM_FORMAT_YVU420:
+      return "DRM_FORMAT_YVU420";
+    case DRM_FORMAT_NV12:
+      return "DRM_FORMAT_NV12";
+    default:
+      return "<invalid>";
+  }
+}
+
 static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   if (!buffer) {
     *out << "buffer=<invalid>";
@@ -352,7 +402,7 @@ static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   }
 
   *out << "buffer[w/h/format]=";
-  *out << buffer->width << "/" << buffer->height << "/" << std::hex << buffer->format << std::dec;
+  *out << buffer->width << "/" << buffer->height << "/" << DrmFormatToString(buffer->format);
 }
 
 static const char *TransformToString(uint32_t transform) {
@@ -388,7 +438,7 @@ static const char *BlendingToString(DrmHwcBlending blending) {
 }
 
 void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
-    *out << "      [" << index << "] ";
+    *out << "DrmHwcLayer[" << index << "] ";
     DumpBuffer(buffer,out);
 
     *out << " transform=" << TransformToString(transform)
@@ -565,7 +615,7 @@ static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
 }
 
 #if RK_DRM_HWC_DEBUG
-static void dump_layer(hwc_layer_1_t *layer, int index) {
+static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
     struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
     size_t i;
   std::ostringstream out;
@@ -573,20 +623,44 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
 
     if(layer->flags & HWC_SKIP_LAYER)
     {
-        ALOGD_IF(log_level(DBG_INFO),"layer %p skipped", layer);
+        ALOGD_IF(log_level(DBG_VERBOSE),"layer %p skipped", layer);
     }
     else
     {
         if(drm_handle)
         {
-            out << "layer[" << index << "]=" << layer
-                << ",name=" << layer->LayerName
+            out << "layer[" << index << "]=" << layer->LayerName
+                << ",layer=" << layer
                 << ",type=" << layer->compositionType
                 << ",hints=" << layer->compositionType
                 << ",flags=" << layer->flags
                 << ",handle=" << layer->handle
                 << ",format=0x" << std::hex << drm_handle->format
-                << ",fd = " << std::dec << drm_handle->prime_fd
+                << ",fd =" << std::dec << drm_handle->prime_fd
+                << ",transform=0x" <<  std::hex << layer->transform
+                << ",blend=0x" << layer->blending
+                << ",sourceCropf{" << std::dec
+                    << layer->sourceCropf.left << "," << layer->sourceCropf.top << ","
+                    << layer->sourceCropf.right << "," << layer->sourceCropf.bottom
+                << "},sourceCrop{"
+                    << layer->sourceCrop.left << ","
+                    << layer->sourceCrop.top << ","
+                    << layer->sourceCrop.right << ","
+                    << layer->sourceCrop.bottom
+                << "},displayFrame{"
+                    << layer->displayFrame.left << ","
+                    << layer->displayFrame.top << ","
+                    << layer->displayFrame.right << ","
+                    << layer->displayFrame.bottom << "},";
+        }
+        else
+        {
+            out << "layer[" << index << "]=" << layer->LayerName
+                << ",layer=" << layer
+                << ",type=" << layer->compositionType
+                << ",hints=" << layer->compositionType
+                << ",flags=" << layer->flags
+                << ",handle=" << layer->handle
                 << ",transform=0x" <<  std::hex << layer->transform
                 << ",blend=0x" << layer->blending
                 << ",sourceCropf{" << std::dec
@@ -612,7 +686,7 @@ static void dump_layer(hwc_layer_1_t *layer, int index) {
                 << layer->visibleRegionScreen.rects[i].bottom << "},";
         }
         out << "\n";
-        ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
+        ALOGD_IF(log_level(DBG_VERBOSE) || bDump,"%s",out.str().c_str());
     }
 }
 #endif
@@ -673,6 +747,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
 #if RK_DRM_HWC_DEBUG
   init_log_level();
+  hwc_dump_fps();
 #endif
 
   for (int i = 0; i < (int)num_displays; ++i) {
@@ -702,18 +777,19 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     std::pair<int, int> skip_layer_indices(-1, -1);
     int num_layers = display_contents[i]->numHwLayers;
 #if RK_DRM_HWC_DEBUG
-    ALOGD_IF(log_level(DBG_INFO),"----------------------------frame=%d start----------------------------",g_frame);
+    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start----------------------------",g_frame);
+
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
-      dump_layer(layer,j);
+      dump_layer(false,layer,j);
     }
 #endif
 
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 #if RK_DRM_HWC
-      if(!use_framebuffer_target && !check_layer(layer) )
+      if(!use_framebuffer_target && !check_layer(layer))
         use_framebuffer_target = true;
 #endif
       if (!(layer->flags & HWC_SKIP_LAYER))
@@ -904,7 +980,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);
-      ALOGD_IF(log_level(DBG_INFO),"%s",out.str().c_str());
+      ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
 #endif
       map.layers.emplace_back(std::move(layer));
     }
@@ -941,7 +1017,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     }
   }
 #if RK_DRM_HWC_DEBUG
- ALOGD_IF(log_level(DBG_INFO),"----------------------------frame=%d end----------------------------",g_frame);
+ ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
  g_frame++;
 #endif
   composition.reset(NULL);

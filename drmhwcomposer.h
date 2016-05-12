@@ -47,7 +47,7 @@ namespace android {
 enum LOG_LEVEL
 {
     //Log level flag 
-    /*0*/
+    /*1*/
     DBG_VERBOSE = 1 << 0,
     /*2*/
     DBG_DEBUG = 1 << 1,
@@ -65,8 +65,24 @@ enum LOG_LEVEL
 bool log_level(LOG_LEVEL log_level);
 
 #if RK_DRM_HWC_DEBUG
+/* interval ms of print fps.*/
+#define HWC_DEBUG_FPS_INTERVAL_MS 1
+
+/* print time macros. */
+#define PRINT_TIME_START        \
+    struct timeval tpend1, tpend2;\
+    long usec1 = 0;\
+    gettimeofday(&tpend1,NULL);\
+
+#define PRINT_TIME_END(tag)        \
+    gettimeofday(&tpend2,NULL);\
+    usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;\
+    if (property_get_bool("sys.hwc.time", 0)) \
+    ALOGD_IF(log_level(DBG_DEBUG),"%s use time=%ld ms",tag,usec1);\
+
+
 struct DrmHwcLayer;
-int DumpLayer(int layer_index,DrmHwcLayer *layer);
+int DumpLayer(const char* layer_name,buffer_handle_t handle);
 #endif
 
 class Importer;

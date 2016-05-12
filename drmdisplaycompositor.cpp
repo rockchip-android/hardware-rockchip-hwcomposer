@@ -30,6 +30,7 @@
 #include <drm/drm_mode.h>
 #include <sync/sync.h>
 #include <utils/Trace.h>
+#include <cutils/properties.h>
 
 #include "autolock.h"
 #include "drmcrtc.h"
@@ -670,6 +671,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_DRM_HWC_DEBUG
   size_t index=0;
 #endif
+
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     DrmPlane *plane = comp_plane.plane;
     DrmCrtc *crtc = comp_plane.crtc;
@@ -717,7 +719,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
           break;
         }
 #if RK_DRM_HWC_DEBUG
-        DumpLayer(comp_plane.source_layer,&layer);
+        DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 #endif
         fb_id = layer.buffer->fb_id;
         display_frame = layer.display_frame;
@@ -742,7 +744,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
 
     // Disable the plane if there's no framebuffer
-    if (fb_id < 0) {
+    if (fb_id < 0 ) {
       ret = drmModePropertySetAdd(pset, plane->id(),
                                   plane->crtc_property().id(), 0) ||
             drmModePropertySetAdd(pset, plane->id(), plane->fb_property().id(),
@@ -817,7 +819,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 
 #if RK_DRM_HWC_DEBUG
     std::ostringstream out_log;
-    out_log << "      [" << index << "]"
+
+    out_log << "DrmDisplayCompositor[" << index << "]"
             << " plane=" << (plane ? plane->id() : -1)
             << " crct id=" << crtc->id()
             << " fb id=" << fb_id
@@ -866,7 +869,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
 #if RK_DRM_HWC_DEBUG
     out_log << "\n";
-    ALOGD_IF(log_level(DBG_INFO),"%s",out_log.str().c_str());
+    ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
+    out_log.clear();
 #endif
   }
 
@@ -875,7 +879,9 @@ out:
     uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
     if (test_only)
       flags |= DRM_MODE_ATOMIC_TEST_ONLY;
-
+#if RK_DRM_HWC_DEBUG
+PRINT_TIME_START;
+#endif
     ret = drmModePropertySetCommit(drm_->fd(), flags, drm_, pset);
     if (ret) {
       if (test_only)
@@ -885,6 +891,9 @@ out:
       drmModePropertySetFree(pset);
       return ret;
     }
+#if RK_DRM_HWC_DEBUG
+PRINT_TIME_END("commit");
+#endif
   }
   if (pset)
     drmModePropertySetFree(pset);
