@@ -75,8 +75,9 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
       return DRM_FORMAT_XBGR8888;
     case HAL_PIXEL_FORMAT_RGBA_8888:
       return DRM_FORMAT_ABGR8888;
+    //Fix color error in NenaMark2.
     case HAL_PIXEL_FORMAT_RGB_565:
-      return DRM_FORMAT_BGR565;
+      return DRM_FORMAT_RGB565;
     case HAL_PIXEL_FORMAT_YV12:
       return DRM_FORMAT_YVU420;
     case HAL_PIXEL_FORMAT_YCrCb_NV12:
@@ -130,7 +131,7 @@ int DrmGenericImporter::ReleaseBuffer(hwc_drm_bo_t *bo) {
   if (bo->fb_id)
     if (drmModeRmFB(drm_->fd(), bo->fb_id))
       ALOGE("Failed to rm fb");
-
+#if 1
   struct drm_gem_close gem_close;
   memset(&gem_close, 0, sizeof(gem_close));
   int num_gem_handles = sizeof(bo->gem_handles) / sizeof(bo->gem_handles[0]);
@@ -145,6 +146,8 @@ int DrmGenericImporter::ReleaseBuffer(hwc_drm_bo_t *bo) {
     else
       bo->gem_handles[i] = 0;
   }
+#endif
+
   return 0;
 }
 }

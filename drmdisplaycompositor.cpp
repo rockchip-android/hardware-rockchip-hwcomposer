@@ -31,7 +31,7 @@
 #include <sync/sync.h>
 #include <utils/Trace.h>
 #include <cutils/properties.h>
-
+#include <unistd.h>
 #include "autolock.h"
 #include "drmcrtc.h"
 #include "drmplane.h"
@@ -683,7 +683,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
     int gralloc_buffer_usage=0;
-
     switch (comp_plane.source_layer) {
       case DrmCompositionPlane::kSourceNone:
         break;
@@ -854,7 +853,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       out_log << " rotation=" << RotatingToString(rotation);
 #endif
     }
-
     if (plane->alpha_property().id()) {
       ret = drmModePropertySetAdd(pset, plane->id(),
                                   plane->alpha_property().id(), alpha);
@@ -882,6 +880,11 @@ out:
 #if RK_DRM_HWC_DEBUG
 PRINT_TIME_START;
 #endif
+    char value[PROPERTY_VALUE_MAX];
+    int new_value;
+    property_get("sys.hwc.msleep", value, "0");
+    new_value = atoi(value);
+    usleep(new_value*100);
     ret = drmModePropertySetCommit(drm_->fd(), flags, drm_, pset);
     if (ret) {
       if (test_only)
@@ -895,6 +898,7 @@ PRINT_TIME_START;
 PRINT_TIME_END("commit");
 #endif
   }
+
   if (pset)
     drmModePropertySetFree(pset);
 

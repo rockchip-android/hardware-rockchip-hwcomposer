@@ -630,7 +630,7 @@ static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
         if(drm_handle)
         {
             out << "layer[" << index << "]=" << layer->LayerName
-                << ",layer=" << layer
+                << "\n\tlayer=" << layer
                 << ",type=" << layer->compositionType
                 << ",hints=" << layer->compositionType
                 << ",flags=" << layer->flags
@@ -656,7 +656,7 @@ static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
         else
         {
             out << "layer[" << index << "]=" << layer->LayerName
-                << ",layer=" << layer
+                << "\n\tlayer=" << layer
                 << ",type=" << layer->compositionType
                 << ",hints=" << layer->compositionType
                 << ",flags=" << layer->flags
