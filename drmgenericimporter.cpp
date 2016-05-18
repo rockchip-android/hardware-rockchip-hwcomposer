@@ -124,6 +124,18 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
     return ret;
   }
 
+  //Fix "Failed to close gem handle" bug which lead by no reference counting.
+#if 1
+  struct drm_gem_close gem_close;
+  memset(&gem_close, 0, sizeof(gem_close));
+  gem_close.handle = bo->gem_handles[0];
+  ret = drmIoctl(drm_->fd(), DRM_IOCTL_GEM_CLOSE, &gem_close);
+    if (ret)
+      ALOGE("Failed to close gem handle %d", ret);
+    else
+      bo->gem_handles[0] = 0;
+#endif
+
   return ret;
 }
 
@@ -131,7 +143,7 @@ int DrmGenericImporter::ReleaseBuffer(hwc_drm_bo_t *bo) {
   if (bo->fb_id)
     if (drmModeRmFB(drm_->fd(), bo->fb_id))
       ALOGE("Failed to rm fb");
-#if 1
+#if 0
   struct drm_gem_close gem_close;
   memset(&gem_close, 0, sizeof(gem_close));
   int num_gem_handles = sizeof(bo->gem_handles) / sizeof(bo->gem_handles[0]);
