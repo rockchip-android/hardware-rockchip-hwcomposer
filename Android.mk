@@ -67,7 +67,7 @@ LOCAL_SRC_FILES += drmgenericimporter.cpp
 LOCAL_CPPFLAGS += -DUSE_DRM_GENERIC_IMPORTER -DRK_DRM_HWC_DEBUG=1 \
 		-DRK_DRM_GRALLOC=1 -DRK_DRM_HWC=1 -DUSE_SQUASH=1 -DUSE_PRE_COMP=1 \
 		-DUSE_MULTI_AREAS=1
-MAJOR_VERSION := "RK_GRAPHICS_VER=commit-id:$(shell cd $(LOCAL_PATH) && git log  -1 --oneline | awk '{print $1}')"
+MAJOR_VERSION := "RK_GRAPHICS_VER=commit-id:$(shell cd $(LOCAL_PATH) && git log  -1 --oneline | awk '{print $$1}')"
 LOCAL_CFLAGS += -DRK_GRAPHICS_VER=\"$(MAJOR_VERSION)\"
 endif
 
