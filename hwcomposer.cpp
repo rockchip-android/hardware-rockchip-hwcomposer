@@ -584,7 +584,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   if (ret)
     return ret;
 
-#if 1
+#if 0
   gralloc_buffer_usage= drm_handle->usage;
 #else
   ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
