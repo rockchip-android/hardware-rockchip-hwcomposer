@@ -29,7 +29,7 @@
 #define BLEND_MASK 0xFFFF
 
 /*hwc version*/
-#define GHWC_VERSION                    "0.02"
+#define GHWC_VERSION                    "0.03"
 
 struct hwc_import_context;
 
