@@ -723,8 +723,25 @@ static int hwc_get_string_property(const char* pcProperty,const char* default_va
     return 0;
 }
 
+static bool vop_support_format(uint32_t hal_format) {
+  switch (hal_format) {
+    case HAL_PIXEL_FORMAT_RGB_888:
+    case HAL_PIXEL_FORMAT_BGRA_8888:
+    case HAL_PIXEL_FORMAT_RGBX_8888:
+    case HAL_PIXEL_FORMAT_RGBA_8888:
+    case HAL_PIXEL_FORMAT_RGB_565:
+    case HAL_PIXEL_FORMAT_YCrCb_NV12:
+        return true;
+    default:
+      return false;
+  }
+}
+
 static bool check_layer(hwc_layer_1_t * Layer) {
-    if (Layer->flags & HWC_SKIP_LAYER){
+struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
+    if (Layer->flags & HWC_SKIP_LAYER
+        || (drm_handle && !vop_support_format(drm_handle->format))
+        ){
         return false;
     }
     return true;

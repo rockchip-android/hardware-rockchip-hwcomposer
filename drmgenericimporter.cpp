@@ -113,6 +113,13 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
+    if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+    {
+        bo->pitches[1] = gr_handle->byte_stride;
+        bo->gem_handles[1] = gem_handle;
+        bo->offsets[1] = gr_handle->width * gr_handle->height;
+    }
+
   ret = drmModeAddFB2(drm_->fd(), bo->width, bo->height, bo->format,
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
   if (ret) {
@@ -126,13 +133,26 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   //Fix "Failed to close gem handle" bug which lead by no reference counting.
 #if 1
   struct drm_gem_close gem_close;
+  int num_gem_handles;
   memset(&gem_close, 0, sizeof(gem_close));
-  gem_close.handle = bo->gem_handles[0];
-  ret = drmIoctl(drm_->fd(), DRM_IOCTL_GEM_CLOSE, &gem_close);
+
+ if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+    num_gem_handles = 2;
+ else
+    num_gem_handles = 1;
+
+ for (int i = 0; i < num_gem_handles; i++) {
+    if (!bo->gem_handles[i])
+      continue;
+
+    gem_close.handle = bo->gem_handles[i];
+    int ret = drmIoctl(drm_->fd(), DRM_IOCTL_GEM_CLOSE, &gem_close);
     if (ret)
-      ALOGE("Failed to close gem handle %d", ret);
+      ALOGE("Failed to close gem handle %d %d", i, ret);
     else
-      bo->gem_handles[0] = 0;
+      bo->gem_handles[i] = 0;
+  }
+
 #endif
 
   return ret;
