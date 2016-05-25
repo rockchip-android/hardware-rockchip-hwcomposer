@@ -741,6 +741,7 @@ static bool check_layer(hwc_layer_1_t * Layer) {
 struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
+        || (Layer->transform)
         ){
         return false;
     }
