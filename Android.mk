@@ -61,7 +61,7 @@ ifeq ($(strip $(BOARD_DRM_HWCOMPOSER_BUFFER_IMPORTER)),nvidia-gralloc)
 LOCAL_SRC_FILES += nvimporter.cpp
 LOCAL_CPPFLAGS += -DUSE_NVIDIA_IMPORTER
 else
-LOCAL_C_INCLUDES += external/drm_gralloc
+LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_SRC_FILES += drmgenericimporter.cpp
 # -DRK_DRM_HWC -DRK_DRM_HWC_DEBUG -DUSE_SQUASH=1 -DUSE_PRE_COMP=1
 LOCAL_CPPFLAGS += -DUSE_DRM_GENERIC_IMPORTER -DRK_DRM_HWC_DEBUG=1 \
