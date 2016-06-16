@@ -539,6 +539,17 @@ int is_need_stereo(hwcContext* ctx, hwc_display_contents_1_t *list)
     return 0;
 }
 
+bool is_boot_skip_platform(hwcContext * context)
+{
+    bool skipPlatform  = false;
+
+    skipPlatform = skipPlatform || context->IsRk3126;
+    skipPlatform = skipPlatform || context->IsRk3128;
+    skipPlatform = skipPlatform || context->IsRk322x;
+
+    return skipPlatform;
+}
+
 void hwc_sync(hwc_display_contents_1_t  *list)
 {
     if (list == NULL)
@@ -2192,7 +2203,8 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 #if hwcDumpSurface
     _DumpSurface(list);
 #endif
-    if(context->bootCount < 1 && context->IsRk322x)
+
+    if(context->bootCount < 1 && is_boot_skip_platform(context))
     {
         hwc_list_nodraw(list);
         return 0;
@@ -3867,7 +3879,7 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     }
 
     /* Check layer list. */
-    if(context->IsRk322x)
+    if(is_boot_skip_platform(context))
         force_skip = context->bootCount < 1;
     else
         force_skip = context->bootCount < 5;
@@ -5228,9 +5240,9 @@ int hotplug_get_config(int flag)
     context->pmemPhysical = ~0U;
     context->pmemLength   = 0;
     property_get("ro.rk.soc", pro_value, "0");
-    context->IsRk3188 = !strcmp(pro_value, "rk3188");
-    context->IsRk3126 = !strcmp(pro_value, "rk3126");
-    context->IsRk3128 = !strcmp(pro_value, "rk3128");
+    context->IsRk3188 = !!strstr(pro_value, "rk3188");
+    context->IsRk3126 = !!strstr(pro_value, "rk3126");
+    context->IsRk3128 = !!strstr(pro_value, "rk3128");
     context->IsRk322x = !!strstr(pro_value, "rk322");
     property_get("ro.target.product", pro_value, "0");
     context->IsRkBox = !strcmp(pro_value, "box");
