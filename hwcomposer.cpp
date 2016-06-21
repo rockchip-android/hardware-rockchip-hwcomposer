@@ -444,10 +444,7 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
     *out << " transform=" << TransformToString(transform)
          << " blending[a=" << (int)alpha
          << "]=" << BlendingToString(blending) << " source_crop";
-    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
-        source_crop.Dump(out);
-    else
-        isource_crop.Dump(out);
+    source_crop.Dump(out);
     *out << " display_frame";
     display_frame.Dump(out);
 
@@ -472,9 +469,6 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   source_crop = DrmHwcRect<float>(
       sf_layer->sourceCropf.left, sf_layer->sourceCropf.top,
       sf_layer->sourceCropf.right, sf_layer->sourceCropf.bottom);
-  isource_crop = DrmHwcRect<int>(
-      sf_layer->sourceCrop.left, sf_layer->sourceCrop.top,
-      sf_layer->sourceCrop.right, sf_layer->sourceCrop.bottom);
   display_frame = DrmHwcRect<int>(
       sf_layer->displayFrame.left, sf_layer->displayFrame.top,
       sf_layer->displayFrame.right, sf_layer->displayFrame.bottom);
@@ -492,52 +486,29 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     else
         is_yuv = false;
 
-    if(gralloc_buffer_usage & GRALLOC_USAGE_HW_FB)
-    {
-        if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
-            ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
-            h_scale_mul = (float) (source_crop.bottom - source_crop.top)
-                    / (display_frame.right - display_frame.left);
-            v_scale_mul = (float) (source_crop.right - source_crop.left)
-                    / (display_frame.bottom - display_frame.top);
-        }else{
-            h_scale_mul = (float) (source_crop.right - source_crop.left)
-                    / (display_frame.right - display_frame.left);
-
-            v_scale_mul = (float) (source_crop.bottom - source_crop.top)
-                    / (display_frame.bottom - display_frame.top);
-        }
-        width = source_crop.right - source_crop.left;
-        height = source_crop.bottom - source_crop.top;
+   if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
+       ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
+	h_scale_mul = (float) (source_crop.bottom - source_crop.top)
+          / (display_frame.right - display_frame.left);
+	v_scale_mul = (float) (source_crop.right - source_crop.left)
+	 / (display_frame.bottom - display_frame.top);
+    } else {
+        h_scale_mul = (float) (source_crop.right - source_crop.left)
+	/ (display_frame.right - display_frame.left);
+        v_scale_mul = (float) (source_crop.bottom - source_crop.top)
+	/ (display_frame.bottom - display_frame.top);
     }
-    else
-    {
-        if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
-            ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
-            h_scale_mul = (float) (isource_crop.bottom - isource_crop.top)
-                    / (display_frame.right - display_frame.left);
-            v_scale_mul = (float) (isource_crop.right - isource_crop.left)
-                    / (display_frame.bottom - display_frame.top);
-        }else{
-            h_scale_mul = (float) (isource_crop.right - isource_crop.left)
-                    / (display_frame.right - display_frame.left);
-
-            v_scale_mul = (float) (isource_crop.bottom - isource_crop.top)
-                    / (display_frame.bottom - display_frame.top);
-        }
-        width = isource_crop.right - isource_crop.left;
-        height = isource_crop.bottom - isource_crop.top;
-    }
+    width = source_crop.right - source_crop.left;
+    height = source_crop.bottom - source_crop.top;
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
+    is_match = false;
 
     bpp = android::bytesPerPixel(format);
     size = width * height * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
     name=sf_layer->LayerName;
 
-    ALOGV("InitFromHwcLayer layer name=%s,isource_crop(%d,%d,%d,%d)",sf_layer->LayerName,
-    isource_crop.left,isource_crop.top,isource_crop.right,isource_crop.bottom);
     ALOGV("\tsourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
     source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
     ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large",h_scale_mul,v_scale_mul,is_scale,is_large);
@@ -561,7 +532,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       transform |= DrmHwcTransform::kRotate90;
   }
 
-  switch (sf_layer->blending & BLEND_MASK) {
+  switch (sf_layer->blending) {
     case HWC_BLENDING_NONE:
       blending = DrmHwcBlending::kNone;
       break;

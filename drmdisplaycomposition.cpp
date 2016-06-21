@@ -241,6 +241,9 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 for(std::vector<DrmHwcLayer*>::const_iterator iter_layer= layer_vector.begin();
                     !layer_vector.empty() && iter_layer != layer_vector.end();++iter_layer)
                 {
+                    if((*iter_layer)->is_match)
+                        continue;
+
                     //loop plane
                     for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
                         !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
@@ -265,10 +268,7 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                     layers_remaining.erase(iter_index);
                             }
 
-                            layer_vector.erase(iter_layer);
-                            //It need minus one because it delete one layer before.
-                            iter_layer--;
-
+                            (*iter_layer)->is_match = true;
                             (*iter_plane)->set_use(true);
 
                             //erase the plane from primary_planes or overlay_planes
@@ -750,43 +750,21 @@ int DrmDisplayComposition::Plan(SquashState *squash,
             i++;
     }
 
-#if 0
-  /*
-  for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
-       iter != layer_map_.end(); ++iter) {
-        if(iter->second.size() > 1) {
-            int i=0,j=0;
-            for(std::vector<DrmHwcLayer*>::iterator iter_layer1 = iter->second.begin();
-                i < iter->second.size()-1;++iter_layer1,++i) {
-                j=i+1;
-                for(std::vector<DrmHwcLayer*>::iterator iter_layer2 = (iter_layer1+1);
-                    j < iter->second.size();++iter_layer2,++j) {
-                     if((*iter_layer1)->display_frame.left > (*iter_layer2)->display_frame.left) {
-                        ALOGD("swap %s and %s",(*iter_layer1)->name.c_str(),(*iter_layer2)->name.c_str());
-                        std::swap(*iter_layer1,*iter_layer2);
-                     }
-                 }
-            }
-        }
-  }*/
-
+  //sort layer by xpos
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
         if(iter->second.size() > 1) {
             for(int i=0;i < iter->second.size()-1;i++) {
                 for(int j=i+1;j < iter->second.size();j++) {
                      if(iter->second[i]->display_frame.left > iter->second[j]->display_frame.left) {
-                 //       ALOGD("swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
-                       // DrmHwcLayer* tmp_layer=std::move(iter->second[i]);
-                        //iter->second[i] = std::move(iter->second[j]);
-                        //iter->second[j] = std::move(tmp_layer);
+                        ALOGV("swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
                         std::swap(iter->second[i],iter->second[j]);
+                        break;
                      }
                  }
             }
         }
   }
-#endif
 
 #if RK_DRM_HWC_DEBUG
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
@@ -807,6 +785,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   std::vector<DrmCompositionPlane> composition_planes_bk = composition_planes_;
   bool bMatch = false;
   layers_remaining_bk = layers_remaining;
+
   for (DrmDisplayComposition::LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
         bMatch = MatchPlane(iter->second,layers_remaining,&last_zpos,primary_planes,overlay_planes);

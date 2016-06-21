@@ -26,7 +26,6 @@
 #include "separate_rects.h"
 #include "drmhwcgralloc.h"
 
-#define BLEND_MASK 0xFFFF
 
 /*hwc version*/
 #define GHWC_VERSION                    "0.03"
@@ -190,7 +189,6 @@ struct DrmHwcLayer {
   DrmHwcBlending blending = DrmHwcBlending::kNone;
   uint8_t alpha = 0xff;
   DrmHwcRect<float> source_crop;
-  DrmHwcRect<int> isource_crop;
   DrmHwcRect<int> display_frame;
   std::vector<DrmHwcRect<int>> source_damage;
 
@@ -198,6 +196,7 @@ struct DrmHwcLayer {
   OutputFd release_fence;
 
 #if RK_DRM_HWC
+  bool is_match;
   bool is_yuv;
   bool is_scale;
   bool is_large;
