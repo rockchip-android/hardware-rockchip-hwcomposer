@@ -224,6 +224,8 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
     bool b_yuv;
     std::vector<PlaneGroup *> ::const_iterator iter;
     std::vector<PlaneGroup *>& plane_groups=drm_->GetPlaneGroups();
+    uint64_t rotation = 0;
+    uint64_t alpha = 0xFF;
 
     //loop plane groups.
     for (iter = plane_groups.begin();
@@ -253,6 +255,29 @@ bool DrmDisplayComposition::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                         {
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
+                                continue;
+
+                            if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
+                                alpha = (*iter_layer)->alpha;
+                            if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+                            {
+                                ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
+                                ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
+                                continue;
+                            }
+
+                            rotation = 0;
+                            if ((*iter_layer)->transform & DrmHwcTransform::kFlipH)
+                                rotation |= 1 << DRM_REFLECT_X;
+                            if ((*iter_layer)->transform & DrmHwcTransform::kFlipV)
+                                rotation |= 1 << DRM_REFLECT_Y;
+                            if ((*iter_layer)->transform & DrmHwcTransform::kRotate90)
+                                rotation |= 1 << DRM_ROTATE_90;
+                            else if ((*iter_layer)->transform & DrmHwcTransform::kRotate180)
+                                rotation |= 1 << DRM_ROTATE_180;
+                            else if ((*iter_layer)->transform & DrmHwcTransform::kRotate270)
+                                rotation |= 1 << DRM_ROTATE_270;
+                            if(rotation && (*iter_plane)->rotation_property().id() == 0)
                                 continue;
 
                             ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
