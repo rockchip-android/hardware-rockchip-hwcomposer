@@ -30,7 +30,7 @@ LOCAL_SHARED_LIBRARIES := \
 
 
 LOCAL_C_INCLUDES := \
-        external/drm_gralloc \
+        hardware/rockchip/libgralloc \
 	external/libdrm \
 	external/libdrm/include/drm \
 	system/core/include/utils \
