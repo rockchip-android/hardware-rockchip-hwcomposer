@@ -23,6 +23,7 @@ LOCAL_SHARED_LIBRARIES := \
 	libEGL \
 	libGLESv2 \
 	libhardware \
+	libhardware_legacy \
 	liblog \
 	libsync \
 	libui \
@@ -60,6 +61,7 @@ LOCAL_SRC_FILES := \
 	separate_rects.cpp \
 	virtualcompositorworker.cpp \
 	vsyncworker.cpp \
+	hotplugworker.cpp \
 	worker.cpp
 
 ifeq ($(strip $(BOARD_DRM_HWCOMPOSER_BUFFER_IMPORTER)),nvidia-gralloc)

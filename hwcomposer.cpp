@@ -23,6 +23,7 @@
 #include "platform.h"
 #include "virtualcompositorworker.h"
 #include "vsyncworker.h"
+#include "hotplugworker.h"
 
 #include <stdlib.h>
 
@@ -255,6 +256,7 @@ typedef struct hwc_drm_display {
 
   std::vector<uint32_t> config_ids;
 
+  HotplugWorker hotplug_worker;
   VSyncWorker vsync_worker;
 } hwc_drm_display_t;
 
@@ -1130,7 +1132,10 @@ static void hwc_register_procs(struct hwc_composer_device_1 *dev,
   ctx->procs = procs;
 
   for (std::pair<const int, hwc_drm_display> &display_entry : ctx->displays)
+  {
     display_entry.second.vsync_worker.SetProcs(procs);
+    display_entry.second.hotplug_worker.SetProcs(procs);
+  }
 
   ctx->hotplug_handler.Init(&ctx->drm, procs);
   ctx->drm.event_listener()->RegisterHotplugHandler(&ctx->hotplug_handler);
@@ -1314,6 +1319,12 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
   int ret = hwc_set_initial_config(hd);
   if (ret) {
     ALOGE("Failed to set initial config for d=%d ret=%d", display, ret);
+    return ret;
+  }
+
+  ret = hd->hotplug_worker.Init(&ctx->drm, display);
+  if (ret) {
+    ALOGE("Failed to create event worker for display %d %d\n", display, ret);
     return ret;
   }
 
