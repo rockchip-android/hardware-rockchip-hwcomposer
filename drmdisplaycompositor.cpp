@@ -324,13 +324,12 @@ int DrmDisplayCompositor::QueueComposition(
         return -ENODEV;
       break;
     case DRM_COMPOSITION_TYPE_DPMS:
+    case DRM_COMPOSITION_TYPE_MODESET:
       /*
        * Update the state as soon as we get it so we can start/stop queuing
        * frames asap.
        */
       active_ = (composition->dpms_mode() == DRM_MODE_DPMS_ON);
-      break;
-    case DRM_COMPOSITION_TYPE_MODESET:
       break;
     case DRM_COMPOSITION_TYPE_EMPTY:
       return 0;
