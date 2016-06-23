@@ -70,7 +70,7 @@ void DrmConnector::set_display(int display) {
 
 bool DrmConnector::built_in() const {
   return type_ == DRM_MODE_CONNECTOR_LVDS || type_ == DRM_MODE_CONNECTOR_eDP ||
-         type_ == DRM_MODE_CONNECTOR_DSI;
+         type_ == DRM_MODE_CONNECTOR_DSI || type_ == DRM_MODE_CONNECTOR_VIRTUAL;
 }
 
 int DrmConnector::UpdateModes() {
@@ -81,6 +81,8 @@ int DrmConnector::UpdateModes() {
     ALOGE("Failed to get connector %d", id_);
     return -ENODEV;
   }
+
+  state_ = c->connection;
 
   std::vector<DrmMode> new_modes;
   for (int i = 0; i < c->count_modes; ++i) {
@@ -125,6 +127,10 @@ DrmEncoder *DrmConnector::encoder() const {
 
 void DrmConnector::set_encoder(DrmEncoder *encoder) {
   encoder_ = encoder;
+}
+
+drmModeConnection DrmConnector::state() const {
+  return state_;
 }
 
 uint32_t DrmConnector::mm_width() const {

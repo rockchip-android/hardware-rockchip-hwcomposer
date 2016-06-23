@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "hwc-drm-generic-importer"
+#define LOG_TAG "hwc-platform-drm-generic"
 
-#include "importer.h"
 #include "drmresources.h"
-#include "drmgenericimporter.h"
+#include "platform.h"
+#include "platformdrmgeneric.h"
 
 #include <drm/drm_fourcc.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
 #include <cutils/log.h>
-#include <gralloc_drm_priv.h>
 #include <gralloc_drm_handle.h>
 #include <hardware/gralloc.h>
 
@@ -92,12 +91,6 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   if (!gr_handle)
     return -EINVAL;
 
-  struct gralloc_drm_bo_t *gralloc_bo = gr_handle->data;
-  if (!gralloc_bo) {
-    ALOGE("Could not get drm bo from handle");
-    return -EINVAL;
-  }
-
   uint32_t gem_handle;
   int ret = drmPrimeFDToHandle(drm_->fd(), gr_handle->prime_fd, &gem_handle);
   if (ret) {
@@ -109,17 +102,16 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   bo->width = gr_handle->width;
   bo->height = gr_handle->height;
   bo->format = ConvertHalFormatToDrm(gr_handle->format);
-  bo->pitches[0] = gr_handle->byte_stride;
+  bo->pitches[0] = gr_handle->stride;
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
     if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
     {
-        bo->pitches[1] = gr_handle->byte_stride;
+        bo->pitches[1] = gr_handle->stride;
         bo->gem_handles[1] = gem_handle;
         bo->offsets[1] = gr_handle->width * gr_handle->height;
     }
-
   ret = drmModeAddFB2(drm_->fd(), bo->width, bo->height, bo->format,
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
   if (ret) {
@@ -162,6 +154,7 @@ int DrmGenericImporter::ReleaseBuffer(hwc_drm_bo_t *bo) {
   if (bo->fb_id)
     if (drmModeRmFB(drm_->fd(), bo->fb_id))
       ALOGE("Failed to rm fb");
+
 #if 0
   struct drm_gem_close gem_close;
   memset(&gem_close, 0, sizeof(gem_close));
@@ -178,7 +171,14 @@ int DrmGenericImporter::ReleaseBuffer(hwc_drm_bo_t *bo) {
       bo->gem_handles[i] = 0;
   }
 #endif
-
   return 0;
 }
+
+#ifdef USE_DRM_GENERIC_IMPORTER
+std::unique_ptr<Planner> Planner::CreateInstance(DrmResources *) {
+  std::unique_ptr<Planner> planner(new Planner);
+  planner->AddStage<PlanStageGreedy>();
+  return planner;
+}
+#endif
 }

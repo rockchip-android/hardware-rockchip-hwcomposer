@@ -18,13 +18,15 @@
 #define LOG_TAG "hwcomposer-drm"
 
 #include "drmhwcomposer.h"
+#include "drmeventlistener.h"
 #include "drmresources.h"
-#include "importer.h"
+#include "platform.h"
 #include "virtualcompositorworker.h"
 #include "vsyncworker.h"
 
 #include <stdlib.h>
 
+#include <cinttypes>
 #include <map>
 #include <vector>
 #include <sstream>
@@ -256,6 +258,62 @@ typedef struct hwc_drm_display {
   VSyncWorker vsync_worker;
 } hwc_drm_display_t;
 
+class DrmHotplugHandler : public DrmEventHandler {
+ public:
+  void Init(DrmResources *drm, const struct hwc_procs *procs) {
+    drm_ = drm;
+    procs_ = procs;
+  }
+
+  void HandleEvent(uint64_t timestamp_us) {
+    for (auto &conn : drm_->connectors()) {
+      drmModeConnection old_state = conn->state();
+
+      conn->UpdateModes();
+
+      drmModeConnection cur_state = conn->state();
+
+      if (cur_state == old_state)
+        continue;
+
+      ALOGI("%s event @%" PRIu64 " for connector %u\n",
+            cur_state == DRM_MODE_CONNECTED ? "Plug" : "Unplug", timestamp_us,
+            conn->id());
+
+      if (cur_state == DRM_MODE_CONNECTED) {
+        // Take the first one, then look for the preferred
+        DrmMode mode = *(conn->modes().begin());
+        for (auto &m : conn->modes()) {
+          if (m.type() & DRM_MODE_TYPE_PREFERRED) {
+            mode = m;
+            break;
+          }
+        }
+        ALOGI("Setting mode %dx%d for connector %d\n", mode.h_display(),
+              mode.v_display(), conn->id());
+        int ret = drm_->SetDisplayActiveMode(conn->display(), mode);
+        if (ret) {
+          ALOGE("Failed to set active config %d", ret);
+          return;
+        }
+      } else {
+        int ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_OFF);
+        if (ret) {
+          ALOGE("Failed to set dpms mode off %d", ret);
+          return;
+        }
+      }
+
+      procs_->hotplug(procs_, conn->display(),
+                      cur_state == DRM_MODE_CONNECTED ? 1 : 0);
+    }
+  }
+
+ private:
+  DrmResources *drm_ = NULL;
+  const struct hwc_procs *procs_ = NULL;
+};
+
 struct hwc_context_t {
   // map of display:hwc_drm_display_t
   typedef std::map<int, hwc_drm_display_t> DisplayMap;
@@ -273,6 +331,7 @@ struct hwc_context_t {
   const gralloc_module_t *gralloc;
   DummySwSyncTimeline dummy_timeline;
   VirtualCompositorWorker virtual_compositor_worker;
+  DrmHotplugHandler hotplug_handler;
 };
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
@@ -713,7 +772,7 @@ struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->h
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
         || (Layer->transform)
-/*        || ((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha)*/
+         /*||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha)*/
         ){
         return false;
     }
@@ -775,7 +834,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       dump_layer(false,layer,j);
     }
 #endif
-
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 #if RK_DRM_HWC
@@ -802,7 +860,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             frame->right <= 0 || frame->bottom <= 0 ||
             frame->left >= (int)mode.h_display() ||
             frame->top >= (int)mode.v_display())
+         {
             continue;
+         }
 
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
@@ -1071,6 +1131,9 @@ static void hwc_register_procs(struct hwc_composer_device_1 *dev,
 
   for (std::pair<const int, hwc_drm_display> &display_entry : ctx->displays)
     display_entry.second.vsync_worker.SetProcs(procs);
+
+  ctx->hotplug_handler.Init(&ctx->drm, procs);
+  ctx->drm.event_listener()->RegisterHotplugHandler(&ctx->hotplug_handler);
 }
 
 static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
@@ -1187,6 +1250,10 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
     ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
+
+  if (c->state() != DRM_MODE_CONNECTED)
+    return -ENODEV;
+
   DrmMode mode;
   for (const DrmMode &conn_mode : c->modes()) {
     if (conn_mode.id() == hd->config_ids[index]) {
@@ -1201,6 +1268,11 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
   int ret = ctx->drm.SetDisplayActiveMode(display, mode);
   if (ret) {
     ALOGE("Failed to set active config %d", ret);
+    return ret;
+  }
+  ret = ctx->drm.SetDpmsMode(display, DRM_MODE_DPMS_ON);
+  if (ret) {
+    ALOGE("Failed to set dpms mode on %d", ret);
     return ret;
   }
   return ret;
@@ -1353,19 +1425,19 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
 }
 
 static struct hw_module_methods_t hwc_module_methods = {
-  open : android::hwc_device_open
+  .open = android::hwc_device_open
 };
 
 hwc_module_t HAL_MODULE_INFO_SYM = {
-  common : {
-    tag : HARDWARE_MODULE_TAG,
-    version_major : 1,
-    version_minor : 0,
-    id : HWC_HARDWARE_MODULE_ID,
-    name : "DRM hwcomposer module",
-    author : "The Android Open Source Project",
-    methods : &hwc_module_methods,
-    dso : NULL,
-    reserved : {0},
+  .common = {
+    .tag = HARDWARE_MODULE_TAG,
+    .version_major = 1,
+    .version_minor = 0,
+    .id = HWC_HARDWARE_MODULE_ID,
+    .name = "DRM hwcomposer module",
+    .author = "The Android Open Source Project",
+    .methods = &hwc_module_methods,
+    .dso = NULL,
+    .reserved = {0},
   }
 };

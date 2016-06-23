@@ -21,7 +21,6 @@
 #include "drmhwcomposer.h"
 #include "drmplane.h"
 #include "glworker.h"
-#include "importer.h"
 
 #include <sstream>
 #include <vector>
@@ -33,7 +32,15 @@
 
 namespace android {
 
-struct SquashState;
+class Importer;
+class Planner;
+class SquashState;
+
+#if RK_DRM_HWC
+  typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
+  typedef LayerMap::iterator LayerMapIter;
+#endif
+
 
 enum DrmCompositionType {
   DRM_COMPOSITION_TYPE_EMPTY,
@@ -47,19 +54,61 @@ struct DrmCompositionRegion {
   std::vector<size_t> source_layers;
 };
 
-struct DrmCompositionPlane {
-  const static size_t kSourceNone = SIZE_MAX;
-  const static size_t kSourcePreComp = kSourceNone - 1;
-  const static size_t kSourceSquash = kSourcePreComp - 1;
-  const static size_t kSourceLayerMax = kSourceSquash - 1;
-  DrmPlane *plane;
-  DrmCrtc *crtc;
-  size_t source_layer;
-  size_t source_layer_bk;
+class DrmCompositionPlane {
+ public:
+  enum class Type : int32_t {
+    kDisable,
+    kLayer,
+    kPrecomp,
+    kSquash,
+  };
+
+  DrmCompositionPlane() = default;
+  DrmCompositionPlane(DrmCompositionPlane &&rhs) = default;
+  DrmCompositionPlane &operator=(DrmCompositionPlane &&other) = default;
+  DrmCompositionPlane(Type type, DrmPlane *plane, DrmCrtc *crtc)
+      : type_(type), plane_(plane), crtc_(crtc) {
+  }
+  DrmCompositionPlane(Type type, DrmPlane *plane, DrmCrtc *crtc,
+                      size_t source_layer)
+      : type_(type),
+        plane_(plane),
+        crtc_(crtc),
+        source_layers_(1, source_layer) {
+  }
+
+  Type type() const {
+    return type_;
+  }
+
+  DrmPlane *plane() const {
+    return plane_;
+  }
+  void set_plane(DrmPlane *plane) {
+    plane_ = plane;
+  }
+
+  DrmCrtc *crtc() const {
+    return crtc_;
+  }
+
+  std::vector<size_t> &source_layers() {
+    return source_layers_;
+  }
+
+  const std::vector<size_t> &source_layers() const {
+    return source_layers_;
+  }
 
 #if RK_DRM_HWC_DEBUG
   void dump_drm_com_plane(int index, std::ostringstream *out) const;
 #endif
+
+ private:
+  Type type_ = Type::kDisable;
+  DrmPlane *plane_ = NULL;
+  DrmCrtc *crtc_ = NULL;
+  std::vector<size_t> source_layers_;
 };
 
 class DrmDisplayComposition {
@@ -69,15 +118,18 @@ class DrmDisplayComposition {
   ~DrmDisplayComposition();
 
   int Init(DrmResources *drm, DrmCrtc *crtc, Importer *importer,
-           uint64_t frame_no);
+           Planner *planner, uint64_t frame_no);
 
   int SetLayers(DrmHwcLayer *layers, size_t num_layers, bool geometry_changed);
+  int AddPlaneComposition(DrmCompositionPlane plane);
   int AddPlaneDisable(DrmPlane *plane);
   int SetDpmsMode(uint32_t dpms_mode);
   int SetDisplayMode(const DrmMode &display_mode);
 
   int Plan(SquashState *squash, std::vector<DrmPlane *> *primary_planes,
            std::vector<DrmPlane *> *overlay_planes);
+
+  int FinalizeComposition();
 
   int CreateNextTimelineFence();
   int SignalSquashDone() {
@@ -134,6 +186,10 @@ class DrmDisplayComposition {
     return importer_;
   }
 
+  Planner *planner() const {
+    return planner_;
+  }
+
   void Dump(std::ostringstream *out) const;
 
  private:
@@ -141,28 +197,16 @@ class DrmDisplayComposition {
 
   int IncreaseTimelineToPoint(int point);
 
-
+  int FinalizeComposition(DrmHwcRect<int> *exclude_rects,
+                          size_t num_exclude_rects);
+  void SeparateLayers(DrmHwcRect<int> *exclude_rects, size_t num_exclude_rects);
   int CreateAndAssignReleaseFences();
-
-#if RK_DRM_HWC
-  void EmplaceCompositionPlane(size_t source_layer,
-                                                    std::vector<size_t>& layers_remaining,
-                                                    std::vector<DrmPlane *> *primary_planes,
-                                                    std::vector<DrmPlane *> *overlay_planes);
-  bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
-                               std::vector<size_t>& layers_remaining,
-                               uint64_t* zpos,
-                               std::vector<DrmPlane *> *primary_planes,
-                               std::vector<DrmPlane *> *overlay_planes);
-#else
-  void EmplaceCompositionPlane(size_t source_layer,
-                               std::vector<DrmPlane *> *primary_planes,
-                               std::vector<DrmPlane *> *overlay_planes);
-#endif
+  void combine_layer();
 
   DrmResources *drm_ = NULL;
   DrmCrtc *crtc_ = NULL;
   Importer *importer_ = NULL;
+  Planner *planner_ = NULL;
 
   DrmCompositionType type_ = DRM_COMPOSITION_TYPE_EMPTY;
   uint32_t dpms_mode_ = DRM_MODE_DPMS_ON;
@@ -181,8 +225,6 @@ class DrmDisplayComposition {
   std::vector<DrmCompositionPlane> composition_planes_;
 
 #if RK_DRM_HWC
-  typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
-  typedef LayerMap::iterator LayerMapIter;
   LayerMap layer_map_;
 #endif
 

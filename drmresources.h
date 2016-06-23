@@ -21,6 +21,7 @@
 #include "drmconnector.h"
 #include "drmcrtc.h"
 #include "drmencoder.h"
+#include "drmeventlistener.h"
 #include "drmplane.h"
 
 #include <stdint.h>
@@ -43,6 +44,7 @@ typedef struct tagPlaneGroup{
 class DrmResources {
  public:
   DrmResources();
+  ~DrmResources();
 
   int Init();
 
@@ -68,6 +70,7 @@ class DrmResources {
   DrmCrtc *GetCrtcForDisplay(int display) const;
   DrmPlane *GetPlane(uint32_t id) const;
   DrmCompositor *compositor();
+  DrmEventListener *event_listener();
 
   int GetPlaneProperty(const DrmPlane &plane, const char *prop_name,
                        DrmProperty *property);
@@ -93,7 +96,7 @@ class DrmResources {
 #endif
 
 #if RK_DRM_HWC
-std::vector<PlaneGroup *>& GetPlaneGroups();
+  std::vector<PlaneGroup *>& GetPlaneGroups();
 #endif
 
  private:
@@ -122,6 +125,7 @@ std::vector<PlaneGroup *>& GetPlaneGroups();
   std::vector<PlaneGroup *> plane_groups_;
 #endif
   DrmCompositor compositor_;
+  DrmEventListener event_listener_;
 };
 }
 

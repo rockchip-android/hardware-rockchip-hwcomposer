@@ -45,7 +45,7 @@ namespace android {
 #define UN_USED(arg)     (arg=arg)
 enum LOG_LEVEL
 {
-    //Log level flag 
+    //Log level flag
     /*1*/
     DBG_VERBOSE = 1 << 0,
     /*2*/

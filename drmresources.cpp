@@ -19,9 +19,11 @@
 #include "drmconnector.h"
 #include "drmcrtc.h"
 #include "drmencoder.h"
+#include "drmeventlistener.h"
 #include "drmplane.h"
 #include "drmresources.h"
 
+#include <cinttypes>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -37,7 +39,11 @@
 
 namespace android {
 
-DrmResources::DrmResources() : compositor_(this) {
+DrmResources::DrmResources() : compositor_(this), event_listener_(this) {
+}
+
+DrmResources::~DrmResources() {
+  event_listener_.Exit();
 }
 
 #if RK_DRM_HWC
@@ -377,6 +383,12 @@ int DrmResources::Init() {
   if (ret)
     return ret;
 
+  ret = event_listener_.Init();
+  if (ret) {
+    ALOGE("Can't initialize event listener %d", ret);
+    return ret;
+  }
+
   for (auto &conn : connectors_) {
     ret = CreateDisplayPipe(conn.get());
     if (ret) {
@@ -493,7 +505,7 @@ int DrmResources::DestroyPropertyBlob(uint32_t blob_id) {
   destroy_blob.blob_id = (__u32)blob_id;
   int ret = drmIoctl(fd(), DRM_IOCTL_MODE_DESTROYPROPBLOB, &destroy_blob);
   if (ret) {
-    ALOGE("Failed to destroy mode property blob %ld/%d", blob_id, ret);
+    ALOGE("Failed to destroy mode property blob %" PRIu32 "/%d", blob_id, ret);
     return ret;
   }
   return 0;
@@ -520,7 +532,7 @@ int DrmResources::SetDisplayActiveMode(int display, const DrmMode &mode) {
 
 int DrmResources::SetDpmsMode(int display, uint64_t mode) {
   if (mode != DRM_MODE_DPMS_ON && mode != DRM_MODE_DPMS_OFF) {
-    ALOGE("Invalid dpms mode %d", mode);
+    ALOGE("Invalid dpms mode %" PRIu64, mode);
     return -EINVAL;
   }
 
@@ -531,7 +543,8 @@ int DrmResources::SetDpmsMode(int display, uint64_t mode) {
   }
   int ret = comp->SetDpmsMode(display, mode);
   if (ret) {
-    ALOGE("Failed to add dpms %ld to composition on %d %d", mode, display, ret);
+    ALOGE("Failed to add dpms %" PRIu64 " to composition on %d %d", mode,
+          display, ret);
     return ret;
   }
   ret = compositor_.QueueComposition(std::move(comp));
@@ -544,6 +557,10 @@ int DrmResources::SetDpmsMode(int display, uint64_t mode) {
 
 DrmCompositor *DrmResources::compositor() {
   return &compositor_;
+}
+
+DrmEventListener *DrmResources::event_listener() {
+  return &event_listener_;
 }
 
 int DrmResources::GetProperty(uint32_t obj_id, uint32_t obj_type,

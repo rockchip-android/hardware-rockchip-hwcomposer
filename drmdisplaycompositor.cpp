@@ -173,9 +173,8 @@ void SquashState::Dump(std::ostringstream *out) const {
 static bool UsesSquash(const std::vector<DrmCompositionPlane> &comp_planes) {
   return std::any_of(comp_planes.begin(), comp_planes.end(),
                      [](const DrmCompositionPlane &plane) {
-                       return plane.source_layer ==
-                              DrmCompositionPlane::kSourceSquash;
-                     });
+    return plane.type() == DrmCompositionPlane::Type::kSquash;
+  });
 }
 
 DrmDisplayCompositor::FrameWorker::FrameWorker(DrmDisplayCompositor *compositor)
@@ -484,7 +483,7 @@ int DrmDisplayCompositor::ApplyPreComposite(
 }
 
 int DrmDisplayCompositor::DisablePlanes(DrmDisplayComposition *display_comp) {
-  drmModePropertySetPtr pset = drmModePropertySetAlloc();
+  drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
   if (!pset) {
     ALOGE("Failed to allocate property set");
     return -ENOMEM;
@@ -494,27 +493,26 @@ int DrmDisplayCompositor::DisablePlanes(DrmDisplayComposition *display_comp) {
   std::vector<DrmCompositionPlane> &comp_planes =
       display_comp->composition_planes();
   for (DrmCompositionPlane &comp_plane : comp_planes) {
-    DrmPlane *plane = comp_plane.plane;
-    ret =
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_property().id(),
-                              0) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->fb_property().id(), 0);
-
+    DrmPlane *plane = comp_plane.plane();
+    ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                   plane->crtc_property().id(), 0) < 0 ||
+          drmModeAtomicAddProperty(pset, plane->id(), plane->fb_property().id(),
+                                   0) < 0;
     if (ret) {
       ALOGE("Failed to add plane %d disable to pset", plane->id());
-      drmModePropertySetFree(pset);
+      drmModeAtomicFree(pset);
       return ret;
     }
   }
 
-  ret = drmModePropertySetCommit(drm_->fd(), 0, drm_, pset);
+  ret = drmModeAtomicCommit(drm_->fd(), pset, 0, drm_);
   if (ret) {
     ALOGE("Failed to commit pset ret=%d\n", ret);
-    drmModePropertySetFree(pset);
+    drmModeAtomicFree(pset);
     return ret;
   }
 
-  drmModePropertySetFree(pset);
+  drmModeAtomicFree(pset);
   return 0;
 }
 
@@ -579,19 +577,24 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   }
 
   for (DrmCompositionPlane &comp_plane : comp_planes) {
-    comp_plane.source_layer_bk = comp_plane.source_layer;
-    switch (comp_plane.source_layer) {
-      case DrmCompositionPlane::kSourceSquash:
-        comp_plane.source_layer = squash_layer_index;
+    std::vector<size_t> &source_layers = comp_plane.source_layers();
+    switch (comp_plane.type()) {
+      case DrmCompositionPlane::Type::kSquash:
+        if (source_layers.size())
+          ALOGE("Squash source_layers is expected to be empty (%zu/%d)",
+                source_layers[0], squash_layer_index);
+        source_layers.push_back(squash_layer_index);
         break;
-      case DrmCompositionPlane::kSourcePreComp:
+      case DrmCompositionPlane::Type::kPrecomp:
         if (!do_pre_comp) {
           ALOGE(
               "Can not use pre composite framebuffer with no pre composite "
               "regions");
           return -EINVAL;
         }
-        comp_plane.source_layer = pre_comp_layer_index;
+        // Replace source_layers with the output of the precomposite
+        source_layers.clear();
+        source_layers.push_back(pre_comp_layer_index);
         break;
       default:
         break;
@@ -634,8 +637,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
   std::vector<DrmCompositionRegion> &pre_comp_regions =
       display_comp->pre_comp_regions();
 
-  DrmFramebuffer *pre_comp_fb;
-
   DrmConnector *connector = drm_->GetConnectorForDisplay(display_);
   if (!connector) {
     ALOGE("Could not locate connector for display %d", display_);
@@ -647,102 +648,99 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     return -ENODEV;
   }
 
-  drmModePropertySetPtr pset = drmModePropertySetAlloc();
+  drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
   if (!pset) {
     ALOGE("Failed to allocate property set");
     return -ENOMEM;
   }
 
   if (mode_.needs_modeset) {
-    ret = drmModePropertySetAdd(pset, crtc->id(), crtc->mode_property().id(),
-                                mode_.blob_id) ||
-          drmModePropertySetAdd(pset, connector->id(),
-                                connector->crtc_id_property().id(), crtc->id());
+    ret = drmModeAtomicAddProperty(pset, crtc->id(), crtc->mode_property().id(),
+                                   mode_.blob_id) < 0 ||
+          drmModeAtomicAddProperty(pset, connector->id(),
+                                   connector->crtc_id_property().id(),
+                                   crtc->id()) < 0;
     if (ret) {
       ALOGE("Failed to add blob %d to pset", mode_.blob_id);
-      drmModePropertySetFree(pset);
+      drmModeAtomicFree(pset);
       return ret;
     }
   }
 
-#if RK_DRM_HWC_DEBUG
-  size_t index=0;
-#endif
-
   for (DrmCompositionPlane &comp_plane : comp_planes) {
-    DrmPlane *plane = comp_plane.plane;
-    DrmCrtc *crtc = comp_plane.crtc;
+    DrmPlane *plane = comp_plane.plane();
+    DrmCrtc *crtc = comp_plane.crtc();
+    std::vector<size_t> &source_layers = comp_plane.source_layers();
 
     int fb_id = -1;
     DrmHwcRect<int> display_frame = DrmHwcRect<int>(0, 0, 0, 0);
-    DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);;
+    DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
-    int gralloc_buffer_usage=0;
-    switch (comp_plane.source_layer) {
-      case DrmCompositionPlane::kSourceNone:
-        break;
-      case DrmCompositionPlane::kSourceSquash:
-        ALOGE("Actual source layer index expected for squash layer");
-        break;
-      case DrmCompositionPlane::kSourcePreComp:
-        ALOGE("Actual source layer index expected for pre-comp layer");
-        break;
-      default: {
-        if (comp_plane.source_layer >= layers.size()) {
-          ALOGE("Source layer index %zu out of bounds %zu",
-                comp_plane.source_layer, layers.size());
-          break;
-        }
-        DrmHwcLayer &layer = layers[comp_plane.source_layer];
-        if (!test_only && layer.acquire_fence.get() >= 0) {
-          int acquire_fence = layer.acquire_fence.get();
-          for (int i = 0; i < kAcquireWaitTries; ++i) {
-            ret = sync_wait(acquire_fence, kAcquireWaitTimeoutMs);
-            if (ret)
-              ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
-                    acquire_fence, i, ret, (i + 1) * kAcquireWaitTimeoutMs);
-          }
-          if (ret) {
-            ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);
-            break;
-          }
-          layer.acquire_fence.Close();
-        }
-        if (!layer.buffer) {
-          ALOGE("Expected a valid framebuffer for pset");
-          break;
-        }
-#if RK_DRM_HWC_DEBUG
-        DumpLayer(layer.name.c_str(),layer.get_usable_handle());
-#endif
-        fb_id = layer.buffer->fb_id;
-        display_frame = layer.display_frame;
-        source_crop = layer.source_crop;
-        gralloc_buffer_usage = layer.gralloc_buffer_usage;
-        if (layer.blending == DrmHwcBlending::kPreMult)
-          alpha = layer.alpha;
 
-        rotation = 0;
-        if (layer.transform & DrmHwcTransform::kFlipH)
-          rotation |= 1 << DRM_REFLECT_X;
-        if (layer.transform & DrmHwcTransform::kFlipV)
-          rotation |= 1 << DRM_REFLECT_Y;
-        if (layer.transform & DrmHwcTransform::kRotate90)
-          rotation |= 1 << DRM_ROTATE_90;
-        else if (layer.transform & DrmHwcTransform::kRotate180)
-          rotation |= 1 << DRM_ROTATE_180;
-        else if (layer.transform & DrmHwcTransform::kRotate270)
-          rotation |= 1 << DRM_ROTATE_270;
+    if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
+      if (source_layers.size() > 1) {
+        ALOGE("Can't handle more than one source layer sz=%zu type=%d",
+              source_layers.size(), comp_plane.type());
+        continue;
       }
-    }
 
+      if (source_layers.empty() || source_layers.front() >= layers.size()) {
+        ALOGE("Source layer index %zu out of bounds %zu type=%d",
+              source_layers.front(), layers.size(), comp_plane.type());
+        break;
+      }
+      DrmHwcLayer &layer = layers[source_layers.front()];
+      if (!test_only && layer.acquire_fence.get() >= 0) {
+        int acquire_fence = layer.acquire_fence.get();
+        int total_fence_timeout = 0;
+        for (int i = 0; i < kAcquireWaitTries; ++i) {
+          int fence_timeout = kAcquireWaitTimeoutMs * (1 << i);
+          total_fence_timeout += fence_timeout;
+          ret = sync_wait(acquire_fence, fence_timeout);
+          if (ret)
+            ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
+                  acquire_fence, i, ret, total_fence_timeout);
+        }
+        if (ret) {
+          ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);
+          break;
+        }
+        layer.acquire_fence.Close();
+      }
+      if (!layer.buffer) {
+        ALOGE("Expected a valid framebuffer for pset");
+        break;
+      }
+
+#if RK_DRM_HWC_DEBUG
+      DumpLayer(layer.name.c_str(),layer.get_usable_handle());
+#endif
+
+      fb_id = layer.buffer->fb_id;
+      display_frame = layer.display_frame;
+      source_crop = layer.source_crop;
+      if (layer.blending == DrmHwcBlending::kPreMult)
+        alpha = layer.alpha;
+
+      rotation = 0;
+      if (layer.transform & DrmHwcTransform::kFlipH)
+        rotation |= 1 << DRM_REFLECT_X;
+      if (layer.transform & DrmHwcTransform::kFlipV)
+        rotation |= 1 << DRM_REFLECT_Y;
+      if (layer.transform & DrmHwcTransform::kRotate90)
+        rotation |= 1 << DRM_ROTATE_90;
+      else if (layer.transform & DrmHwcTransform::kRotate180)
+        rotation |= 1 << DRM_ROTATE_180;
+      else if (layer.transform & DrmHwcTransform::kRotate270)
+        rotation |= 1 << DRM_ROTATE_270;
+    }
     // Disable the plane if there's no framebuffer
-    if (fb_id < 0 ) {
-      ret = drmModePropertySetAdd(pset, plane->id(),
-                                  plane->crtc_property().id(), 0) ||
-            drmModePropertySetAdd(pset, plane->id(), plane->fb_property().id(),
-                                  0);
+    if (fb_id < 0) {
+      ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->crtc_property().id(), 0) < 0 ||
+            drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->fb_property().id(), 0) < 0;
       if (ret) {
         ALOGE("Failed to add plane %d disable to pset", plane->id());
         break;
@@ -764,34 +762,41 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       break;
     }
 
-    ret =
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_property().id(),
-                              crtc->id()) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->fb_property().id(),
-                              fb_id) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_x_property().id(),
-                              display_frame.left) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_y_property().id(),
-                              display_frame.top) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_w_property().id(),
-                              display_frame.right - display_frame.left) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->crtc_h_property().id(),
-                              display_frame.bottom - display_frame.top) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_x_property().id(),
-                              (int)(source_crop.left) << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_y_property().id(),
-                              (int)(source_crop.top) << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_w_property().id(),
-                              (int)(source_crop.right - source_crop.left) << 16) ||
-        drmModePropertySetAdd(pset, plane->id(), plane->src_h_property().id(),
-                              (int)(source_crop.bottom - source_crop.top) << 16);
-
+    ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                   plane->crtc_property().id(), crtc->id()) < 0;
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
+                                    plane->fb_property().id(), fb_id) < 0;
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
+                                    plane->crtc_x_property().id(),
+                                    display_frame.left) < 0;
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
+                                    plane->crtc_y_property().id(),
+                                    display_frame.top) < 0;
+    ret |= drmModeAtomicAddProperty(
+               pset, plane->id(), plane->crtc_w_property().id(),
+               display_frame.right - display_frame.left) < 0;
+    ret |= drmModeAtomicAddProperty(
+               pset, plane->id(), plane->crtc_h_property().id(),
+               display_frame.bottom - display_frame.top) < 0;
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
+                                    plane->src_x_property().id(),
+                                    (int)(source_crop.left) << 16) < 0;
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
+                                    plane->src_y_property().id(),
+                                    (int)(source_crop.top) << 16) < 0;
+    ret |= drmModeAtomicAddProperty(
+               pset, plane->id(), plane->src_w_property().id(),
+               (int)(source_crop.right - source_crop.left) << 16) < 0;
+    ret |= drmModeAtomicAddProperty(
+               pset, plane->id(), plane->src_h_property().id(),
+               (int)(source_crop.bottom - source_crop.top) << 16) < 0;
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
       break;
     }
 
 #if RK_DRM_HWC_DEBUG
+    size_t index=0;
     std::ostringstream out_log;
 
     out_log << "DrmDisplayCompositor[" << index << "]"
@@ -806,9 +811,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << "," << source_crop.bottom - source_crop.top << "]";
     index++;
 #endif
+
     if (plane->rotation_property().id()) {
-      ret = drmModePropertySetAdd(pset, plane->id(),
-                                  plane->rotation_property().id(), rotation);
+      ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->rotation_property().id(),
+                                     rotation) < 0;
       if (ret) {
         ALOGE("Failed to add rotation property %d to plane %d",
               plane->rotation_property().id(), plane->id());
@@ -819,8 +826,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #endif
     }
     if (plane->alpha_property().id()) {
-      ret = drmModePropertySetAdd(pset, plane->id(),
-                                  plane->alpha_property().id(), alpha);
+      ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->alpha_property().id(),
+                                     alpha) < 0;
       if (ret) {
         ALOGE("Failed to add alpha property %d to plane %d",
               plane->alpha_property().id(), plane->id());
@@ -842,6 +850,7 @@ out:
     uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
     if (test_only)
       flags |= DRM_MODE_ATOMIC_TEST_ONLY;
+
 #if RK_DRM_HWC_DEBUG
 PRINT_TIME_START;
 #endif
@@ -850,13 +859,14 @@ PRINT_TIME_START;
     property_get("sys.hwc.msleep", value, "0");
     new_value = atoi(value);
     usleep(new_value*100);
-    ret = drmModePropertySetCommit(drm_->fd(), flags, drm_, pset);
+
+    ret = drmModeAtomicCommit(drm_->fd(), pset, flags, drm_);
     if (ret) {
       if (test_only)
         ALOGI("Commit test pset failed ret=%d\n", ret);
       else
         ALOGE("Failed to commit pset ret=%d\n", ret);
-      drmModePropertySetFree(pset);
+      drmModeAtomicFree(pset);
       return ret;
     }
 #if RK_DRM_HWC_DEBUG
@@ -865,12 +875,12 @@ PRINT_TIME_END("commit");
   }
 
   if (pset)
-    drmModePropertySetFree(pset);
+    drmModeAtomicFree(pset);
 
   if (!test_only && mode_.needs_modeset) {
     ret = drm_->DestroyPropertyBlob(mode_.old_blob_id);
     if (ret) {
-      ALOGE("Failed to destroy old mode property blob %lld/%d",
+      ALOGE("Failed to destroy old mode property blob %" PRIu32 "/%d",
             mode_.old_blob_id, ret);
       return ret;
     }
@@ -921,7 +931,7 @@ std::tuple<int, uint32_t> DrmDisplayCompositor::CreateModeBlob(
     ALOGE("Failed to create mode property blob %d", ret);
     return std::make_tuple(ret, 0);
   }
-  ALOGE("Create blob_id %ld\n", id);
+  ALOGE("Create blob_id %" PRIu32 "\n", id);
   return std::make_tuple(ret, id);
 }
 
@@ -1103,62 +1113,58 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
   // Make sure there is more than one layer to squash.
   size_t src_planes_with_layer = std::count_if(
       src_planes.begin(), src_planes.end(), [](DrmCompositionPlane &p) {
-        return p.source_layer <= DrmCompositionPlane::kSourceLayerMax;
+        return p.type() == DrmCompositionPlane::Type::kLayer;
       });
   if (src_planes_with_layer <= 1)
     return -EALREADY;
 
   int pre_comp_layer_index;
 
-  int ret = dst->Init(drm_, src->crtc(), src->importer(), src->frame_no());
+  int ret = dst->Init(drm_, src->crtc(), src->importer(), src->planner(),
+                      src->frame_no());
   if (ret) {
     ALOGE("Failed to init squash all composition %d", ret);
     return ret;
   }
 
-  std::vector<DrmPlane *> primary_planes;
-  std::vector<DrmPlane *> fake_overlay_planes;
+  DrmCompositionPlane squashed_comp(DrmCompositionPlane::Type::kPrecomp, NULL,
+                                    src->crtc());
   std::vector<DrmHwcLayer> dst_layers;
   for (DrmCompositionPlane &comp_plane : src_planes) {
     // Composition planes without DRM planes should never happen
-    if (comp_plane.plane == NULL) {
+    if (comp_plane.plane() == NULL) {
       ALOGE("Skipping squash all because of NULL plane");
       ret = -EINVAL;
       goto move_layers_back;
     }
 
-    if (comp_plane.source_layer == DrmCompositionPlane::kSourceNone)
+    if (comp_plane.type() == DrmCompositionPlane::Type::kDisable) {
+      dst->AddPlaneDisable(comp_plane.plane());
       continue;
-
-    // Out of range layers should never happen. If they do, somebody probably
-    // forgot to replace the symbolic names (kSourceSquash, kSourcePreComp) with
-    // real ones.
-    if (comp_plane.source_layer >= src_layers.size()) {
-      ALOGE("Skipping squash all because of out of range source layer %zu",
-            comp_plane.source_layer);
-      ret = -EINVAL;
-      goto move_layers_back;
     }
 
-    DrmHwcLayer &layer = src_layers[comp_plane.source_layer];
+    for (auto i : comp_plane.source_layers()) {
+      DrmHwcLayer &layer = src_layers[i];
 
-    // Squashing protected layers is impossible.
-    if (layer.protected_usage()) {
-      ret = -ENOTSUP;
-      goto move_layers_back;
+      // Squashing protected layers is impossible.
+      if (layer.protected_usage()) {
+        ret = -ENOTSUP;
+        goto move_layers_back;
+      }
+
+      // The OutputFds point to freed memory after hwc_set returns. They are
+      // returned to the default to prevent DrmDisplayComposition::Plan from
+      // filling the OutputFds.
+      layer.release_fence = OutputFd();
+      dst_layers.emplace_back(std::move(layer));
+      squashed_comp.source_layers().push_back(
+          squashed_comp.source_layers().size());
     }
 
-    // The OutputFds point to freed memory after hwc_set returns. They are
-    // returned to the default to prevent DrmDisplayComposition::Plan from
-    // filling the OutputFds.
-    layer.release_fence = OutputFd();
-    dst_layers.emplace_back(std::move(layer));
-
-    if (comp_plane.plane->type() == DRM_PLANE_TYPE_PRIMARY &&
-        primary_planes.size() == 0)
-      primary_planes.push_back(comp_plane.plane);
+    if (comp_plane.plane()->type() == DRM_PLANE_TYPE_PRIMARY)
+      squashed_comp.set_plane(comp_plane.plane());
     else
-      dst->AddPlaneDisable(comp_plane.plane);
+      dst->AddPlaneDisable(comp_plane.plane());
   }
 
   ret = dst->SetLayers(dst_layers.data(), dst_layers.size(), false);
@@ -1167,8 +1173,13 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
     goto move_layers_back;
   }
 
-  ret =
-      dst->Plan(NULL /* SquashState */, &primary_planes, &fake_overlay_planes);
+  ret = dst->AddPlaneComposition(std::move(squashed_comp));
+  if (ret) {
+    ALOGE("Failed to add squashed plane composition %d", ret);
+    goto move_layers_back;
+  }
+
+  ret = dst->FinalizeComposition();
   if (ret) {
     ALOGE("Failed to plan for squash all composition %d", ret);
     goto move_layers_back;
@@ -1183,12 +1194,14 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
   pre_comp_layer_index = dst->layers().size() - 1;
   framebuffer_index_ = (framebuffer_index_ + 1) % DRM_DISPLAY_BUFFERS;
 
-  for (DrmCompositionPlane &plane : dst->composition_planes())
-    if (plane.source_layer == DrmCompositionPlane::kSourcePreComp)
-    {
-      plane.source_layer_bk = plane.source_layer;
-      plane.source_layer = pre_comp_layer_index;
+  for (DrmCompositionPlane &plane : dst->composition_planes()) {
+    if (plane.type() == DrmCompositionPlane::Type::kPrecomp) {
+      // Replace source_layers with the output of the precomposite
+      plane.source_layers().clear();
+      plane.source_layers().push_back(pre_comp_layer_index);
+      break;
     }
+  }
 
   return 0;
 
@@ -1196,10 +1209,13 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
 // composition.
 move_layers_back:
   for (size_t plane_index = 0;
-       plane_index < src_planes.size() && plane_index < dst_layers.size();
-       plane_index++) {
-    size_t source_layer_index = src_planes[plane_index].source_layer;
-    src_layers[source_layer_index] = std::move(dst_layers[plane_index]);
+       plane_index < src_planes.size() && plane_index < dst_layers.size();) {
+    if (src_planes[plane_index].source_layers().empty()) {
+      plane_index++;
+      continue;
+    }
+    for (auto i : src_planes[plane_index].source_layers())
+      src_layers[i] = std::move(dst_layers[plane_index++]);
   }
 
   return ret;

@@ -49,6 +49,11 @@ class DrmCrtc {
   void dump_crtc(std::ostringstream *out) const;
 #endif
 
+  DrmResources *getDrmReoources()
+  {
+        return drm_;
+  }
+
  private:
   DrmResources *drm_;
 

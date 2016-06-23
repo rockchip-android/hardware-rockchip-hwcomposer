@@ -19,7 +19,7 @@
 
 #include "drmcomposition.h"
 #include "drmdisplaycompositor.h"
-#include "importer.h"
+#include "platform.h"
 
 #include <map>
 #include <memory>
@@ -44,6 +44,7 @@ class DrmCompositor {
   DrmCompositor(const DrmCompositor &) = delete;
 
   DrmResources *drm_;
+  std::unique_ptr<Planner> planner_;
 
   uint64_t frame_no_;
 
