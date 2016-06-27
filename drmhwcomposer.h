@@ -197,6 +197,7 @@ struct DrmHwcLayer {
 
 #if RK_DRM_HWC
   bool is_match;
+  bool is_take;
   bool is_yuv;
   bool is_scale;
   bool is_large;

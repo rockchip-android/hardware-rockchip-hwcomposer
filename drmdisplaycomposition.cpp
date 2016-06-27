@@ -141,7 +141,6 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
                                            size_t num_exclude_rects) {
   DrmCompositionPlane *comp = NULL;
   std::vector<size_t> dedicated_layers;
-
   // Go through the composition and find the precomp layer as well as any
   // layers that have a dedicated plane located below the precomp layer.
   for (auto &i : composition_planes_) {
@@ -506,6 +505,21 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   // squashed layers).
   std::map<size_t, DrmHwcLayer *> to_composite;
   bool use_squash_framebuffer = false;
+#if RK_DRM_HWC
+  std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
+
+    //set use flag to false.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+        (*iter)->bUse=false;
+
+        for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
+            iter_plane != (*iter)->planes.end(); ++iter_plane) {
+            (*iter_plane)->set_use(false);
+        }
+    }
+#endif
+
 #if USE_SQUASH
   // Used to determine which layers were entirely squashed
   std::vector<int> layer_squash_area(layers_.size(), 0);

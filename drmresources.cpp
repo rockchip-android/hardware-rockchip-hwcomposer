@@ -297,9 +297,11 @@ int DrmResources::Init() {
       break;
     }
 #if RK_DRM_HWC
-    uint64_t share_id,zpos;
+    uint64_t share_id,zpos,crtc_id;
     plane->share_id_property().value(&share_id);
     plane->zpos_property().value(&zpos);
+    plane->crtc_property().value(&crtc_id);
+
     std::vector<PlaneGroup *> ::const_iterator iter;
     for (iter = plane_groups_.begin();
        iter != plane_groups_.end(); ++iter)
@@ -315,6 +317,7 @@ int DrmResources::Init() {
         PlaneGroup* plane_group = new PlaneGroup();
         plane_group->bUse= false;
         plane_group->zpos = zpos;
+        plane_group->possible_crtcs = p->possible_crtcs;
         plane_group->share_id = share_id;
         plane_group->planes.push_back(plane.get());
         plane_groups_.push_back(plane_group);
@@ -365,8 +368,8 @@ int DrmResources::Init() {
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
-        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d",
-            (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
+        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d,possible_crtcs=0x%x",
+            (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size(),(*iter)->possible_crtcs);
         for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
         {

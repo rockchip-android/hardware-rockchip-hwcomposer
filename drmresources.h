@@ -36,6 +36,7 @@ const char * res##_str(int type);
 typedef struct tagPlaneGroup{
         bool     bUse;
         uint32_t zpos;
+        uint32_t possible_crtcs;
         uint64_t share_id;
         std::vector<DrmPlane*> planes;
 }PlaneGroup;

@@ -36,13 +36,56 @@ std::vector<DrmPlane *> Planner::GetUsablePlanes(
   return usable_planes;
 }
 
+#if RK_DRM_HWC
+void Planner::rkSetPlaneFlag(DrmCrtc *crtc, DrmPlane* plane) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+        //loop plane
+        for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
+            !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
+        {
+            if(plane == (*iter_plane))
+            {
+                (*iter)->bUse = true;
+                (*iter_plane)->set_use(true);
+            }
+        }
+    }
+}
+
+std::vector<DrmPlane *> Planner::rkGetUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+            std::copy_if((*iter)->planes.begin(), (*iter)->planes.end(),
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) { return !plane->is_use() && plane->GetCrtcSupported(*crtc); });
+  }
+  return usable_planes;
+}
+#endif
+
 std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
     std::map<size_t, DrmHwcLayer *> &layers, bool use_squash_fb, DrmCrtc *crtc,
     std::vector<DrmPlane *> *primary_planes,
     std::vector<DrmPlane *> *overlay_planes) {
   std::vector<DrmCompositionPlane> composition;
+#if RK_DRM_HWC
+  std::vector<DrmPlane *> planes = rkGetUsablePlanes(crtc);
+  UN_USED(primary_planes);
+  UN_USED(overlay_planes);
+#else
   std::vector<DrmPlane *> planes =
       GetUsablePlanes(crtc, primary_planes, overlay_planes);
+#endif
   if (planes.empty()) {
     ALOGE("Display %d has no usable planes", crtc->display());
     return std::make_tuple(-ENODEV, std::vector<DrmCompositionPlane>());
@@ -54,6 +97,9 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
   if (use_squash_fb) {
     if (!planes.empty()) {
       squash_plane = planes.back();
+#if RK_DRM_HWC
+      rkSetPlaneFlag(crtc,squash_plane);
+#endif
       planes.pop_back();
     } else {
       ALOGI("Not enough planes to reserve for squash fb");
@@ -67,6 +113,9 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
   if (layers.size() > planes.size()) {
     if (!planes.empty()) {
       precomp_plane = planes.back();
+#if RK_DRM_HWC
+      rkSetPlaneFlag(crtc,precomp_plane);
+#endif
       planes.pop_back();
       composition.emplace_back(DrmCompositionPlane::Type::kPrecomp,
                                precomp_plane, crtc);
@@ -113,7 +162,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
     //loop plane groups.
     for (iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
-       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,plane group zpos=%d,plane group bUse=%d",__LINE__,*zpos,(*iter)->zpos,(*iter)->bUse);
+       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,plane group zpos=%d,plane group bUse=%d,crtc=0x%x",__LINE__,*zpos,(*iter)->zpos,(*iter)->bUse,(1<<crtc->pipe()));
         //find the match zpos plane group
         if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
         {
@@ -133,7 +182,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                     for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
                         !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
                     {
-                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,plane is_use=%d",__LINE__,(*iter_plane)->is_use());
+                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,crtc=0x%x,plane is_use=%d",__LINE__,(1<<crtc->pipe()),(*iter_plane)->is_use());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
                             b_yuv  = (*iter_plane)->get_yuv();
@@ -327,14 +376,19 @@ int PlanStageProtected::ProvisionPlanes(
                                     b_yuv  = (*iter_plane)->get_yuv();
                                     if(layer->is_yuv && !b_yuv)
                                         continue;
-
+                                    layer->is_take = true;  //mark layer which take a plane.
                                     ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
                                             layer->name.c_str(),(*iter_plane)->id(),layer->index);
                                 }
 
                                 (*iter_plane)->set_use(true);
                                 (*iter)->bUse = true;
+#if USE_PRE_COMP
+                                auto precomp = GetPrecompIter(composition);
+                                composition->emplace(precomp, type, (*iter_plane), crtc, source_layer);
+#else
                                 composition->emplace_back(type, (*iter_plane), crtc, source_layer);
+#endif
                                 return 0;
                             }
                         }
@@ -353,11 +407,12 @@ int PlanStageGreedy::ProvisionPlanes(
     std::map<size_t, DrmHwcLayer *> &layers, DrmCrtc *crtc,
     std::vector<DrmPlane *> *planes) {
   // Fill up the remaining planes
-  for (auto i = layers.begin(); i != layers.end(); i = layers.erase(i)) {
 #if RK_DRM_HWC
+  for (auto i = layers.begin(); i != layers.end(); ++i) {
     int ret = TakePlane(composition, planes, DrmCompositionPlane::Type::kLayer,
                       crtc, i->first,i->second);
 #else
+  for (auto i = layers.begin(); i != layers.end(); i = layers.erase(i)) {
     int ret = Emplace(composition, planes, DrmCompositionPlane::Type::kLayer,
                       crtc, i->first);
 #endif
@@ -372,8 +427,17 @@ int PlanStageGreedy::ProvisionPlanes(
   // Put the rest of the layers in the precomp plane
   DrmCompositionPlane *precomp = GetPrecomp(composition);
   if (precomp) {
-    for (auto i = layers.begin(); i != layers.end(); i = layers.erase(i))
-      precomp->source_layers().emplace_back(i->first);
+#if RK_DRM_HWC
+    for (auto i = layers.begin(); i != layers.end(); i++) {
+#else
+    for (auto i = layers.begin(); i != layers.end(); i = layers.erase(i)) {
+#endif
+
+#if RK_DRM_HWC
+        if(!i->second->is_take)
+#endif
+            precomp->source_layers().emplace_back(i->first);
+    }
   }
 #endif
 
