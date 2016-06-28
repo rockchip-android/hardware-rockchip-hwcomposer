@@ -65,7 +65,8 @@ std::vector<DrmPlane *> Planner::rkGetUsablePlanes(DrmCrtc *crtc) {
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
             if(!(*iter)->bUse)
-            std::copy_if((*iter)->planes.begin(), (*iter)->planes.end(),
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
                        std::back_inserter(usable_planes),
                        [=](DrmPlane *plane) { return !plane->is_use() && plane->GetCrtcSupported(*crtc); });
   }
