@@ -129,6 +129,9 @@ int DrmComposition::Plan(std::map<int, DrmDisplayCompositor> &compositor_map) {
 }
 
 int DrmComposition::DisableUnusedPlanes() {
+#if RK_DRM_HWC
+std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
+#endif
   for (auto &conn : drm_->connectors()) {
     int display = conn->display();
     DrmDisplayComposition *comp = GetDisplayComposition(display);
@@ -148,6 +151,21 @@ int DrmComposition::DisableUnusedPlanes() {
       continue;
     }
 
+#if RK_DRM_HWC
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+        //loop plane
+        for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
+            !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane) {
+            if ((*iter_plane)->GetCrtcSupported(*crtc) && !(*iter_plane)->is_use()) {
+                ALOGD_IF(log_level(DBG_DEBUG),"DisableUnusedPlanes plane_groups plane id=%d",(*iter_plane)->id());
+                comp->AddPlaneDisable(*iter_plane);
+               // break;
+            }
+        }
+    }
+#else
     for (std::vector<DrmPlane *>::iterator iter = primary_planes_.begin();
          iter != primary_planes_.end(); ++iter) {
       if ((*iter)->GetCrtcSupported(*crtc)) {
@@ -167,6 +185,7 @@ int DrmComposition::DisableUnusedPlanes() {
         iter++;
       }
     }
+#endif
   }
   return 0;
 }

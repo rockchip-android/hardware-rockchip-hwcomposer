@@ -48,7 +48,8 @@ void Planner::rkSetPlaneFlag(DrmCrtc *crtc, DrmPlane* plane) {
         for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
             !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
         {
-            if(plane == (*iter_plane))
+            //only set the special crtc's plane
+            if((*iter_plane)->GetCrtcSupported(*crtc) && plane == (*iter_plane))
             {
                 (*iter)->bUse = true;
                 (*iter_plane)->set_use(true);
@@ -272,22 +273,22 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::MatchPlanes(
         }
     }
 
-#if RK_DRM_HWC
-    //set use flag to false.
-    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
-       iter != plane_groups.end(); ++iter) {
-        (*iter)->bUse=false;
-
-        for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
-            iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            (*iter_plane)->set_use(false);
-        }
-    }
-#endif
-
     //If it cann't match any layer after area assign process,we need rollback the area assign process.
     if(!bMatch)
     {
+#if RK_DRM_HWC
+        //set use flag to false.
+        for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+           iter != plane_groups.end(); ++iter) {
+            (*iter)->bUse=false;
+
+            for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
+                iter_plane != (*iter)->planes.end(); ++iter_plane) {
+                if((*iter_plane)->GetCrtcSupported(*crtc))
+                    (*iter_plane)->set_use(false);
+            }
+        }
+#endif
         composition_plane.clear();
         return std::make_tuple(-1, std::vector<DrmCompositionPlane>());
     }
@@ -421,7 +422,7 @@ int PlanStageGreedy::ProvisionPlanes(
     if (ret == -ENOENT)
       break;
     else if (ret)
-      ALOGE("Failed to emplace layer %zu, dropping it", i->first);
+      ALOGD_IF(log_level(DBG_DEBUG),"Failed to emplace layer %zu, dropping it", i->first);
   }
 
 #if USE_PRE_COMP

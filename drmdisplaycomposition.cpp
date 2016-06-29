@@ -66,7 +66,7 @@ bool DrmDisplayComposition::validate_composition_type(DrmCompositionType des) {
 int DrmDisplayComposition::CreateNextTimelineFence() {
   ++timeline_;
   return sw_sync_fence_create(timeline_fd_, "hwc drm display composition fence",
-                              timeline_);
+                                timeline_);
 }
 
 int DrmDisplayComposition::IncreaseTimelineToPoint(int point) {
@@ -512,10 +512,10 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
         (*iter)->bUse=false;
-
         for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
             iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            (*iter_plane)->set_use(false);
+            if((*iter_plane)->GetCrtcSupported(*crtc_))  //only init the special crtc's plane
+                (*iter_plane)->set_use(false);
         }
     }
 #endif
