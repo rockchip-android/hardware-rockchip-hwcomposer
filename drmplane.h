@@ -80,12 +80,12 @@ class DrmPlane {
 #if RK_DRM_HWC
   bool is_use();
   void set_use(bool b_use);
+  bool get_scale();
   bool get_yuv();
   void set_yuv(bool b_yuv);
   const DrmProperty &zpos_property() const;
   const DrmProperty &share_id_property() const;
-  const DrmProperty &share_flags_property() const;
- // const DrmProperty &scale_property() const;
+  const DrmProperty &feature_property() const;
   bool is_reserved();
   void set_reserved(bool b_reserved);
 #endif
@@ -118,11 +118,11 @@ class DrmPlane {
 #if RK_DRM_HWC
   DrmProperty zpos_property_;
   DrmProperty share_id_property_;
-  DrmProperty share_flags_property_;
- // DrmProperty scale_property_;
+  DrmProperty feature_property_;
   bool b_reserved_;
   bool b_use_;
   bool b_yuv_;
+  bool b_scale_;
 #endif
 
   drmModePlanePtr plane_;

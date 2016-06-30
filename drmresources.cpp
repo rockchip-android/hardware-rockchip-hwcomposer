@@ -738,7 +738,8 @@ void DrmResources::dump_prop(drmModePropertyPtr prop,
 		*out << "\n";
 		return;
 	}
-
+ALOGD_IF(log_level(DBG_VERBOSE),"%s",out->str().c_str());
+out->str("");
 	*out << " " << prop->name << ":\n";
 
 	*out << "\t\tflags:";

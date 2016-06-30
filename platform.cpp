@@ -155,7 +155,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 {
     uint32_t combine_layer_count = 0;
     uint32_t layer_size = layer_vector.size();
-    bool b_yuv;
+    bool b_yuv,b_scale;
     std::vector<PlaneGroup *> ::const_iterator iter;
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
     uint64_t rotation = 0;
@@ -189,6 +189,9 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                         {
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
+                                continue;
+                            b_scale = (*iter_plane)->get_scale();
+                            if((*iter_layer)->is_scale && !b_scale)
                                 continue;
 
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
@@ -355,7 +358,7 @@ int PlanStageProtected::ProvisionPlanes(
                        size_t source_layer,
                        DrmHwcLayer* layer)
     {
-        bool b_yuv;
+        bool b_yuv,b_scale;
         DrmResources* drm = crtc->getDrmReoources();
         std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
 
@@ -378,6 +381,10 @@ int PlanStageProtected::ProvisionPlanes(
                                     b_yuv  = (*iter_plane)->get_yuv();
                                     if(layer->is_yuv && !b_yuv)
                                         continue;
+                                    b_scale = (*iter_plane)->get_scale();
+                                    if(layer->is_scale && !b_scale)
+                                        continue;
+
                                     layer->is_take = true;  //mark layer which take a plane.
                                     ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
                                             layer->name.c_str(),(*iter_plane)->id(),layer->index);

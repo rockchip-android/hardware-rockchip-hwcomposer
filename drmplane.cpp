@@ -135,17 +135,14 @@ int DrmPlane::Init() {
   if (ret)
     ALOGE("Could not get SHARE_ID property");
 
-  ret = drm_->GetPlaneProperty(*this, "SHARE_FLAGS", &share_flags_property_);
+  ret = drm_->GetPlaneProperty(*this, "FEATURE", &feature_property_);
   if (ret)
-    ALOGE("Could not get SHARE_FLAGS property");
+    ALOGE("Could not get FEATURE property");
 
- /* ret = drm_->GetPlaneProperty(*this, "scale_support", &scale_property_);
-  if (ret)
-    ALOGE("Could not get scale_support property");
-*/
   b_reserved_= false;
   b_use_ = false;
   b_yuv_ = false;
+  b_scale_ = false;
 #endif
 
   return 0;
@@ -212,9 +209,17 @@ const DrmProperty &DrmPlane::alpha_property() const {
 }
 
 #if RK_DRM_HWC
+bool DrmPlane::get_scale(){
+    uint64_t feature=0;
+
+    feature_property().set_feature("scale");
+    feature_property().value(&feature);
+    b_scale_ = (feature ==1)?true:false;
+    return b_scale_;
+}
 
 bool DrmPlane::get_yuv(){
-       return b_yuv_;
+    return b_yuv_;
 }
 
 void DrmPlane::set_yuv(bool b_yuv)
@@ -239,14 +244,9 @@ const DrmProperty &DrmPlane::share_id_property() const {
   return share_id_property_;
 }
 
-const DrmProperty &DrmPlane::share_flags_property() const {
-  return share_flags_property_;
+const DrmProperty &DrmPlane::feature_property() const {
+  return feature_property_;
 }
-
-/*
-const DrmProperty &DrmPlane::scale_property() const {
-  return scale_property_;
-}*/
 
 bool DrmPlane::is_reserved(){
   return b_reserved_;

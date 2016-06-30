@@ -775,7 +775,7 @@ struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->h
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
         || (Layer->transform)
-         /*||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha)*/
+        ||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha!=0xFF)
         ){
         return false;
     }
