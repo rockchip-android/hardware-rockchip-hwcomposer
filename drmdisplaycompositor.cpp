@@ -1160,7 +1160,7 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
           squashed_comp.source_layers().size());
     }
 
-    if (comp_plane.plane()->type() == DRM_PLANE_TYPE_PRIMARY)
+    if (!squashed_comp.plane())
       squashed_comp.set_plane(comp_plane.plane());
     else
       dst->AddPlaneDisable(comp_plane.plane());
