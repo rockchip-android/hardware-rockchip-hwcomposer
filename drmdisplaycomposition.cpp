@@ -310,28 +310,28 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   return 0;
 }
 
-static bool is_not_intersect(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
+static bool is_rec1_intersect_rec2(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
 {
     ALOGD_IF(log_level(DBG_DEBUG),"is_not_intersect: rec1[%d,%d,%d,%d],rec2[%d,%d,%d,%d]",rec1->left,rec1->top,
         rec1->right,rec1->bottom,rec2->left,rec2->top,rec2->right,rec2->bottom);
     if (rec1->left >= rec2->left && rec1->left <= rec2->right) {
         if (rec1->top >= rec2->top && rec1->top <= rec2->bottom) {
-            return false;
+            return true;
         }
         if (rec1->bottom >= rec2->top && rec1->bottom <= rec2->bottom) {
-            return false;
+            return true;
         }
     }
     if (rec1->right >= rec2->left && rec1->right <= rec2->right) {
         if (rec1->top >= rec2->top && rec1->top <= rec2->bottom) {
-            return false;
+            return true;
         }
         if (rec1->bottom >= rec2->top && rec1->bottom <= rec2->bottom) {
-            return false;
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 static bool is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
@@ -340,7 +340,8 @@ static bool is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
     if(/*layer_one->format != layer_two->format
         ||*/ layer_one->alpha!= layer_two->alpha
         || layer_one->is_scale || layer_two->is_scale
-        || !is_not_intersect(&layer_one->display_frame,&layer_two->display_frame))
+        || is_rec1_intersect_rec2(&layer_one->display_frame,&layer_two->display_frame)
+        || is_rec1_intersect_rec2(&layer_two->display_frame,&layer_one->display_frame))
     {
         ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer one alpha=%d,is_scale=%d",layer_one->alpha,layer_one->is_scale);
         ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer two alpha=%d,is_scale=%d",layer_two->alpha,layer_two->is_scale);
@@ -461,6 +462,7 @@ void DrmDisplayComposition::combine_layer()
         else
             i++;
     }
+
 
   //sort layer by xpos
   for (LayerMap::iterator iter = layer_map_.begin();
