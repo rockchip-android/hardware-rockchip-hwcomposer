@@ -131,10 +131,42 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
   for (auto &i : stages_) {
     int ret = i->ProvisionPlanes(&composition, layers, crtc, &planes);
     if (ret) {
+#if USE_PRE_COMP & RK_DRM_HWC
+        if (!planes.empty()) {
+              precomp_plane = planes.back();
+              if(!precomp_plane->is_use()) {
+                  rkSetPlaneFlag(crtc,precomp_plane);
+                  planes.pop_back();
+                  composition.emplace_back(DrmCompositionPlane::Type::kPrecomp,
+                                           precomp_plane, crtc);
+
+                  // Put the rest of the layers in the precomp plane
+                  DrmCompositionPlane *precomp = i->GetPrecomp(&composition);
+                  if (precomp) {
+                        for (auto j = layers.begin(); j != layers.end(); j++) {
+                            if(!j->second->is_take)
+                            {
+                                ALOGD_IF(log_level(DBG_DEBUG),"line=%d,using precomp for layer=%s",__LINE__,
+                                    j->second->name.c_str());
+                                precomp->source_layers().emplace_back(j->first);
+                            }
+                        }
+                        return std::make_tuple(0, std::move(composition));
+                   } else {
+                        ALOGE("line=%d precomp is null",__LINE__);
+                   }
+              } else {
+                ALOGE("line=%d the last plane is using",__LINE__);
+              }
+          } else {
+            ALOGE("line=%d planes is empty",__LINE__);
+          }
+#endif
       ALOGE("Failed provision stage with ret %d", ret);
       return std::make_tuple(ret, std::vector<DrmCompositionPlane>());
     }
   }
+
 
 #if USE_SQUASH
   if (squash_plane)
@@ -147,7 +179,7 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
 
 
 //According to zpos and combine layer count,find the suitable plane.
-static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
+bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                uint64_t* zpos,
                                DrmCrtc *crtc,
                                DrmResources *drm,
@@ -184,15 +216,22 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                     for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
                         !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
                     {
-                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,crtc=0x%x,plane is_use=%d",__LINE__,(1<<crtc->pipe()),(*iter_plane)->is_use());
+                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,crtc=0x%x,plane(%d) is_use=%d,possible_crtc_mask=0x%x",__LINE__,(1<<crtc->pipe()),
+                                (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
+                            {
+                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
                                 continue;
+                            }
                             b_scale = (*iter_plane)->get_scale();
                             if((*iter_layer)->is_scale && !b_scale)
+                            {
+                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale",(*iter_plane)->id());
                                 continue;
+                            }
 
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
                                 alpha = (*iter_layer)->alpha;
@@ -417,6 +456,7 @@ int PlanStageGreedy::ProvisionPlanes(
     std::vector<DrmPlane *> *planes) {
   // Fill up the remaining planes
 #if RK_DRM_HWC
+  int iEmplaceFail=0;
   for (auto i = layers.begin(); i != layers.end(); ++i) {
     int ret = TakePlane(composition, planes, DrmCompositionPlane::Type::kLayer,
                       crtc, i->first,i->second);
@@ -429,7 +469,10 @@ int PlanStageGreedy::ProvisionPlanes(
     if (ret == -ENOENT)
       break;
     else if (ret)
-      ALOGD_IF(log_level(DBG_DEBUG),"Failed to emplace layer %zu, dropping it", i->first);
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"Failed to emplace layer %zu, dropping it", i->first);
+        iEmplaceFail++;
+    }
   }
 
 #if USE_PRE_COMP
@@ -444,10 +487,23 @@ int PlanStageGreedy::ProvisionPlanes(
 
 #if RK_DRM_HWC
         if(!i->second->is_take)
-#endif
+        {
+            iEmplaceFail--;
             precomp->source_layers().emplace_back(i->first);
+            ALOGD_IF(log_level(DBG_DEBUG),"line=%d,using precomp for layer=%s",__LINE__,
+                i->second->name.c_str());
+        }
+#else
+        precomp->source_layers().emplace_back(i->first);
+#endif
     }
   }
+#endif
+
+#if RK_DRM_HWC
+  //If it still contain layers which are not take.
+  if(iEmplaceFail)
+    return -1;
 #endif
 
   return 0;

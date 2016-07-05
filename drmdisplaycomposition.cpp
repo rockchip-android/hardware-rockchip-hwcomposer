@@ -469,7 +469,7 @@ void DrmDisplayComposition::combine_layer()
             for(uint32_t i=0;i < iter->second.size()-1;i++) {
                 for(uint32_t j=i+1;j < iter->second.size();j++) {
                      if(iter->second[i]->display_frame.left > iter->second[j]->display_frame.left) {
-                        ALOGV("swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
+                        ALOGD_IF(log_level(DBG_DEBUG),"swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
                         std::swap(iter->second[i],iter->second[j]);
                         break;
                      }

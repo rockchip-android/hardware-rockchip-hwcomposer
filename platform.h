@@ -63,6 +63,15 @@ class Planner {
                                 DrmCrtc *crtc,
                                 std::vector<DrmPlane *> *planes) = 0;
 
+    // Finds and returns the squash layer from the composition
+    static DrmCompositionPlane *GetPrecomp(
+        std::vector<DrmCompositionPlane> *composition) {
+      auto l = GetPrecompIter(composition);
+      if (l == composition->end())
+        return NULL;
+      return &(*l);
+    }
+
    protected:
     // Removes and returns the next available plane from planes
     static DrmPlane *PopPlane(std::vector<DrmPlane *> *planes) {
@@ -71,15 +80,6 @@ class Planner {
       DrmPlane *plane = planes->front();
       planes->erase(planes->begin());
       return plane;
-    }
-
-    // Finds and returns the squash layer from the composition
-    static DrmCompositionPlane *GetPrecomp(
-        std::vector<DrmCompositionPlane> *composition) {
-      auto l = GetPrecompIter(composition);
-      if (l == composition->end())
-        return NULL;
-      return &(*l);
     }
 
     // Inserts the given layer:plane in the composition right before the precomp
@@ -138,6 +138,12 @@ class Planner {
       std::map<size_t, DrmHwcLayer *> &layers, bool use_squash_fb,
       DrmCrtc *crtc, std::vector<DrmPlane *> *primary_planes,
       std::vector<DrmPlane *> *overlay_planes);
+
+  bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
+                               uint64_t* zpos,
+                               DrmCrtc *crtc,
+                               DrmResources *drm,
+                               std::vector<DrmCompositionPlane>* composition_plane);
 
   std::tuple<int, std::vector<DrmCompositionPlane>> MatchPlanes(
       std::map<int, std::vector<DrmHwcLayer*>> &layer_map,

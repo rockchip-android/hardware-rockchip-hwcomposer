@@ -88,6 +88,10 @@ class DrmPlane {
   const DrmProperty &feature_property() const;
   bool is_reserved();
   void set_reserved(bool b_reserved);
+  inline uint32_t get_possible_crtc_mask() const
+  {
+        return possible_crtc_mask_;
+  }
 #endif
 
 #if RK_DRM_HWC_DEBUG
