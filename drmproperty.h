@@ -47,7 +47,7 @@ class DrmProperty {
 
   int value(uint64_t *value) const;
 
-  void set_feature(char* pcFeature)const;
+  void set_feature(const char* pcFeature)const;
 
  private:
   class DrmPropertyEnum {
@@ -64,7 +64,7 @@ class DrmProperty {
   DrmPropertyType type_ = DRM_PROPERTY_TYPE_INVALID;
   uint32_t flags_ = 0;
   std::string name_;
-  mutable char* feature_name_;
+  mutable const char* feature_name_;
   uint64_t value_ = 0;
 
   std::vector<uint64_t> values_;

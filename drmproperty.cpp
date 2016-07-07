@@ -75,7 +75,7 @@ std::string DrmProperty::name() const {
   return name_;
 }
 
-void DrmProperty::set_feature(char* pcFeature) const{
+void DrmProperty::set_feature(const char* pcFeature) const{
   feature_name_ = pcFeature;
 }
 

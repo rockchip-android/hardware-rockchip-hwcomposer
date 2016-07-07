@@ -201,7 +201,7 @@ class DrmDisplayComposition {
                           size_t num_exclude_rects);
   void SeparateLayers(DrmHwcRect<int> *exclude_rects, size_t num_exclude_rects);
   int CreateAndAssignReleaseFences();
-  void combine_layer();
+  int combine_layer();
 
   DrmResources *drm_ = NULL;
   DrmCrtc *crtc_ = NULL;

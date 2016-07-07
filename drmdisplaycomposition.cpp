@@ -378,11 +378,11 @@ static void add_layer_by_xpos(std::vector<DrmHwcLayer*>& layers,DrmHwcLayer& lay
     }
 }
 
-void DrmDisplayComposition::combine_layer()
+int DrmDisplayComposition::combine_layer()
 {
     /*Group layer*/
     int zpos = 0;
-    size_t i;
+    size_t i,j;
     uint32_t sort_cnt=0;
     bool is_combine = false;
     layer_map_.clear();
@@ -393,7 +393,7 @@ void DrmDisplayComposition::combine_layer()
         {
             layer_map_[zpos].push_back(&layers_[0]);
         }
-        for(size_t j = i+1;j<MOST_WIN_ZONES && j < layers_.size(); j++) {
+        for(j = i+1;j<MOST_WIN_ZONES && j < layers_.size(); j++) {
             DrmHwcLayer &layer_one = layers_[j];
             layer_one.index = j;
             is_combine = false;
@@ -455,6 +455,13 @@ void DrmDisplayComposition::combine_layer()
                 break;
              }
         }
+
+        if(j==MOST_WIN_ZONES)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: layer_map's size is beyond the plane");
+            return -1;
+        }
+
         if(is_combine)  //all remain layer or limit MOST_WIN_ZONES layer is combine well,it need start a new group.
             zpos++;
         if(sort_cnt)
@@ -492,6 +499,7 @@ void DrmDisplayComposition::combine_layer()
   }
 #endif
 
+    return 0;
 }
 
 int DrmDisplayComposition::Plan(SquashState *squash,
@@ -592,11 +600,14 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   int ret=0;
 
 #if USE_MULTI_AREAS
-  combine_layer();
+  ret = combine_layer();
 
-  std::tie(ret, composition_planes_) = planner_->MatchPlanes(layer_map_,crtc_,drm_);
-  if (ret) {
-    ALOGD_IF(log_level(DBG_VERBOSE),"Planner failed MatchPlanes planes ret=%d", ret);
+  if(0==ret)
+  {
+      std::tie(ret, composition_planes_) = planner_->MatchPlanes(layer_map_,crtc_,drm_);
+      if (ret) {
+        ALOGD_IF(log_level(DBG_VERBOSE),"Planner failed MatchPlanes planes ret=%d", ret);
+      }
   }
 
 #endif
