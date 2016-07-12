@@ -188,6 +188,7 @@ struct DrmHwcLayer {
   uint32_t transform;
   DrmHwcBlending blending = DrmHwcBlending::kNone;
   uint8_t alpha = 0xff;
+  uint32_t frame_no = 0;
   DrmHwcRect<float> source_crop;
   DrmHwcRect<int> display_frame;
   std::vector<DrmHwcRect<int>> source_damage;

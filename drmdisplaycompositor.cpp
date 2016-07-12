@@ -437,7 +437,7 @@ int DrmDisplayCompositor::ApplySquash(DrmDisplayComposition *display_comp) {
     return ret;
   }
 
-  ret = display_comp->CreateNextTimelineFence();
+  ret = display_comp->CreateNextTimelineFence("ApplySquash");
   if (ret <= 0) {
     ALOGE("Failed to create squash framebuffer release fence %d", ret);
     return ret;
@@ -470,7 +470,7 @@ int DrmDisplayCompositor::ApplyPreComposite(
     return ret;
   }
 
-  ret = display_comp->CreateNextTimelineFence();
+  ret = display_comp->CreateNextTimelineFence("ApplyPreComposite");
   if (ret <= 0) {
     ALOGE("Failed to create pre-composite framebuffer release fence %d", ret);
     return ret;
@@ -553,7 +553,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
       squash_layer.display_frame = DrmHwcRect<int>(
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
-      ret = display_comp->CreateNextTimelineFence();
+      ret = display_comp->CreateNextTimelineFence("PrepareFrame");
 
       if (ret <= 0) {
         ALOGE("Failed to create squash framebuffer release fence %d", ret);
@@ -697,7 +697,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         for (int i = 0; i < kAcquireWaitTries; ++i) {
           int fence_timeout = kAcquireWaitTimeoutMs * (1 << i);
           total_fence_timeout += fence_timeout;
-          ret = sync_wait(acquire_fence, fence_timeout);
+          ret = sync_wait(acquire_fence, -1);
           if (ret)
             ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
                   acquire_fence, i, ret, total_fence_timeout);

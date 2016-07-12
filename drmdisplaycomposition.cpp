@@ -63,9 +63,9 @@ bool DrmDisplayComposition::validate_composition_type(DrmCompositionType des) {
   return type_ == DRM_COMPOSITION_TYPE_EMPTY || type_ == des;
 }
 
-int DrmDisplayComposition::CreateNextTimelineFence() {
+int DrmDisplayComposition::CreateNextTimelineFence(char* fence_name) {
   ++timeline_;
-  return sw_sync_fence_create(timeline_fd_, "hwc drm display composition fence",
+  return sw_sync_fence_create(timeline_fd_, fence_name,
                                 timeline_);
 }
 
@@ -284,7 +284,7 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   for (DrmHwcLayer *layer : squash_layers) {
     if (!layer->release_fence)
       continue;
-    int ret = layer->release_fence.Set(CreateNextTimelineFence());
+    int ret = layer->release_fence.Set(CreateNextTimelineFence("squash_layers"));
     if (ret < 0)
       return ret;
   }
@@ -293,16 +293,18 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   for (DrmHwcLayer *layer : pre_comp_layers) {
     if (!layer->release_fence)
       continue;
-    int ret = layer->release_fence.Set(CreateNextTimelineFence());
+    int ret = layer->release_fence.Set(CreateNextTimelineFence("pre_comp_layers"));
     if (ret < 0)
       return ret;
   }
   timeline_pre_comp_done_ = timeline_;
 
+  char acBuf[50];
   for (DrmHwcLayer *layer : comp_layers) {
     if (!layer->release_fence)
       continue;
-    int ret = layer->release_fence.Set(CreateNextTimelineFence());
+    sprintf(acBuf,"frame-%d",layer->frame_no);
+    int ret = layer->release_fence.Set(CreateNextTimelineFence(acBuf));
     if (ret < 0)
       return ret;
   }

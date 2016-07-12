@@ -524,7 +524,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(sf_layer->handle);
   sf_handle = sf_layer->handle;
   alpha = sf_layer->planeAlpha;
-
+  frame_no = g_frame;
   source_crop = DrmHwcRect<float>(
       sf_layer->sourceCropf.left, sf_layer->sourceCropf.top,
       sf_layer->sourceCropf.right, sf_layer->sourceCropf.bottom);
@@ -798,6 +798,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
   init_log_level();
   hwc_dump_fps();
+
+    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
+
 #endif
 
   for (int i = 0; i < (int)num_displays; ++i) {
@@ -827,7 +830,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     std::pair<int, int> skip_layer_indices(-1, -1);
     int num_layers = display_contents[i]->numHwLayers;
 #if RK_DRM_HWC_DEBUG
-    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start----------------------------",g_frame);
 
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
@@ -903,7 +905,11 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   ATRACE_CALL();
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
   int ret = 0;
-
+  int fail_display=-1;
+#if RK_DRM_HWC_DEBUG
+ ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
+ g_frame++;
+#endif
   std::vector<CheckedOutputFd> checked_output_fences;
   std::vector<DrmHwcDisplayContents> displays_contents;
   std::vector<DrmCompositionDisplayLayersMap> layers_map;
@@ -994,20 +1000,25 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         ALOGE(
             "Expected valid layer with HWC_FRAMEBUFFER_TARGET when all "
             "HWC_OVERLAY layers are skipped.");
+        fail_display = i;
         ret = -EINVAL;
       }
       indices_to_composite.push_back(framebuffer_target_index);
     }
   }
 
+#if 0
   if (ret)
     return ret;
-
+#endif
   for (size_t i = 0; i < num_displays; ++i) {
     hwc_display_contents_1_t *dc = sf_display_contents[i];
     DrmHwcDisplayContents &display_contents = displays_contents[i];
     if (!sf_display_contents[i] || i == HWC_DISPLAY_VIRTUAL)
       continue;
+
+    if(i == fail_display)
+        continue;
 
     layers_map.emplace_back();
     DrmCompositionDisplayLayersMap &map = layers_map.back();
@@ -1059,6 +1070,9 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     if (!dc)
       continue;
 
+    if(i == fail_display)
+        continue;
+
     size_t num_dc_layers = dc->numHwLayers;
     for (size_t j = 0; j < num_dc_layers; ++j) {
       hwc_layer_1_t *layer = &dc->hwLayers[j];
@@ -1067,10 +1081,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_add_layer_to_retire_fence(layer, dc);
     }
   }
-#if RK_DRM_HWC_DEBUG
- ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
- g_frame++;
-#endif
+
   composition.reset(NULL);
 
   return ret;
