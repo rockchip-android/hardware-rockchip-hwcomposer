@@ -28,7 +28,7 @@
 
 
 /*hwc version*/
-#define GHWC_VERSION                    "0.07"
+#define GHWC_VERSION                    "0.08"
 
 struct hwc_import_context;
 
