@@ -938,7 +938,6 @@ std::tuple<int, uint32_t> DrmDisplayCompositor::CreateModeBlob(
 void DrmDisplayCompositor::ApplyFrame(
     std::unique_ptr<DrmDisplayComposition> composition, int status) {
   int ret = status;
-
   if (!ret)
     ret = CommitFrame(composition.get(), false);
 
@@ -1039,6 +1038,13 @@ int DrmDisplayCompositor::Composite() {
       ret = ApplyDpms(composition.get());
       if (ret)
         ALOGE("Failed to apply dpms for display %d", display_);
+
+        //zxl:Fix fence timeout bug when plug out HDMI.
+        if(composition.get()->dpms_mode() == DRM_MODE_DPMS_OFF && active_composition_)
+        {
+                active_composition_->SignalCompositionDone();
+        }
+
       return ret;
     case DRM_COMPOSITION_TYPE_MODESET:
       mode_.mode = composition->display_mode();

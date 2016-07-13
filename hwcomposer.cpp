@@ -821,7 +821,18 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 #if RK_DRM_HWC
     //force go into GPU
-    if(hwc_get_int_property("sys.hwc.compose_policy","0") <= 0)
+    /*
+        <=0: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into GPU.
+        =1: DISPLAY_PRIMARY go into overlay,DISPLAY_EXTERNAL go into GPU.
+        =2: DISPLAY_EXTERNAL go into overlay,DISPLAY_PRIMARY go into GPU.
+        others: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into overlay.
+    */
+    int iMode = hwc_get_int_property("sys.hwc.compose_policy","0");
+    if( iMode <= 0 )
+        use_framebuffer_target = true;
+    else if( iMode == 1 && i == 1 )
+        use_framebuffer_target = true;
+    else if ( iMode == 2 && i == 0 )
         use_framebuffer_target = true;
 #endif
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
@@ -905,15 +916,18 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   ATRACE_CALL();
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
   int ret = 0;
-  int fail_display=-1;
+
 #if RK_DRM_HWC_DEBUG
  ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d end----------------------------",g_frame);
  g_frame++;
 #endif
+
   std::vector<CheckedOutputFd> checked_output_fences;
   std::vector<DrmHwcDisplayContents> displays_contents;
   std::vector<DrmCompositionDisplayLayersMap> layers_map;
   std::vector<std::vector<size_t>> layers_indices;
+  std::vector<uint32_t> fail_displays;
+
   displays_contents.reserve(num_displays);
   // layers_map.reserve(num_displays);
   layers_indices.reserve(num_displays);
@@ -1000,7 +1014,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         ALOGE(
             "Expected valid layer with HWC_FRAMEBUFFER_TARGET when all "
             "HWC_OVERLAY layers are skipped.");
-        fail_display = i;
+        fail_displays.emplace_back(i);
         ret = -EINVAL;
       }
       indices_to_composite.push_back(framebuffer_target_index);
@@ -1014,10 +1028,21 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   for (size_t i = 0; i < num_displays; ++i) {
     hwc_display_contents_1_t *dc = sf_display_contents[i];
     DrmHwcDisplayContents &display_contents = displays_contents[i];
+    bool bFindDisplay = false;
     if (!sf_display_contents[i] || i == HWC_DISPLAY_VIRTUAL)
       continue;
 
-    if(i == fail_display)
+    for (auto &fail_display : fail_displays) {
+        if( i == fail_display )
+        {
+            bFindDisplay = true;
+#if RK_DRM_HWC_DEBUG
+            ALOGD_IF(log_level(DBG_VERBOSE),"%s:line=%d,Find fail display %d",__FUNCTION__,__LINE__,i);
+#endif
+            break;
+        }
+    }
+    if(bFindDisplay)
         continue;
 
     layers_map.emplace_back();
@@ -1042,7 +1067,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);
-      ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
+      ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
 #endif
       map.layers.emplace_back(std::move(layer));
     }
@@ -1067,10 +1092,21 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 
   for (size_t i = 0; i < num_displays; ++i) {
     hwc_display_contents_1_t *dc = sf_display_contents[i];
+    bool bFindDisplay = false;
     if (!dc)
       continue;
 
-    if(i == fail_display)
+    for (auto &fail_display : fail_displays) {
+        if( i == fail_display )
+        {
+            bFindDisplay = true;
+#if RK_DRM_HWC_DEBUG
+            ALOGD_IF(log_level(DBG_DEBUG),"%s:line=%d,Find fail display %d",__FUNCTION__,__LINE__,i);
+#endif
+            break;
+        }
+    }
+    if(bFindDisplay)
         continue;
 
     size_t num_dc_layers = dc->numHwLayers;
