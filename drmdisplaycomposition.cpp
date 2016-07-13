@@ -63,7 +63,7 @@ bool DrmDisplayComposition::validate_composition_type(DrmCompositionType des) {
   return type_ == DRM_COMPOSITION_TYPE_EMPTY || type_ == des;
 }
 
-int DrmDisplayComposition::CreateNextTimelineFence(char* fence_name) {
+int DrmDisplayComposition::CreateNextTimelineFence(const char* fence_name) {
   ++timeline_;
   return sw_sync_fence_create(timeline_fd_, fence_name,
                                 timeline_);

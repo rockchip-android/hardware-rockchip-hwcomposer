@@ -131,7 +131,7 @@ class DrmDisplayComposition {
 
   int FinalizeComposition();
 
-  int CreateNextTimelineFence(char* fence_name);
+  int CreateNextTimelineFence(const char* fence_name);
   int SignalSquashDone() {
     return IncreaseTimelineToPoint(timeline_squash_done_);
   }

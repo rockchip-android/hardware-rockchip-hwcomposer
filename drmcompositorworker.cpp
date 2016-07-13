@@ -72,7 +72,7 @@ void DrmCompositorWorker::Routine() {
       case -ETIMEDOUT:
         ret = compositor_->SquashAll();
         if (ret)
-          ALOGE("Failed to squash all %d", ret);
+          ALOGD_IF(log_level(DBG_DEBUG),"Failed to squash all %d", ret);
         did_squash_all_ = true;
         return;
       default:
