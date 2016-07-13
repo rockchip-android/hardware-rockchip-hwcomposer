@@ -387,15 +387,25 @@ int DrmDisplayComposition::combine_layer()
     size_t i,j;
     uint32_t sort_cnt=0;
     bool is_combine = false;
+    size_t min_size = (MOST_WIN_ZONES<layers_.size())?MOST_WIN_ZONES:layers_.size();
+
     layer_map_.clear();
 
-    for (i = 0; i < layers_.size();) {
+    for (i = 0; i < layers_.size(); ) {
         sort_cnt=0;
         if(i == 0)
         {
             layer_map_[zpos].push_back(&layers_[0]);
         }
-        for(j = i+1;j<MOST_WIN_ZONES && j < layers_.size(); j++) {
+
+        if(i == min_size)
+        {
+            //We can use pre-comp to optimise.
+            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: it remain layer i=%d, min_size=%d",i,min_size);
+            return -1;
+        }
+
+        for(j = i+1; j < min_size; j++) {
             DrmHwcLayer &layer_one = layers_[j];
             layer_one.index = j;
             is_combine = false;
@@ -458,12 +468,6 @@ int DrmDisplayComposition::combine_layer()
              }
         }
 
-        if(j==MOST_WIN_ZONES)
-        {
-            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: layer_map's size is beyond the plane");
-            return -1;
-        }
-
         if(is_combine)  //all remain layer or limit MOST_WIN_ZONES layer is combine well,it need start a new group.
             zpos++;
         if(sort_cnt)
@@ -471,7 +475,6 @@ int DrmDisplayComposition::combine_layer()
         else
             i++;
     }
-
 
   //sort layer by xpos
   for (LayerMap::iterator iter = layer_map_.begin();
