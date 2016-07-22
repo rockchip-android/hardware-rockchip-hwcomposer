@@ -560,15 +560,18 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
         v_scale_mul = (float) (source_crop.bottom - source_crop.top)
 	/ (display_frame.bottom - display_frame.top);
     }
-    width = source_crop.right - source_crop.left;
-    height = source_crop.bottom - source_crop.top;
+    width = drm_handle->width;
+    height = drm_handle->height;
+    stride = drm_handle->width;
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
     is_match = false;
     is_take = false;
-
+#if RK_RGA
+    is_rotate_by_rga = false;
+#endif
     bpp = android::bytesPerPixel(format);
-    size = width * height * bpp;
+    size = (source_crop.right - source_crop.left) * (source_crop.bottom - source_crop.top) * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
     name=sf_layer->LayerName;
 
@@ -1425,6 +1428,8 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     ALOGE("Failed to open gralloc module %d", ret);
     return ret;
   }
+
+  ctx->drm.setGralloc(ctx->gralloc);
 
   ret = ctx->dummy_timeline.Init();
   if (ret) {

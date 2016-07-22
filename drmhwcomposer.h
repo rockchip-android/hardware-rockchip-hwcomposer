@@ -202,11 +202,15 @@ struct DrmHwcLayer {
   bool is_yuv;
   bool is_scale;
   bool is_large;
+#if RK_RGA
+  bool is_rotate_by_rga;
+#endif
   float h_scale_mul;
   float v_scale_mul;
   int format;
   int width;
   int height;
+  int stride;
   int bpp;
   int group_id;
   int share_id;

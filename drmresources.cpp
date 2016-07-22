@@ -399,6 +399,24 @@ int DrmResources::Init() {
       return ret;
     }
   }
+
+#if RK_RGA
+    /*
+    *init rga moudle
+    */
+    ret = hw_get_module(DRMRGA_HARDWARE_MODULE_ID, &rga_module_);
+    if (ret) {
+        ALOGE("%s,%d faile get hw moudle\n",__FUNCTION__,__LINE__);
+        return ret;
+    }
+
+    ret = rga_open(rga_module_, &rga_device_);
+    if (ret) {
+        ALOGE("device failed to initialize (%s)\n", strerror(-ret));
+        return ret;
+    }
+#endif
+
   return 0;
 }
 

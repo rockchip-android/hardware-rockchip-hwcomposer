@@ -288,6 +288,9 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
   drm_ = drm;
   display_ = display;
+#if RK_RGA
+  mRga_ = drm->GetRgaDevice();
+#endif
 
   int ret = pthread_mutex_init(&lock_, NULL);
   if (ret) {
@@ -417,6 +420,94 @@ int DrmDisplayCompositor::PrepareFramebuffer(
   return ret;
 }
 
+#if RK_RGA
+int DrmDisplayCompositor::PrepareRgaBuffer(
+    DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer) {
+  int ret = rgaBuffer.WaitReleased(-1);
+  if (ret) {
+    ALOGE("Failed to wait for rga buffer release %d", ret);
+    return ret;
+  }
+
+  rgaBuffer.set_release_fence_fd(-1);
+  if (!rgaBuffer.Allocate(layer.width, layer.height)) {
+    ALOGE("Failed to allocate rga buffer with size %dx%d", layer.width, layer.height);
+    return -ENOMEM;
+  }
+
+  drm_rga_t rects;
+  int dst_w = layer.display_frame.right - layer.display_frame.left;
+  int dst_h = layer.display_frame.bottom - layer.display_frame.top;
+  int rga_transform = 0;
+  float l,t,r,b;
+  switch(layer.transform)
+  {
+    case DrmHwcTransform::kRotate90:
+        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_set_rect(&rects.dst,dst_w-1,0,dst_h,dst_w,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_transform = DRM_RGA_TRANSFORM_ROT_90;
+        l = layer.height - layer.source_crop.bottom;
+        t = layer.source_crop.left;
+        r = layer.height - layer.source_crop.top;
+        b = layer.source_crop.right;
+        break;
+    case DrmHwcTransform::kRotate270:
+        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_set_rect(&rects.dst,0,dst_h-1,dst_h,dst_w,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_transform = DRM_RGA_TRANSFORM_ROT_270;
+        l = layer.source_crop.top;
+        t = layer.width - layer.source_crop.right;
+        r = layer.source_crop.bottom;
+        b = layer.width - layer.source_crop.left;
+        break;
+    case DrmHwcTransform::kRotate180:
+        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_set_rect(&rects.dst,dst_w-1,dst_h-1,dst_w,dst_h,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+        rga_transform = DRM_RGA_TRANSFORM_ROT_180;
+        l = layer.width - layer.source_crop.right;
+        t = layer.height - layer.source_crop.bottom;
+        r = layer.width - layer.source_crop.left;
+        b = layer.height - layer.source_crop.top;
+        break;
+    default:
+        ALOGE("wrong transform=0x%x",layer.transform);
+        ret = -1;
+        return ret;
+  }
+
+  layer.source_crop = DrmHwcRect<float>(l,t,r,b);
+
+  ret = mRga_->rgaRotateScale(mRga_,layer.sf_handle,rgaBuffer.buffer()->handle,&rects,rga_transform);
+  if(ret) {
+    ALOGE("rgaRotateScale error : src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
+        rects.src.xoffset,rects.src.yoffset,rects.src.width,rects.src.height,rects.src.wstride,
+        rects.dst.xoffset,rects.dst.yoffset,rects.dst.width,rects.dst.height,rects.dst.wstride);
+    ALOGE("rgaRotateScale error : %s,src hnd=%p,dst hnd=%p\n",
+        strerror(errno),(void*)layer.sf_handle,(void*)(rgaBuffer.buffer()->handle));
+  }
+
+  //instead of the original DrmHwcLayer
+  layer.is_rotate_by_rga = true;
+  layer.buffer.Clear();
+  layer.sf_handle = rgaBuffer.buffer()->handle;
+  ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
+                                           display_comp->importer());
+  if (ret)
+  {
+    ALOGE("Failed to import rga buffer for display %d", ret);
+    return ret;
+  }
+  ret = layer.handle.CopyBufferHandle(rgaBuffer.buffer()->handle, drm_->getGralloc());
+  if (ret)
+  {
+    ALOGE("Failed to Copy rga buffer,ret=%d", ret);
+    return ret;
+  }
+
+  return ret;
+}
+#endif
+
 int DrmDisplayCompositor::ApplySquash(DrmDisplayComposition *display_comp) {
   int ret = 0;
 
@@ -481,6 +572,60 @@ int DrmDisplayCompositor::ApplyPreComposite(
 
   return 0;
 }
+
+#if RK_RGA
+static int fence_merge(char* value,int fd1,int fd2)
+{
+    int ret = -1;
+    if(fd1 >= 0 && fd2 >= 0) {
+        ret = sync_merge(value, fd1, fd2);
+        close(fd1);close(fd2);
+    } else if (fd1 >= 0) {
+        ret = sync_merge(value, fd1, fd1);
+        close(fd1);
+    } else if (fd2 >= 0) {
+        ret = sync_merge(value, fd2, fd2);
+        close(fd2);
+    }
+    if(ret < 0) {
+        ALOGD("%s:merge[%d,%d]:%s",value,fd1,fd2,strerror(errno));
+    }
+    ALOGD_IF(log_level(DBG_DEBUG),"merge fd[%d,%d] to fd=%d",fd1,fd2,ret);
+    return ret;
+}
+
+int DrmDisplayCompositor::ApplyPreRotate(
+    DrmDisplayComposition *display_comp, DrmHwcLayer &layer) {
+  int ret = 0;
+
+  DrmRgaBuffer &rga_buffer = rgaBuffers_[rgaBuffer_index_];
+  ret = PrepareRgaBuffer(rga_buffer, display_comp, layer);
+  if (ret) {
+    ALOGE("Failed to prepare rga buffer for RGA rotate %d", ret);
+    return ret;
+  }
+
+  ret = display_comp->CreateNextTimelineFence("ApplyPreRotate");
+  if (ret <= 0) {
+    ALOGE("Failed to create RGA rotate release fence %d", ret);
+    return ret;
+  }
+
+  char acBuf[50];
+  sprintf(acBuf,"rga_buffer-%d",rgaBuffer_index_);
+  ret = fence_merge(acBuf,layer.release_fence.get(),ret);
+  if (ret <= 0) {
+    ALOGE("Failed to merge layer release fence %d,ret=%d",layer.release_fence.get(),ret);
+    return ret;
+  }
+
+  rga_buffer.set_release_fence_fd(ret);
+  layer.release_fence.Set(ret);
+  //display_comp->SignalPreRotateDone();
+
+  return 0;
+}
+#endif
 
 int DrmDisplayCompositor::DisablePlanes(DrmDisplayComposition *display_comp) {
   drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
@@ -578,6 +723,9 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
 
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     std::vector<size_t> &source_layers = comp_plane.source_layers();
+#if RK_RGA
+    DrmHwcLayer &layer = layers[source_layers.front()];
+#endif
     switch (comp_plane.type()) {
       case DrmCompositionPlane::Type::kSquash:
         if (source_layers.size())
@@ -596,6 +744,18 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         source_layers.clear();
         source_layers.push_back(pre_comp_layer_index);
         break;
+#if RK_RGA
+      case DrmCompositionPlane::Type::kLayer:
+        if(layer.is_yuv && layer.transform!=0)
+        {
+            ret = ApplyPreRotate(display_comp,layer);
+            if (ret)
+                return ret;
+
+            rgaBuffer_index_ = (rgaBuffer_index_ + 1) % MaxVideoBackBuffers;
+        }
+        break;
+#endif
       default:
         break;
     }
@@ -677,7 +837,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
-
+#if RK_RGA
+    bool is_rotate_by_rga = false;
+#endif
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
         ALOGE("Can't handle more than one source layer sz=%zu type=%d",
@@ -723,6 +885,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       if (layer.blending == DrmHwcBlending::kPreMult)
         alpha = layer.alpha;
 
+#if RK_RGA
+      is_rotate_by_rga = layer.is_rotate_by_rga;
+#endif
       rotation = 0;
       if (layer.transform & DrmHwcTransform::kFlipH)
         rotation |= 1 << DRM_REFLECT_X;
@@ -749,7 +914,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
 
     // TODO: Once we have atomic test, this should fall back to GL
-    if (rotation && plane->rotation_property().id() == 0) {
+    if (
+#if RK_RGA
+    !is_rotate_by_rga &&
+#endif
+    rotation && plane->rotation_property().id() == 0) {
       ALOGE("Rotation is not supported on plane %d", plane->id());
       ret = -EINVAL;
       break;
@@ -812,7 +981,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     index++;
 #endif
 
-    if (plane->rotation_property().id()) {
+    if (
+#if RK_RGA
+    !is_rotate_by_rga &&
+#endif
+    plane->rotation_property().id()) {
       ret = drmModeAtomicAddProperty(pset, plane->id(),
                                      plane->rotation_property().id(),
                                      rotation) < 0;

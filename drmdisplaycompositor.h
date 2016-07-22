@@ -29,12 +29,19 @@
 #include <sstream>
 #include <tuple>
 
+#if RK_RGA
+#include <drmrga.h>
+#endif
+
 #include <hardware/hardware.h>
 #include <hardware/hwcomposer.h>
 
 // One for the front, one for the back, and one for cases where we need to
 // squash a frame that the hw can't display with hw overlays.
 #define DRM_DISPLAY_BUFFERS 3
+#define MaxVideoBackBuffers             (3)
+#define RGA_MAX_WIDTH                   (4096)
+#define RGA_MAX_HEIGHT                  (2304)
 
 namespace android {
 
@@ -141,8 +148,16 @@ class DrmDisplayCompositor {
 
   int PrepareFramebuffer(DrmFramebuffer &fb,
                          DrmDisplayComposition *display_comp);
+#if RK_RGA
+  int PrepareRgaBuffer(DrmRgaBuffer &rgaBuffer,
+                         DrmDisplayComposition *display_comp, DrmHwcLayer &layer);
+#endif
   int ApplySquash(DrmDisplayComposition *display_comp);
   int ApplyPreComposite(DrmDisplayComposition *display_comp);
+#if RK_RGA
+  int ApplyPreRotate(DrmDisplayComposition *display_comp,
+                DrmHwcLayer &layer);
+#endif
   int PrepareFrame(DrmDisplayComposition *display_comp);
   int CommitFrame(DrmDisplayComposition *display_comp, bool test_only);
   int SquashFrame(DrmDisplayComposition *src, DrmDisplayComposition *dst);
@@ -156,6 +171,9 @@ class DrmDisplayCompositor {
 
   DrmResources *drm_;
   int display_;
+#if RK_RGA
+  rga_device_t* mRga_;
+#endif
 
   DrmCompositorWorker worker_;
   FrameWorker frame_worker_;
@@ -171,6 +189,10 @@ class DrmDisplayCompositor {
 
   int framebuffer_index_;
   DrmFramebuffer framebuffers_[DRM_DISPLAY_BUFFERS];
+#if RK_RGA
+  int rgaBuffer_index_;
+  DrmRgaBuffer rgaBuffers_[MaxVideoBackBuffers];
+#endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;
 
   SquashState squash_state_;

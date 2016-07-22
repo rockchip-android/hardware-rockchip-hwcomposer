@@ -25,6 +25,9 @@
 #include "drmplane.h"
 
 #include <stdint.h>
+#if RK_RGA
+#include <drmrga.h>
+#endif
 
 namespace android {
 #if RK_DRM_HWC_DEBUG
@@ -51,6 +54,14 @@ class DrmResources {
 
   int fd() const {
     return fd_.get();
+  }
+
+  const gralloc_module_t * getGralloc() {
+        return gralloc_;
+  }
+
+  void setGralloc(const gralloc_module_t *gralloc) {
+        gralloc_ = gralloc;
   }
 
   const std::vector<std::unique_ptr<DrmConnector>> &connectors() const {
@@ -100,6 +111,12 @@ class DrmResources {
   std::vector<PlaneGroup *>& GetPlaneGroups();
 #endif
 
+#if RK_RGA
+  inline rga_device_t* GetRgaDevice() {
+        return rga_device_;
+  };
+#endif
+
  private:
   int TryEncoderForDisplay(int display, DrmEncoder *enc);
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
@@ -127,6 +144,11 @@ class DrmResources {
 #endif
   DrmCompositor compositor_;
   DrmEventListener event_listener_;
+#if RK_RGA
+  const hw_module_t *rga_module_;
+  rga_device_t      *rga_device_;
+#endif
+  const gralloc_module_t *gralloc_;
 };
 }
 
