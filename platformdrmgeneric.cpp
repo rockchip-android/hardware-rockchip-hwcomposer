@@ -89,11 +89,15 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
 int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(handle);
   if (!gr_handle)
+  {
+    gralloc_drm_unlock_handle(handle);
     return -EINVAL;
+  }
 
   uint32_t gem_handle;
   int ret = drmPrimeFDToHandle(drm_->fd(), gr_handle->prime_fd, &gem_handle);
   if (ret) {
+    gralloc_drm_unlock_handle(handle);
     ALOGE("failed to import prime fd %d ret=%d", gr_handle->prime_fd, ret);
     return ret;
   }
@@ -119,6 +123,7 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
     ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",
     drm_->fd(), bo->width, bo->height, gr_handle->format,bo->format,
     gem_handle, bo->pitches[0], bo->fb_id);
+    gralloc_drm_unlock_handle(handle);
     return ret;
   }
 
@@ -146,6 +151,7 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   }
 
 #endif
+  gralloc_drm_unlock_handle(handle);
 
   return ret;
 }

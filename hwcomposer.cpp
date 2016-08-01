@@ -106,6 +106,7 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
         struct gralloc_drm_bo_t *gralloc_bo = gr_handle->data;
         if (!gralloc_bo) {
             ALOGE("Could not get drm bo from handle");
+            gralloc_drm_unlock_handle(handle);
             return -EINVAL;
         }
 
@@ -129,6 +130,8 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
 
             gralloc->unlock(gralloc, handle);
         //}
+
+        gralloc_drm_unlock_handle(handle);
     }
     return 0;
 }
