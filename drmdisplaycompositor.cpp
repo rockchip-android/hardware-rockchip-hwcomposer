@@ -723,9 +723,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
 
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     std::vector<size_t> &source_layers = comp_plane.source_layers();
-#if RK_RGA
-    DrmHwcLayer &layer = layers[source_layers.front()];
-#endif
+
     switch (comp_plane.type()) {
       case DrmCompositionPlane::Type::kSquash:
         if (source_layers.size())
@@ -746,13 +744,17 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         break;
 #if RK_RGA
       case DrmCompositionPlane::Type::kLayer:
-        if(layer.is_yuv && layer.transform!=0)
+        if(!source_layers.empty())
         {
-            ret = ApplyPreRotate(display_comp,layer);
-            if (ret)
-                return ret;
+            DrmHwcLayer &layer = layers[source_layers.front()];
+            if(layer.is_yuv && layer.transform!=0)
+            {
+                ret = ApplyPreRotate(display_comp,layer);
+                if (ret)
+                    return ret;
 
-            rgaBuffer_index_ = (rgaBuffer_index_ + 1) % MaxVideoBackBuffers;
+                rgaBuffer_index_ = (rgaBuffer_index_ + 1) % MaxVideoBackBuffers;
+            }
         }
         break;
 #endif
