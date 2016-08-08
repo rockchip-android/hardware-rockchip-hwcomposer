@@ -61,14 +61,15 @@ LOCAL_SRC_FILES := \
 	separate_rects.cpp \
 	virtualcompositorworker.cpp \
 	vsyncworker.cpp \
-	worker.cpp
+	worker.cpp \
+        hwcutil.cpp
 
 ifeq ($(strip $(BOARD_DRM_HWCOMPOSER_BUFFER_IMPORTER)),nvidia-gralloc)
 LOCAL_CPPFLAGS += -DUSE_NVIDIA_IMPORTER
 else
 LOCAL_CPPFLAGS += -DUSE_DRM_GENERIC_IMPORTER -DRK_DRM_HWC_DEBUG=1 \
                -DRK_DRM_GRALLOC=1 -DRK_DRM_HWC=1 -DUSE_SQUASH=1 -DUSE_PRE_COMP=1 \
-               -DUSE_MULTI_AREAS=1 -DMALI_AFBC_GRALLOC=1 -DRK_RGA=0
+               -DUSE_MULTI_AREAS=1 -DMALI_AFBC_GRALLOC=1 -DRK_RGA=0 -DRK_VR=0
 MAJOR_VERSION := "RK_GRAPHICS_VER=commit-id:$(shell cd $(LOCAL_PATH) && git log  -1 --oneline | awk '{print $$1}')"
 LOCAL_CFLAGS += -DRK_GRAPHICS_VER=\"$(MAJOR_VERSION)\"
 endif

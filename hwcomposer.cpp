@@ -52,6 +52,10 @@
 #include "gralloc_drm_handle.h"
 #endif
 
+#if RK_VR
+#include "hwcutil.h"
+#endif
+
 #define UM_PER_INCH 25400
 
 namespace android {
@@ -1264,10 +1268,30 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
         values[i] = 1000 * 1000 * 1000 / mode.v_refresh();
         break;
       case HWC_DISPLAY_WIDTH:
+      {
+#if RK_VR
+        int xxx_w =  hwc_get_int_property("sys.xxx.x_w","720");
+        if(xxx_w)
+            values[i] = xxx_w;
+        else
+            values[i] = mode.h_display();
+#else
         values[i] = mode.h_display();
+#endif
+       }
         break;
       case HWC_DISPLAY_HEIGHT:
+      {
+#if RK_VR
+        int xxx_h =  hwc_get_int_property("sys.xxx.x_h","1280");
+        if(xxx_h)
+            values[i] = xxx_h;
+        else
+            values[i] = mode.v_display();
+#else
         values[i] = mode.v_display();
+#endif
+      }
         break;
       case HWC_DISPLAY_DPI_X:
         /* Dots per 1000 inches */

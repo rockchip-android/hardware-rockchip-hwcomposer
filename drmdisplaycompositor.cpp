@@ -37,6 +37,9 @@
 #include "drmplane.h"
 #include "drmresources.h"
 #include "glworker.h"
+#if RK_VR
+#include "hwcutil.h"
+#endif
 
 #define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 2
 
@@ -873,6 +876,31 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
   }
 
+#if RK_VR
+  float w_scale=1.0,h_scale=1.0;
+  int xxx_w =  hwc_get_int_property("sys.xxx.x_w","720");
+  int xxx_h =  hwc_get_int_property("sys.xxx.x_h","1280");
+  uint32_t act_w, act_h;
+  std::tie(act_w, act_h, ret) = GetActiveModeResolution();
+  if (ret) {
+    ALOGE(
+        "Failed to allocate framebuffer because the display resolution could "
+        "not be determined %d",
+        ret);
+    return ret;
+  }
+  if(act_w && xxx_w)
+  {
+    w_scale = (float)act_w / xxx_w;
+    ALOGD("zxl xxx_w=%d,act_w=%d,w_scale=%f,w_scale=%d",xxx_w,act_w,w_scale,(int)w_scale);
+  }
+
+  if(act_h && xxx_h)
+  {
+    h_scale = (float)act_h / xxx_h;
+  }
+#endif
+
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     DrmPlane *plane = comp_plane.plane();
     DrmCrtc *crtc = comp_plane.crtc();
@@ -977,22 +1005,38 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       break;
     }
 
+    int dst_l,dst_t,dst_r,dst_b;
+#if RK_VR
+    dst_l = display_frame.left * w_scale;
+    dst_t = display_frame.top * h_scale;
+    dst_r = display_frame.right * w_scale;
+    dst_b = display_frame.bottom * h_scale;
+  //  ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
+      ALOGD("zxl scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
+
+#else
+    dst_l = display_frame.left;
+    dst_t = display_frame.top;
+    dst_r = display_frame.right;
+    dst_b = display_frame.bottom;
+#endif
+
     ret = drmModeAtomicAddProperty(pset, plane->id(),
                                    plane->crtc_property().id(), crtc->id()) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->fb_property().id(), fb_id) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->crtc_x_property().id(),
-                                    display_frame.left) < 0;
+                                    dst_l) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->crtc_y_property().id(),
-                                    display_frame.top) < 0;
+                                    dst_t) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->crtc_w_property().id(),
-               display_frame.right - display_frame.left) < 0;
+               dst_r - dst_l) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->crtc_h_property().id(),
-               display_frame.bottom - display_frame.top) < 0;
+               dst_b - dst_t) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->src_x_property().id(),
                                     (int)(source_crop.left) << 16) < 0;
