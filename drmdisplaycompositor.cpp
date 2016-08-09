@@ -523,10 +523,10 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
 
     layer.source_crop = DrmHwcRect<float>(l,t,r,b);
 
-    ALOGD_IF(1,"rgaRotateScale  : mRga_=%p,src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
+    ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale  : mRga_=%p,src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
         mRga_,rects.src.xoffset,rects.src.yoffset,rects.src.width,rects.src.height,rects.src.wstride,
         rects.dst.xoffset,rects.dst.yoffset,rects.dst.width,rects.dst.height,rects.dst.wstride);
-    ALOGD_IF(1,"rgaRotateScale : src hnd=%p,dst hnd=%p,layer.format=0x%x,rga_transform=0x%x\n",
+    ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale : src hnd=%p,dst hnd=%p,layer.format=0x%x,rga_transform=0x%x\n",
         (void*)layer.sf_handle,(void*)(rgaBuffer.buffer()->handle),layer.format,rga_transform);
 
     ret = mRga_->rgaRotateScale(mRga_,layer.sf_handle,rgaBuffer.buffer()->handle,&rects,rga_transform);
