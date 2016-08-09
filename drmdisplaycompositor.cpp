@@ -930,17 +930,22 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       if (!test_only && layer.acquire_fence.get() >= 0) {
         int acquire_fence = layer.acquire_fence.get();
         int total_fence_timeout = 0;
-        for (int i = 0; i < kAcquireWaitTries; ++i) {
-          int fence_timeout = kAcquireWaitTimeoutMs * (1 << i);
-          total_fence_timeout += fence_timeout;
-          ret = sync_wait(acquire_fence, -1);
-          if (ret)
-            ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
-                  acquire_fence, i, ret, total_fence_timeout);
-        }
-        if (ret) {
-          ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);
-          break;
+#if RK_VR
+        if(!(layer.gralloc_buffer_usage & 0x08000000))
+#endif
+        {
+            for (int i = 0; i < kAcquireWaitTries; ++i) {
+              int fence_timeout = kAcquireWaitTimeoutMs * (1 << i);
+              total_fence_timeout += fence_timeout;
+              ret = sync_wait(acquire_fence, -1);
+              if (ret)
+                ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
+                      acquire_fence, i, ret, total_fence_timeout);
+            }
+            if (ret) {
+              ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);
+              break;
+            }
         }
         layer.acquire_fence.Close();
       }

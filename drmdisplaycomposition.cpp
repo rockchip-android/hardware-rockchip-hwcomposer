@@ -303,10 +303,22 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   for (DrmHwcLayer *layer : comp_layers) {
     if (!layer->release_fence)
       continue;
-    sprintf(acBuf,"frame-%d",layer->frame_no);
-    int ret = layer->release_fence.Set(CreateNextTimelineFence(acBuf));
-    if (ret < 0)
-      return ret;
+#if RK_VR
+    if(layer->release_fence.get() > -1 && (layer->gralloc_buffer_usage & 0x08000000))
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),">>>close releaseFenceFd:%d,layername=%s",
+                    layer->release_fence.get(),layer->name.c_str());
+        close(layer->release_fence.get());
+        layer->release_fence.Set(-1);
+    }
+    else
+#endif
+    {
+        sprintf(acBuf,"frame-%d",layer->frame_no);
+        int ret = layer->release_fence.Set(CreateNextTimelineFence(acBuf));
+        if (ret < 0)
+          return ret;
+    }
   }
 
   return 0;
