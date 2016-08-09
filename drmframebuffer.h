@@ -53,7 +53,7 @@ struct DrmRgaBuffer {
     release_fence_fd_ = fd;
   }
 
-  bool Allocate(uint32_t w, uint32_t h) {
+  bool Allocate(uint32_t w, uint32_t h, uint32_t format) {
     if (is_valid()) {
       if (buffer_->getWidth() == w && buffer_->getHeight() == h)
         return true;
@@ -66,9 +66,8 @@ struct DrmRgaBuffer {
       }
       Clear();
     }
-    buffer_ = new GraphicBuffer(w, h, PIXEL_FORMAT_RGBA_8888,
-                                GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |
-                                    GRALLOC_USAGE_HW_COMPOSER);
+    buffer_ = new GraphicBuffer(w, h, format,
+                                 GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK);
     release_fence_fd_ = -1;
     return is_valid();
   }

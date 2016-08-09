@@ -171,9 +171,6 @@ class DrmDisplayCompositor {
 
   DrmResources *drm_;
   int display_;
-#if RK_RGA
-  rga_device_t* mRga_;
-#endif
 
   DrmCompositorWorker worker_;
   FrameWorker frame_worker_;
@@ -192,6 +189,7 @@ class DrmDisplayCompositor {
 #if RK_RGA
   int rgaBuffer_index_;
   DrmRgaBuffer rgaBuffers_[MaxVideoBackBuffers];
+  rga_device_t* mRga_;
 #endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;
 

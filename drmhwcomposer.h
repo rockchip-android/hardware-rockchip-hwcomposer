@@ -172,6 +172,7 @@ enum DrmHwcTransform {
   kRotate90 = 1 << 2,
   kRotate180 = 1 << 3,
   kRotate270 = 1 << 4,
+  kRotate0 = 1 << 5
 };
 
 enum class DrmHwcBlending : int32_t {

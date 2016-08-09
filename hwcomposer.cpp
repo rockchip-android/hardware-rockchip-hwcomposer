@@ -85,7 +85,7 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
     {
         //static int test = 0;
         static int DumpSurfaceCount = 0;
-        int32_t SrcStride = 4 ;
+       // int32_t SrcStride = 2 ;
         FILE * pfile = NULL;
         char data_name[100] ;
         const gralloc_module_t *gralloc;
@@ -116,16 +116,17 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
           //  test = 1;
 
             DumpSurfaceCount++;
-            sprintf(data_name,"/data/dump/dmlayer%d_%d_%d_%d.bin", DumpSurfaceCount,
-                    gr_handle->width,gr_handle->height,SrcStride);
+            sprintf(data_name,"/data/dump/dmlayer%d_%d_%d.bin", DumpSurfaceCount,
+                    gr_handle->pixel_stride,gr_handle->height);
             gralloc->lock(gralloc, handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
                             0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
             pfile = fopen(data_name,"wb");
             if(pfile)
             {
-                fwrite((const void *)cpu_addr,(size_t)(SrcStride * gr_handle->width*gr_handle->height),1,pfile);
+                fwrite((const void *)cpu_addr,(size_t)(gr_handle->stride*gr_handle->height),1,pfile);
                 fclose(pfile);
-                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,size :%d",layer_name,data_name,gr_handle->width,gr_handle->height,SrcStride);
+                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,stride :%d,cpu_addr=%p",
+                    layer_name,data_name,gr_handle->width,gr_handle->height,gr_handle->stride,cpu_addr);
             }
 
             gralloc->unlock(gralloc, handle);
@@ -133,6 +134,8 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
 
         gralloc_drm_unlock_handle(handle);
     }
+
+   // property_set("sys.dump","false");
     return 0;
 }
 
@@ -562,7 +565,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     }
     width = drm_handle->width;
     height = drm_handle->height;
-    stride = drm_handle->width;
+    stride = drm_handle->pixel_stride;
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
     is_match = false;
@@ -581,6 +584,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
 #endif
 
   transform = 0;
+
   // 270* and 180* cannot be combined with flips. More specifically, they
   // already contain both horizontal and vertical flips, so those fields are
   // redundant in this case. 90* rotation can be combined with either horizontal
@@ -597,6 +601,12 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     if (sf_layer->transform & HWC_TRANSFORM_ROT_90)
       transform |= DrmHwcTransform::kRotate90;
   }
+
+    if(!strcmp(sf_layer->LayerName ,"SurfaceView"))
+    {
+        transform |= DrmHwcTransform::kRotate90;
+        //transform |= DrmHwcTransform::kFlipH;
+    }
 
   switch (sf_layer->blending) {
     case HWC_BLENDING_NONE:
@@ -778,7 +788,9 @@ static bool check_layer(hwc_layer_1_t * Layer) {
 struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
+#if RK_RGA
         || (Layer->transform)
+#endif
         ||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha!=0xFF)
         ){
         return false;
@@ -850,7 +862,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-
       dump_layer(false,layer,j);
     }
 #endif

@@ -247,6 +247,10 @@ DrmDisplayCompositor::DrmDisplayCompositor()
       active_(false),
       use_hw_overlays_(true),
       framebuffer_index_(0),
+#if RK_RGA
+      rgaBuffer_index_(0),
+      mRga_(NULL),
+#endif
       squash_framebuffer_index_(0),
       dump_frames_composited_(0),
       dump_last_timestamp_ns_(0) {
@@ -288,9 +292,6 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
   drm_ = drm;
   display_ = display;
-#if RK_RGA
-  mRga_ = drm->GetRgaDevice();
-#endif
 
   int ret = pthread_mutex_init(&lock_, NULL);
   if (ret) {
@@ -422,89 +423,140 @@ int DrmDisplayCompositor::PrepareFramebuffer(
 
 #if RK_RGA
 int DrmDisplayCompositor::PrepareRgaBuffer(
-    DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer) {
-  int ret = rgaBuffer.WaitReleased(-1);
-  if (ret) {
-    ALOGE("Failed to wait for rga buffer release %d", ret);
-    return ret;
-  }
+DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer) {
+    drm_rga_t rects;
+    int rga_transform = 0;
+    float l,t,r,b;
+    int ret;
+    int dst_w,dst_h;
 
-  rgaBuffer.set_release_fence_fd(-1);
-  if (!rgaBuffer.Allocate(layer.width, layer.height)) {
-    ALOGE("Failed to allocate rga buffer with size %dx%d", layer.width, layer.height);
-    return -ENOMEM;
-  }
+    ret = rgaBuffer.WaitReleased(-1);
+    if (ret) {
+        ALOGE("Failed to wait for rga buffer release %d", ret);
+        return ret;
+    }
 
-  drm_rga_t rects;
-  int dst_w = layer.display_frame.right - layer.display_frame.left;
-  int dst_h = layer.display_frame.bottom - layer.display_frame.top;
-  int rga_transform = 0;
-  float l,t,r,b;
-  switch(layer.transform)
-  {
-    case DrmHwcTransform::kRotate90:
-        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
-        rga_set_rect(&rects.dst,dst_w-1,0,dst_h,dst_w,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+    dst_w = layer.display_frame.right - layer.display_frame.left;
+    dst_h = layer.display_frame.bottom - layer.display_frame.top;
+
+    rgaBuffer.set_release_fence_fd(-1);
+
+    if((layer.transform & DrmHwcTransform::kRotate90) ||
+    (layer.transform & DrmHwcTransform::kRotate270))
+    {
+        if (!rgaBuffer.Allocate(dst_h, dst_w, layer.format)) {
+            ALOGE("Failed to allocate rga buffer with size %dx%d", dst_h, dst_w);
+            return -ENOMEM;
+        }
+    }
+    else
+    {
+        if (!rgaBuffer.Allocate(dst_w, dst_h, layer.format)) {
+            ALOGE("Failed to allocate rga buffer with size %dx%d", dst_w, dst_h);
+            return -ENOMEM;
+        }
+    }
+
+    if(layer.transform & DrmHwcTransform::kRotate90)
+    {
+        rga_set_rect(&rects.src, (int)layer.source_crop.left, (int)layer.source_crop.top,
+                    layer.width, layer.height, layer.stride, layer.format);
+        rga_set_rect(&rects.dst, 0, 0, dst_h, dst_w, dst_h, layer.format);
         rga_transform = DRM_RGA_TRANSFORM_ROT_90;
         l = layer.height - layer.source_crop.bottom;
         t = layer.source_crop.left;
         r = layer.height - layer.source_crop.top;
         b = layer.source_crop.right;
-        break;
-    case DrmHwcTransform::kRotate270:
-        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
-        rga_set_rect(&rects.dst,0,dst_h-1,dst_h,dst_w,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+    }
+    else if(layer.transform & DrmHwcTransform::kRotate270)
+    {
+        rga_set_rect(&rects.src, (int)layer.source_crop.left, (int)layer.source_crop.top,
+                    layer.width, layer.height, layer.stride, layer.format);
+        rga_set_rect(&rects.dst, 0, 0, dst_h, dst_w, dst_h, layer.format);
         rga_transform = DRM_RGA_TRANSFORM_ROT_270;
         l = layer.source_crop.top;
         t = layer.width - layer.source_crop.right;
         r = layer.source_crop.bottom;
         b = layer.width - layer.source_crop.left;
-        break;
-    case DrmHwcTransform::kRotate180:
-        rga_set_rect(&rects.src,(int)layer.source_crop.left,(int)layer.source_crop.top,layer.width,layer.height,layer.stride,HAL_PIXEL_FORMAT_YCrCb_NV12);
-        rga_set_rect(&rects.dst,dst_w-1,dst_h-1,dst_w,dst_h,dst_w,HAL_PIXEL_FORMAT_YCrCb_NV12);
+    }
+    else if(layer.transform & DrmHwcTransform::kRotate180)
+    {
+        rga_set_rect(&rects.src, (int)layer.source_crop.left, (int)layer.source_crop.top,
+                    layer.width, layer.height, layer.stride, layer.format);
+        rga_set_rect(&rects.dst, 0, 0, dst_w, dst_h, dst_w, layer.format);
         rga_transform = DRM_RGA_TRANSFORM_ROT_180;
         l = layer.width - layer.source_crop.right;
         t = layer.height - layer.source_crop.bottom;
         r = layer.width - layer.source_crop.left;
         b = layer.height - layer.source_crop.top;
-        break;
-    default:
-        ALOGE("wrong transform=0x%x",layer.transform);
+    }
+    else if(layer.transform & DrmHwcTransform::kRotate0)
+    {
+        rga_set_rect(&rects.src, (int)layer.source_crop.left, (int)layer.source_crop.top,
+                    layer.width, layer.height, layer.stride, layer.format);
+        rga_set_rect(&rects.dst, 0, 0, dst_w, dst_h, dst_w, layer.format);
+        rga_transform = DRM_RGA_TRANSFORM_ROT_0;
+        l = layer.source_crop.left;
+        t = layer.source_crop.top;
+        r = layer.source_crop.right;
+        b = layer.source_crop.bottom;
+    }
+    else
+    {
+        ALOGE("%s: line=%d, wrong transform=0x%x", __FUNCTION__, __LINE__, layer.transform);
         ret = -1;
         return ret;
-  }
+    }
 
-  layer.source_crop = DrmHwcRect<float>(l,t,r,b);
+    if(layer.transform & DrmHwcTransform::kFlipH)
+    {
+        rga_transform |= DRM_RGA_TRANSFORM_FLIP_H;
+    }
 
-  ret = mRga_->rgaRotateScale(mRga_,layer.sf_handle,rgaBuffer.buffer()->handle,&rects,rga_transform);
-  if(ret) {
-    ALOGE("rgaRotateScale error : src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
-        rects.src.xoffset,rects.src.yoffset,rects.src.width,rects.src.height,rects.src.wstride,
+    if (layer.transform & DrmHwcTransform::kFlipV)
+    {
+        rga_transform |= DRM_RGA_TRANSFORM_FLIP_V;
+    }
+
+    if(!mRga_)
+        mRga_ = drm_->GetRgaDevice();
+
+    layer.source_crop = DrmHwcRect<float>(l,t,r,b);
+
+    ALOGD_IF(1,"rgaRotateScale  : mRga_=%p,src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
+        mRga_,rects.src.xoffset,rects.src.yoffset,rects.src.width,rects.src.height,rects.src.wstride,
         rects.dst.xoffset,rects.dst.yoffset,rects.dst.width,rects.dst.height,rects.dst.wstride);
-    ALOGE("rgaRotateScale error : %s,src hnd=%p,dst hnd=%p\n",
-        strerror(errno),(void*)layer.sf_handle,(void*)(rgaBuffer.buffer()->handle));
-  }
+    ALOGD_IF(1,"rgaRotateScale : src hnd=%p,dst hnd=%p,layer.format=0x%x,rga_transform=0x%x\n",
+        (void*)layer.sf_handle,(void*)(rgaBuffer.buffer()->handle),layer.format,rga_transform);
 
-  //instead of the original DrmHwcLayer
-  layer.is_rotate_by_rga = true;
-  layer.buffer.Clear();
-  layer.sf_handle = rgaBuffer.buffer()->handle;
-  ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
+    ret = mRga_->rgaRotateScale(mRga_,layer.sf_handle,rgaBuffer.buffer()->handle,&rects,rga_transform);
+    if(ret) {
+        ALOGE("rgaRotateScale error : src[x=%d,y=%d,w=%d,h=%d,s=%d],dst[x=%d,y=%d,w=%d,h=%d,s=%d]",
+            rects.src.xoffset,rects.src.yoffset,rects.src.width,rects.src.height,rects.src.wstride,
+            rects.dst.xoffset,rects.dst.yoffset,rects.dst.width,rects.dst.height,rects.dst.wstride);
+        ALOGE("rgaRotateScale error : %s,src hnd=%p,dst hnd=%p\n",
+            strerror(errno),(void*)layer.sf_handle,(void*)(rgaBuffer.buffer()->handle));
+    }
+
+#if RK_DRM_HWC_DEBUG
+      DumpLayer("rga",rgaBuffer.buffer()->handle);
+    //DumpLayer("layer",layer.sf_handle);
+#endif
+
+    //instead of the original DrmHwcLayer
+    layer.is_rotate_by_rga = true;
+    layer.buffer.Clear();
+
+    layer.sf_handle = rgaBuffer.buffer()->handle;
+    ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
                                            display_comp->importer());
-  if (ret)
-  {
-    ALOGE("Failed to import rga buffer for display %d", ret);
-    return ret;
-  }
-  ret = layer.handle.CopyBufferHandle(rgaBuffer.buffer()->handle, drm_->getGralloc());
-  if (ret)
-  {
-    ALOGE("Failed to Copy rga buffer,ret=%d", ret);
-    return ret;
-  }
+    if (ret)
+    {
+        ALOGE("Failed to import rga buffer for display %d", ret);
+        return ret;
+    }
 
-  return ret;
+    return ret;
 }
 #endif
 
@@ -598,6 +650,8 @@ int DrmDisplayCompositor::ApplyPreRotate(
     DrmDisplayComposition *display_comp, DrmHwcLayer &layer) {
   int ret = 0;
 
+  ALOGD_IF(log_level(DBG_DEBUG),"%s:rgaBuffer_index_=%d",__FUNCTION__,rgaBuffer_index_);
+
   DrmRgaBuffer &rga_buffer = rgaBuffers_[rgaBuffer_index_];
   ret = PrepareRgaBuffer(rga_buffer, display_comp, layer);
   if (ret) {
@@ -611,17 +665,7 @@ int DrmDisplayCompositor::ApplyPreRotate(
     return ret;
   }
 
-  char acBuf[50];
-  sprintf(acBuf,"rga_buffer-%d",rgaBuffer_index_);
-  ret = fence_merge(acBuf,layer.release_fence.get(),ret);
-  if (ret <= 0) {
-    ALOGE("Failed to merge layer release fence %d,ret=%d",layer.release_fence.get(),ret);
-    return ret;
-  }
-
   rga_buffer.set_release_fence_fd(ret);
-  layer.release_fence.Set(ret);
-  //display_comp->SignalPreRotateDone();
 
   return 0;
 }
@@ -747,7 +791,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         if(!source_layers.empty())
         {
             DrmHwcLayer &layer = layers[source_layers.front()];
-            if(layer.is_yuv && layer.transform!=0)
+            if(/*layer.is_yuv &&*/ layer.transform!=0)
             {
                 ret = ApplyPreRotate(display_comp,layer);
                 if (ret)
@@ -877,7 +921,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         break;
       }
 
-#if RK_DRM_HWC_DEBUG
+#if 0
       DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 #endif
 
