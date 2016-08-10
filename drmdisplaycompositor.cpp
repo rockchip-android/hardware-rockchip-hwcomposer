@@ -997,7 +997,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_RGA
     !is_rotate_by_rga &&
 #endif
-    rotation && plane->rotation_property().id() == 0) {
+    rotation && !(rotation & plane->get_rotate())) {
       ALOGE("Rotation is not supported on plane %d", plane->id());
       ret = -EINVAL;
       break;

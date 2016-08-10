@@ -218,6 +218,15 @@ bool DrmPlane::get_scale(){
     return b_scale_;
 }
 
+uint64_t DrmPlane::get_rotate(){
+    uint64_t rotate=0;
+
+    rotation_property().set_feature("rotate");
+    rotation_property().value(&rotate);
+
+    return rotate;
+}
+
 bool DrmPlane::get_yuv(){
     return b_yuv_;
 }

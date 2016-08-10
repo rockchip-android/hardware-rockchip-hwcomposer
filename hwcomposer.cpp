@@ -818,11 +818,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
 
 #if RK_DRM_HWC_DEBUG
-  init_log_level();
-  hwc_dump_fps();
-
+    init_log_level();
+    hwc_dump_fps();
     ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
-
 #endif
 
   for (int i = 0; i < (int)num_displays; ++i) {
@@ -841,6 +839,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       }
       mode = c->active_mode();
     }
+
 #if RK_DRM_HWC
     //force go into GPU
     /*
@@ -857,18 +856,20 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     else if ( iMode == 2 && i == 0 )
         use_framebuffer_target = true;
 #endif
+
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
     // handle all layers in between the first and last skip layers. So find the
     // outer indices and mark everything in between as HWC_FRAMEBUFFER
     std::pair<int, int> skip_layer_indices(-1, -1);
     int num_layers = display_contents[i]->numHwLayers;
-#if RK_DRM_HWC_DEBUG
 
+#if RK_DRM_HWC_DEBUG
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
       dump_layer(false,layer,j);
     }
 #endif
+
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 #if RK_DRM_HWC

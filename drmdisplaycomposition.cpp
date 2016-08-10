@@ -603,7 +603,14 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 
     for (size_t i = 0; i < layers_.size(); ++i) {
       if (layer_squash_area[i] < layers_[i].display_frame.area())
+      {
         to_composite.emplace(std::make_pair(i, &layers_[i]));
+      }
+      else
+      {
+        layers_[i].is_match = true;
+        ALOGD_IF(log_level(DBG_DEBUG),"add Squash layer[%d] %s",i,layers_[i].name.c_str());
+      }
     }
   } else {
     for (size_t i = 0; i < layers_.size(); ++i)
@@ -615,7 +622,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
 #endif
 
   int ret=0;
-
 #if USE_MULTI_AREAS
   ret = combine_layer();
 

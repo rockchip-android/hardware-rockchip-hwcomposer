@@ -139,7 +139,6 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
                   planes.pop_back();
                   composition.emplace_back(DrmCompositionPlane::Type::kPrecomp,
                                            precomp_plane, crtc);
-
                   // Put the rest of the layers in the precomp plane
                   DrmCompositionPlane *precomp = i->GetPrecomp(&composition);
                   if (precomp) {
@@ -151,7 +150,8 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
                                 precomp->source_layers().emplace_back(j->first);
                             }
                         }
-                        return std::make_tuple(0, std::move(composition));
+                        //Fix squash layer show nothing when enter precomp case
+                        break;
                    } else {
                         ALOGE("line=%d precomp is null",__LINE__);
                    }
@@ -243,7 +243,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
                                 continue;
                             }
-
+#if !RK_RGA
                             rotation = 0;
                             if ((*iter_layer)->transform & DrmHwcTransform::kFlipH)
                                 rotation |= 1 << DRM_REFLECT_X;
@@ -255,9 +255,9 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 rotation |= 1 << DRM_ROTATE_180;
                             else if ((*iter_layer)->transform & DrmHwcTransform::kRotate270)
                                 rotation |= 1 << DRM_ROTATE_270;
-                            if(rotation && (*iter_plane)->rotation_property().id() == 0)
+                            if(rotation && !(rotation & (*iter_plane)->get_rotate()))
                                 continue;
-
+#endif
                             ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
                             //Find the match plane for layer,it will be commit.
@@ -266,8 +266,6 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             (*iter_plane)->set_use(true);
 
                             combine_layer_count++;
-                            //erase the plane from primary_planes or overlay_planes
-                           // ErasePlane((*iter_plane)->id(),primary_planes,overlay_planes);
                             break;
 
                         }
@@ -402,6 +400,8 @@ int PlanStageProtected::ProvisionPlanes(
         bool b_yuv,b_scale;
         DrmResources* drm = crtc->getDrmReoources();
         std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+        uint64_t rotation = 0;
+        uint64_t alpha = 0xFF;
 
         UN_USED(planes);
 
@@ -427,6 +427,30 @@ int PlanStageProtected::ProvisionPlanes(
                                     b_scale = (*iter_plane)->get_scale();
                                     if(layer->is_scale && !b_scale)
                                         continue;
+
+                                   if (layer->blending == DrmHwcBlending::kPreMult)
+                                        alpha = layer->alpha;
+                                    if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+                                    {
+                                        ALOGV("layer name=%s,plane id=%d",layer->name.c_str(),(*iter_plane)->id());
+                                        ALOGV("layer alpha=0x%x,alpha id=%d",layer->alpha,(*iter_plane)->alpha_property().id());
+                                        continue;
+                                    }
+#if !RK_RGA
+                                    rotation = 0;
+                                    if (layer->transform & DrmHwcTransform::kFlipH)
+                                        rotation |= 1 << DRM_REFLECT_X;
+                                    if (layer->transform & DrmHwcTransform::kFlipV)
+                                        rotation |= 1 << DRM_REFLECT_Y;
+                                    if (layer->transform & DrmHwcTransform::kRotate90)
+                                        rotation |= 1 << DRM_ROTATE_90;
+                                    else if (layer->transform & DrmHwcTransform::kRotate180)
+                                        rotation |= 1 << DRM_ROTATE_180;
+                                    else if (layer->transform & DrmHwcTransform::kRotate270)
+                                        rotation |= 1 << DRM_ROTATE_270;
+                                    if(rotation && !(rotation & (*iter_plane)->get_rotate()))
+                                        continue;
+#endif
 
                                     layer->is_take = true;  //mark layer which take a plane.
                                     ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",

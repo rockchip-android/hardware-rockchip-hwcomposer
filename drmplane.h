@@ -81,6 +81,7 @@ class DrmPlane {
   bool is_use();
   void set_use(bool b_use);
   bool get_scale();
+  uint64_t get_rotate();
   bool get_yuv();
   void set_yuv(bool b_yuv);
   const DrmProperty &zpos_property() const;

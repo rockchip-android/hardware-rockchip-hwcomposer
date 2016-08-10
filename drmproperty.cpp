@@ -110,13 +110,22 @@ int DrmProperty::value(uint64_t *value) const {
             ALOGE("You don't set feature name for %s",name_.c_str());
             return -EINVAL;
         }
-        for (auto &drm_enum : enums_)
+        if(!strcmp(feature_name_,"scale"))
         {
-            if(!strncmp(drm_enum.name_.c_str(),(const char*)feature_name_,strlen(feature_name_)))
+            for (auto &drm_enum : enums_)
             {
-                *value = (value_ & (1LL << drm_enum.value_));
+                if(!strncmp(drm_enum.name_.c_str(),(const char*)feature_name_,strlen(feature_name_)))
+                {
+                    *value = (value_ & (1LL << drm_enum.value_));
+                    break;
+                }
             }
         }
+        else
+        {
+            *value = value_;
+        }
+
         return 0;
 
     default:
