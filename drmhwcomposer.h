@@ -43,6 +43,29 @@ bool hwc_import_bo_release(int fd, struct hwc_import_context *ctx,
 namespace android {
 
 #define UN_USED(arg)     (arg=arg)
+
+#if RK_DRM_HWC
+/*get it from drm_gralloc*/
+enum {
+	GRALLOC_MODULE_PERFORM_GET_DRM_FD                = 0x80000002,
+	GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD       = 0x81000002,
+	GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES     = 0x81000004,
+};
+
+typedef enum attribute_flag{
+    ATT_WIDTH = 0,
+    ATT_HEIGHT,
+    ATT_STRIDE,
+    ATT_FORMAT,
+    ATT_SIZE,
+}attribute_flag_t;
+
+int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attribute_flag_t flag);
+int hwc_get_handle_attributes(struct hwc_context_t *ctx, buffer_handle_t hnd, std::vector<int> *attrs);
+int hwc_get_handle_primefd(struct hwc_context_t *ctx, buffer_handle_t hnd);
+
+#endif
+
 enum LOG_LEVEL
 {
     //Log level flag

@@ -220,7 +220,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
-#if !RK_RGA
+#if 1
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
                             {
@@ -419,7 +419,7 @@ int PlanStageProtected::ProvisionPlanes(
                                 //otherwise,only get a plane from the plane group.
                                 if(layer)
                                 {
-#if !RK_RGA
+#if 1
                                     b_yuv  = (*iter_plane)->get_yuv();
                                     if(layer->is_yuv && !b_yuv)
                                         continue;

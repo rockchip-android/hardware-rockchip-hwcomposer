@@ -110,12 +110,12 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
-    if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
-    {
-        bo->pitches[1] = gr_handle->stride;
-        bo->gem_handles[1] = gem_handle;
-        bo->offsets[1] = gr_handle->width * gr_handle->height;
-    }
+  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+  {
+    bo->pitches[1] = gr_handle->stride;
+    bo->gem_handles[1] = gem_handle;
+    bo->offsets[1] = gr_handle->width * gr_handle->height;
+  }
   ret = drmModeAddFB2(drm_->fd(), bo->width, bo->height, bo->format,
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
   if (ret) {

@@ -531,7 +531,6 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
 int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
                                     const gralloc_module_t *gralloc) {
 #endif
-  struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(sf_layer->handle);
   sf_handle = sf_layer->handle;
   alpha = sf_layer->planeAlpha;
   frame_no = g_frame;
@@ -549,7 +548,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
         return -ENODEV;
     }
     mode = c->active_mode();
-    format = drm_handle->format;
+    format = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_FORMAT);
     if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         is_yuv = true;
     else
@@ -567,9 +566,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
         v_scale_mul = (float) (source_crop.bottom - source_crop.top)
 	/ (display_frame.bottom - display_frame.top);
     }
-    width = drm_handle->width;
-    height = drm_handle->height;
-    stride = drm_handle->pixel_stride;
+    width = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_WIDTH);
+    height = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_HEIGHT);
+    stride = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_STRIDE);
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
     is_match = false;
@@ -605,12 +604,6 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     if (sf_layer->transform & HWC_TRANSFORM_ROT_90)
       transform |= DrmHwcTransform::kRotate90;
   }
-
-    if(!strcmp(sf_layer->LayerName ,"SurfaceView"))
-    {
-        transform |= DrmHwcTransform::kRotate90;
-        //transform |= DrmHwcTransform::kFlipH;
-    }
 
   switch (sf_layer->blending) {
     case HWC_BLENDING_NONE:
@@ -666,8 +659,7 @@ static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
 }
 
 #if RK_DRM_HWC_DEBUG
-static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
-    struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(layer->handle);
+static void dump_layer(struct hwc_context_t *ctx, bool bDump, hwc_layer_1_t *layer, int index) {
     size_t i;
   std::ostringstream out;
 
@@ -678,7 +670,7 @@ static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
     }
     else
     {
-        if(drm_handle)
+        if(layer->handle)
         {
             out << "layer[" << index << "]=" << layer->LayerName
                 << "\n\tlayer=" << layer
@@ -686,8 +678,8 @@ static void dump_layer(bool bDump,hwc_layer_1_t *layer, int index) {
                 << ",hints=" << layer->compositionType
                 << ",flags=" << layer->flags
                 << ",handle=" << layer->handle
-                << ",format=0x" << std::hex << drm_handle->format
-                << ",fd =" << std::dec << drm_handle->prime_fd
+                << ",format=0x" << std::hex << hwc_get_handle_attibute(ctx, layer->handle, ATT_FORMAT)
+                << ",fd =" << std::dec << hwc_get_handle_primefd(ctx, layer->handle)
                 << ",transform=0x" <<  std::hex << layer->transform
                 << ",blend=0x" << layer->blending
                 << ",sourceCropf{" << std::dec
@@ -813,6 +805,81 @@ bool log_level(LOG_LEVEL log_level)
 #endif
 }
 
+/*
+@func hwc_get_handle_attributes:get attributes from handle.Before call this api,As far as now,
+    we need register the buffer first.May be the register is good for processer I think
+
+@param hnd:
+@param attrs: if size of attrs is small than 5,it will return EINVAL else
+    width  = attrs[0]
+    height = attrs[1]
+    stride = attrs[2]
+    format = attrs[3]
+    size   = attrs[4]
+*/
+int hwc_get_handle_attributes(struct hwc_context_t *ctx, buffer_handle_t hnd, std::vector<int> *attrs)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES;
+
+    if (!ctx)
+        return -EINVAL;
+
+    if(ctx->gralloc && ctx->gralloc->perform)
+        ret = ctx->gralloc->perform(ctx->gralloc, op, hnd, attrs);
+    else
+        ret = -EINVAL;
+
+    if(ret) {
+       ALOGE("hwc_get_handle_attributes fail %d for:%s",ret,strerror(ret));
+    }
+
+    return ret;
+}
+
+int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attribute_flag_t flag)
+{
+    std::vector<int> attrs;
+    int ret=0;
+
+    ret = hwc_get_handle_attributes(ctx, hnd, &attrs);
+    if(ret < 0)
+    {
+        ALOGE("getHandleAttributes fail %d for:%s",ret,strerror(ret));
+        return ret;
+    }
+    else
+    {
+        return attrs.at(flag);
+    }
+}
+
+/*
+@func getHandlePrimeFd:get prime_fd  from handle.Before call this api,As far as now, we
+    need register the buffer first.May be the register is good for processer I think
+
+@param hnd:
+@return fd: prime_fd. and driver can call the dma_buf_get to get the buffer
+
+*/
+int hwc_get_handle_primefd(struct hwc_context_t *ctx, buffer_handle_t hnd)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD;
+    int fd = -1;
+
+    if (!ctx)
+        return -EINVAL;
+
+    if(ctx->gralloc && ctx->gralloc->perform)
+        ret = ctx->gralloc->perform(ctx->gralloc, op, hnd, &fd);
+    else
+        ret = -EINVAL;
+
+    return fd;
+}
+
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
@@ -840,6 +907,12 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       mode = c->active_mode();
     }
 
+    // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
+    // handle all layers in between the first and last skip layers. So find the
+    // outer indices and mark everything in between as HWC_FRAMEBUFFER
+    std::pair<int, int> skip_layer_indices(-1, -1);
+    int num_layers = display_contents[i]->numHwLayers;
+
 #if RK_DRM_HWC
     //force go into GPU
     /*
@@ -855,18 +928,35 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         use_framebuffer_target = true;
     else if ( iMode == 2 && i == 0 )
         use_framebuffer_target = true;
-#endif
 
-    // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
-    // handle all layers in between the first and last skip layers. So find the
-    // outer indices and mark everything in between as HWC_FRAMEBUFFER
-    std::pair<int, int> skip_layer_indices(-1, -1);
-    int num_layers = display_contents[i]->numHwLayers;
+    //If the transform nv12 layers is bigger than one,then go into GPU GLES.
+    //If the transform normal layers is bigger than zero,then go into GPU GLES.
+    int transform_nv12 = 0;
+    int transform_normal = 0;
+    int ret = 0;
+    int format = 0;
+    for (int j = 0; j < num_layers; j++) {
+        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+        format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
+        if(layer->transform)
+        {
+            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+                transform_nv12++;
+            else
+                transform_normal++;
+        }
+    }
+    if(transform_nv12 > 1 || transform_normal > 0)
+    {
+        use_framebuffer_target = true;
+    }
+
+#endif
 
 #if RK_DRM_HWC_DEBUG
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-      dump_layer(false,layer,j);
+      dump_layer(ctx, false, layer, j);
     }
 #endif
 
