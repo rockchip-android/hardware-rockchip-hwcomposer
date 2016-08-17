@@ -822,16 +822,21 @@ int hwc_get_handle_attributes(struct hwc_context_t *ctx, buffer_handle_t hnd, st
     int ret = 0;
     int op = GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES;
 
-    if (!ctx)
+    if (!ctx || !hnd)
         return -EINVAL;
 
     if(ctx->gralloc && ctx->gralloc->perform)
+    {
         ret = ctx->gralloc->perform(ctx->gralloc, op, hnd, attrs);
+    }
     else
+    {
         ret = -EINVAL;
+    }
+
 
     if(ret) {
-       ALOGE("hwc_get_handle_attributes fail %d for:%s",ret,strerror(ret));
+       ALOGE("hwc_get_handle_attributes fail %d for:%s hnd=%p",ret,strerror(ret),hnd);
     }
 
     return ret;
@@ -841,6 +846,12 @@ int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attr
 {
     std::vector<int> attrs;
     int ret=0;
+
+    if(!hnd)
+    {
+        ALOGE("%s handle is null");
+        return -1;
+    }
 
     ret = hwc_get_handle_attributes(ctx, hnd, &attrs);
     if(ret < 0)
@@ -937,13 +948,16 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int format = 0;
     for (int j = 0; j < num_layers; j++) {
         hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-        format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
-        if(layer->transform)
+        if(layer->handle)
         {
-            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
-                transform_nv12++;
-            else
-                transform_normal++;
+            format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
+            if(layer->transform)
+            {
+                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+                    transform_nv12++;
+                else
+                    transform_normal++;
+            }
         }
     }
     if(transform_nv12 > 1 || transform_normal > 0)
