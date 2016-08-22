@@ -251,6 +251,15 @@ int DrmResources::Init() {
     connectors_.emplace_back(std::move(conn));
   }
 
+  if (!found_primary) {
+	  display_num = 0;
+
+	  for (auto &conn : connectors_) {
+		  conn->set_display(display_num);
+		  ++display_num;
+	  }
+  }
+
 #if RK_DRM_HWC_DEBUG
   ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
   out.str("");
