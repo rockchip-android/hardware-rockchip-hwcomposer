@@ -312,6 +312,14 @@ class DrmHotplugHandler : public DrmEventHandler {
           ALOGE("Failed to set active config %d", ret);
           return;
         }
+
+	if (conn->display() == 0) {
+		ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_ON);
+		if (ret) {
+			ALOGE("Failed to set dpms mode off %d", ret);
+			return;
+		}
+	}
       } else {
         int ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_OFF);
         if (ret) {
@@ -319,6 +327,9 @@ class DrmHotplugHandler : public DrmEventHandler {
           return;
         }
       }
+
+      if (conn->display() == 0)
+	      continue;
 
       procs_->hotplug(procs_, conn->display(),
                       cur_state == DRM_MODE_CONNECTED ? 1 : 0);
@@ -969,6 +980,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     bool use_framebuffer_target = false;
     DrmMode mode;
+    drmModeConnection state;
     if (i == HWC_DISPLAY_VIRTUAL) {
       use_framebuffer_target = true;
     } else {
@@ -978,6 +990,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         return -ENODEV;
       }
       mode = c->active_mode();
+      state = c->state();
     }
 
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
@@ -1052,6 +1065,11 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     for (int j = 0; j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+      if (state != DRM_MODE_CONNECTED) {
+	layer->compositionType = HWC_NODRAW;
+	continue;
+      }
 
       if (!use_framebuffer_target && !hwc_skip_layer(skip_layer_indices, j)) {
         // If the layer is off the screen, don't earmark it for an overlay.
