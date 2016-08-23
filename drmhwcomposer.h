@@ -45,19 +45,23 @@ namespace android {
 #define UN_USED(arg)     (arg=arg)
 
 #if RK_DRM_HWC
-/*get it from drm_gralloc*/
-enum {
-	GRALLOC_MODULE_PERFORM_GET_DRM_FD                = 0x80000002,
-	GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD       = 0x81000002,
-	GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES     = 0x81000004,
-};
+#if USE_AFBC_LAYER
+#define GRALLOC_ARM_INTFMT_EXTENSION_BIT_START     32
+/* This format will use AFBC */
+#define	    GRALLOC_ARM_INTFMT_AFBC                 (1ULL << (GRALLOC_ARM_INTFMT_EXTENSION_BIT_START+0))
+#define SKIP_BOOT       (1)
+#endif
 
-typedef enum attribute_flag{
+#if SKIP_BOOT
+#define BOOT_COUNT       (2)
+#endif
+
+typedef enum attribute_flag {
     ATT_WIDTH = 0,
     ATT_HEIGHT,
     ATT_STRIDE,
     ATT_FORMAT,
-    ATT_SIZE,
+    ATT_SIZE
 }attribute_flag_t;
 
 int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attribute_flag_t flag);
@@ -226,6 +230,10 @@ struct DrmHwcLayer {
   bool is_yuv;
   bool is_scale;
   bool is_large;
+#if USE_AFBC_LAYER
+  uint64_t internal_format;
+#endif
+
 #if RK_RGA
   bool is_rotate_by_rga;
 #endif

@@ -261,6 +261,13 @@ DrmDisplayCompositor::DrmDisplayCompositor()
   if (clock_gettime(CLOCK_MONOTONIC, &ts))
     return;
   dump_last_timestamp_ns_ = ts.tv_sec * 1000 * 1000 * 1000 + ts.tv_nsec;
+
+  int ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID,
+                      (const hw_module_t **)&gralloc_);
+  if (ret) {
+    ALOGE("Failed to open gralloc module %d", ret);
+  }
+
 }
 
 DrmDisplayCompositor::~DrmDisplayCompositor() {
@@ -421,6 +428,15 @@ int DrmDisplayCompositor::PrepareFramebuffer(
     return ret;
   }
 
+#if USE_AFBC_LAYER
+    ret = gralloc_->perform(gralloc_, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                         fb.buffer()->handle, &pre_comp_layer.internal_format);
+    if (ret) {
+        ALOGE("Failed to get internal_format for buffer %p (%d)", fb.buffer()->handle, ret);
+        return ret;
+    }
+#endif
+
   return ret;
 }
 
@@ -542,8 +558,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     }
 
 #if RK_DRM_HWC_DEBUG
-      DumpLayer("rga",rgaBuffer.buffer()->handle);
-    //DumpLayer("layer",layer.sf_handle);
+      //DumpLayer("rga",rgaBuffer.buffer()->handle);
 #endif
 
     //instead of the original DrmHwcLayer
@@ -751,7 +766,14 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         ALOGE("Failed to create squash framebuffer release fence %d", ret);
         return ret;
       }
-
+#if USE_AFBC_LAYER
+    ret = gralloc_->perform(gralloc_, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                         fb.buffer()->handle, &squash_layer.internal_format);
+    if (ret) {
+        ALOGE("Failed to get internal_format for buffer %p (%d)", fb.buffer()->handle, ret);
+        return ret;
+    }
+#endif
       fb.set_release_fence_fd(ret);
       ret = 0;
     }
@@ -834,11 +856,21 @@ static const char *RotatingToString(uint64_t rotating) {
 }
 #endif
 
+#if USE_AFBC_LAYER
+inline static bool isAfbcInternalFormat(uint64_t internal_format)
+{
+    return (internal_format & GRALLOC_ARM_INTFMT_AFBC);
+}
+#endif
+
 int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                                       bool test_only) {
   ATRACE_CALL();
 
   int ret = 0;
+#if RK_DRM_HWC
+  uint32_t afbc_plane_id = 0;
+#endif
 
   std::vector<DrmHwcLayer> &layers = display_comp->layers();
   std::vector<DrmCompositionPlane> &comp_planes =
@@ -954,8 +986,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         break;
       }
 
-#if 0
-      DumpLayer(layer.name.c_str(),layer.get_usable_handle());
+#if RK_DRM_HWC_DEBUG
+      //DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 #endif
 
       fb_id = layer.buffer->fb_id;
@@ -963,6 +995,14 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       source_crop = layer.source_crop;
       if (layer.blending == DrmHwcBlending::kPreMult)
         alpha = layer.alpha;
+
+#if USE_AFBC_LAYER
+    if((afbc_plane_id== 0) && isAfbcInternalFormat(layer.internal_format))
+    {
+        afbc_plane_id = plane->id();
+        //crtc->set_afbc_property(plane->id());
+    }
+#endif
 
 #if RK_RGA
       is_rotate_by_rga = layer.is_rotate_by_rga;
@@ -1114,6 +1154,17 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
   }
 
 out:
+
+#if RK_DRM_HWC
+  ret = drmModeAtomicAddProperty(pset, crtc->id(),
+                                 crtc->afbc_property().id(),
+                                 afbc_plane_id) < 0;
+  if (ret) {
+    ALOGE("Failed to add afbc_property property %d to crtc %d",
+          crtc->afbc_property().id(), crtc->id());
+  }
+#endif
+
   if (!ret) {
     uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
     if (test_only)

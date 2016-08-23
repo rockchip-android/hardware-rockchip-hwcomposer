@@ -204,6 +204,8 @@ class DrmDisplayCompositor {
   // we need to reset them on every Dump() call.
   mutable uint64_t dump_frames_composited_;
   mutable uint64_t dump_last_timestamp_ns_;
+
+  const gralloc_module_t *gralloc_;
 };
 }
 

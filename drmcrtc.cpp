@@ -52,6 +52,15 @@ int DrmCrtc::Init() {
     ALOGE("Failed to get MODE_ID property");
     return ret;
   }
+
+#if RK_DRM_HWC
+  ret = drm_->GetCrtcProperty(*this, "AFBDC_PLANE_ID", &afbc_property_);
+  if (ret) {
+    ALOGE("Failed to get AFBDC_PLANE_ID property");
+    return ret;
+  }
+#endif
+
   return 0;
 }
 
@@ -82,6 +91,25 @@ const DrmProperty &DrmCrtc::active_property() const {
 const DrmProperty &DrmCrtc::mode_property() const {
   return mode_property_;
 }
+
+#if RK_DRM_HWC
+const DrmProperty &DrmCrtc::afbc_property() const {
+  return afbc_property_;
+}
+#endif
+
+#if USE_AFBC_LAYER
+int DrmCrtc::set_afbc_property(uint64_t plane_id) {
+    int afbc_id = afbc_property_.id();
+	int ret = drmModeObjectSetProperty(drm_->fd(), id_, DRM_MODE_OBJECT_CRTC,
+				       afbc_id, plane_id);
+	if (ret < 0)
+		ALOGE("failed to set %s[%d] property id[%d] to %d: %s\n",
+			"DRM_MODE_OBJECT_CRTC", id_, afbc_id, plane_id, strerror(errno));
+
+    return ret;
+}
+#endif
 
 #if RK_DRM_HWC_DEBUG
 void DrmCrtc::dump_crtc(std::ostringstream *out) const

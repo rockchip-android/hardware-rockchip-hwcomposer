@@ -63,6 +63,7 @@ namespace android {
 #if RK_DRM_HWC_DEBUG
 unsigned int g_log_level;
 unsigned int g_frame;
+
 static int init_log_level()
 {
     char value[PROPERTY_VALUE_MAX];
@@ -127,10 +128,10 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
             pfile = fopen(data_name,"wb");
             if(pfile)
             {
-                fwrite((const void *)cpu_addr,(size_t)(gr_handle->stride*gr_handle->height),1,pfile);
+                fwrite((const void *)cpu_addr,(size_t)(gr_handle->size),1,pfile);
                 fclose(pfile);
-                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,stride :%d,cpu_addr=%p",
-                    layer_name,data_name,gr_handle->width,gr_handle->height,gr_handle->stride,cpu_addr);
+                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,stride :%d,size=%d,cpu_addr=%p",
+                    layer_name,data_name,gr_handle->width,gr_handle->height,gr_handle->stride,gr_handle->size,cpu_addr);
             }
 
             gralloc->unlock(gralloc, handle);
@@ -175,6 +176,11 @@ static void hwc_dump_fps(void)
 #endif
 
 #if RK_DRM_HWC
+
+#if SKIP_BOOT
+static unsigned int g_boot_cnt = 0;
+#endif
+
 int hwc_init_version()
 {
     char acVersion[50];
@@ -531,6 +537,7 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
 int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
                                     const gralloc_module_t *gralloc) {
 #endif
+    int ret = 0;
   sf_handle = sf_layer->handle;
   alpha = sf_layer->planeAlpha;
   frame_no = g_frame;
@@ -584,6 +591,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     ALOGV("\tsourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
     source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
     ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large",h_scale_mul,v_scale_mul,is_scale,is_large);
+
 #endif
 
   transform = 0;
@@ -620,7 +628,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       return -EINVAL;
   }
 
-  int ret = buffer.ImportBuffer(sf_layer->handle, importer);
+  ret = buffer.ImportBuffer(sf_layer->handle, importer);
   if (ret)
     return ret;
 
@@ -637,6 +645,15 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     ALOGE("Failed to get usage for buffer %p (%d)", handle.get(), ret);
     return ret;
   }
+#endif
+
+#if USE_AFBC_LAYER
+    ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                         handle.get(), &internal_format);
+    if (ret) {
+        ALOGE("Failed to get internal_format for buffer %p (%d)", handle.get(), ret);
+        return ret;
+    }
 #endif
 
   return 0;
@@ -890,6 +907,39 @@ int hwc_get_handle_primefd(struct hwc_context_t *ctx, buffer_handle_t hnd)
     return fd;
 }
 
+void hwc_list_nodraw(hwc_display_contents_1_t  *list)
+{
+    if (list == NULL)
+    {
+        return;
+    }
+    for (unsigned int i = 0; i < list->numHwLayers - 1; i++)
+    {
+        list->hwLayers[i].compositionType = HWC_NODRAW;
+    }
+    return;
+}
+
+void hwc_sync_release(hwc_display_contents_1_t  *list)
+{
+	for (int i=0; i< (int)list->numHwLayers; i++){
+		hwc_layer_1_t* layer = &list->hwLayers[i];
+		if (layer == NULL){
+			return ;
+		}
+		if (layer->acquireFenceFd>0){
+			ALOGV(">>>close acquireFenceFd:%d,layername=%s",layer->acquireFenceFd,layer->LayerName);
+			close(layer->acquireFenceFd);
+			list->hwLayers[i].acquireFenceFd = -1;
+		}
+	}
+
+	if (list->outbufAcquireFenceFd>0){
+		ALOGV(">>>close outbufAcquireFenceFd:%d",list->outbufAcquireFenceFd);
+		close(list->outbufAcquireFenceFd);
+		list->outbufAcquireFenceFd = -1;
+	}
+}
 
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
@@ -901,9 +951,21 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
 #endif
 
+
+
+
   for (int i = 0; i < (int)num_displays; ++i) {
     if (!display_contents[i])
       continue;
+
+#if SKIP_BOOT
+    if(g_boot_cnt < BOOT_COUNT)
+    {
+        hwc_list_nodraw(display_contents[i]);
+        ALOGD_IF(log_level(DBG_DEBUG),"prepare skip %d",g_boot_cnt);
+        return 0;
+    }
+#endif
 
     bool use_framebuffer_target = false;
     DrmMode mode;
@@ -1068,6 +1130,15 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 
     if (!sf_display_contents[i])
       continue;
+#if SKIP_BOOT
+    if(g_boot_cnt < BOOT_COUNT) {
+        hwc_sync_release(sf_display_contents[i]);
+        if(0 == i)
+            g_boot_cnt++;
+        ALOGD_IF(log_level(DBG_DEBUG),"set skip %d",g_boot_cnt);
+        return 0;
+    }
+#endif
 
     if (i == HWC_DISPLAY_VIRTUAL) {
       ctx->virtual_compositor_worker.QueueComposite(dc);

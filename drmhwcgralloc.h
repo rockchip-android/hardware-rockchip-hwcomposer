@@ -20,6 +20,13 @@
 #include <stdint.h>
 
 enum {
+#if RK_DRM_HWC
+  GRALLOC_MODULE_PERFORM_GET_DRM_FD                = 0x80000002,
+  GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD       = 0x81000002,
+  GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES     = 0x81000004,
+  GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT       = 0x81000006,
+#endif
+
   /* perform(const struct gralloc_module_t *mod,
    *	   int op,
    *	   int drm_fd,

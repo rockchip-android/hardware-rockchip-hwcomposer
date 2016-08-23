@@ -45,6 +45,13 @@ class DrmCrtc {
 
   const DrmProperty &active_property() const;
   const DrmProperty &mode_property() const;
+#if RK_DRM_HWC
+  const DrmProperty &afbc_property() const;
+#endif
+#if USE_AFBC_LAYER
+  int set_afbc_property(uint64_t plane_id);
+#endif
+
 #if RK_DRM_HWC_DEBUG
   void dump_crtc(std::ostringstream *out) const;
 #endif
@@ -71,7 +78,9 @@ class DrmCrtc {
 
   DrmProperty active_property_;
   DrmProperty mode_property_;
-
+#if RK_DRM_HWC
+  DrmProperty afbc_property_;
+#endif
   drmModeCrtcPtr crtc_;
 };
 }
