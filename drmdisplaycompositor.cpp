@@ -598,9 +598,9 @@ int DrmDisplayCompositor::ApplySquash(DrmDisplayComposition *display_comp) {
     return ret;
   }
 
-  ret = display_comp->CreateNextTimelineFence("ApplySquash");
+  ret = display_comp->CreateNextTimelineFence("PreLayer");
   if (ret <= 0) {
-    ALOGE("Failed to create squash framebuffer release fence %d", ret);
+    ALOGE("Failed to create PreLayer framebuffer release fence %d", ret);
     return ret;
   }
 
@@ -760,12 +760,6 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
       squash_layer.display_frame = DrmHwcRect<int>(
           0, 0, squash_layer.buffer->width, squash_layer.buffer->height);
-      ret = display_comp->CreateNextTimelineFence("PrepareFrame");
-
-      if (ret <= 0) {
-        ALOGE("Failed to create squash framebuffer release fence %d", ret);
-        return ret;
-      }
 #if USE_AFBC_LAYER
     ret = gralloc_->perform(gralloc_, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
                          fb.buffer()->handle, &squash_layer.internal_format);
@@ -774,6 +768,12 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         return ret;
     }
 #endif
+     ret = display_comp->CreateNextTimelineFence("SquashLayer");
+      if (ret <= 0) {
+        ALOGE("Failed to create squash framebuffer release fence %d", ret);
+        return ret;
+      }
+
       fb.set_release_fence_fd(ret);
       ret = 0;
     }
@@ -1163,6 +1163,9 @@ out:
     ALOGE("Failed to add afbc_property property %d to crtc %d",
           crtc->afbc_property().id(), crtc->id());
   }
+
+    ALOGD_IF(log_level(DBG_VERBOSE),"Add plane=%d for afbc_property property %d of crtc %d",
+            afbc_plane_id,crtc->afbc_property().id(), crtc->id());
 #endif
 
   if (!ret) {
