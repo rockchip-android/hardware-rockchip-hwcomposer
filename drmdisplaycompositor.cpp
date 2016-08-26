@@ -1000,6 +1000,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     if((afbc_plane_id== 0) && isAfbcInternalFormat(layer.internal_format))
     {
         afbc_plane_id = plane->id();
+        ALOGD_IF(log_level(DBG_VERBOSE),"fbdc layer %s,plane id=%d",layer.name.c_str(),afbc_plane_id);
         //crtc->set_afbc_property(plane->id());
     }
 #endif
@@ -1056,9 +1057,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     dst_t = display_frame.top * h_scale;
     dst_r = display_frame.right * w_scale;
     dst_b = display_frame.bottom * h_scale;
-  //  ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
-      ALOGD("zxl scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
-
+    ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
 #else
     dst_l = display_frame.left;
     dst_t = display_frame.top;

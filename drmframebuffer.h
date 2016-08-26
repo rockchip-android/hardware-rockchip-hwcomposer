@@ -146,7 +146,12 @@ struct DrmFramebuffer {
     }
     buffer_ = new GraphicBuffer(w, h, PIXEL_FORMAT_RGBA_8888,
                                 GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |
-                                    GRALLOC_USAGE_HW_COMPOSER);
+                                    GRALLOC_USAGE_HW_COMPOSER
+//close fbdc for pre-comp and squash layer.
+#if USE_AFBC_LAYER
+                                    | MAGIC_USAGE_FOR_AFBC_LAYER
+#endif
+                                    );
     release_fence_fd_ = -1;
     return is_valid();
   }

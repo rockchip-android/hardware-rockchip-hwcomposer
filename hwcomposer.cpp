@@ -1021,7 +1021,11 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int transform_normal = 0;
     int ret = 0;
     int format = 0;
-    for (int j = 0; j < num_layers; j++) {
+#if USE_AFBC_LAYER
+    uint64_t internal_format = 0;
+    int iFbdcCnt = 0;
+#endif
+    for (int j = 0; j < num_layers-1; j++) {
         hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
         if(layer->handle)
         {
@@ -1033,12 +1037,32 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                 else
                     transform_normal++;
             }
+
+#if USE_AFBC_LAYER
+        ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                             layer->handle, &internal_format);
+        if (ret) {
+            ALOGE("Failed to get internal_format for buffer %p (%d)", layer->handle, ret);
+            return ret;
+        }
+
+        if(internal_format & GRALLOC_ARM_INTFMT_AFBC)
+            iFbdcCnt++;
+#endif
         }
     }
     if(transform_nv12 > 1 || transform_normal > 0)
     {
         use_framebuffer_target = true;
     }
+
+#if USE_AFBC_LAYER
+    if(iFbdcCnt > 1)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES",iFbdcCnt);
+        use_framebuffer_target = true;
+    }
+#endif
 
 #endif
 
