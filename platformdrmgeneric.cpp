@@ -129,27 +129,22 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
 
   //Fix "Failed to close gem handle" bug which lead by no reference counting.
 #if 1
-  struct drm_gem_close gem_close;
-  int num_gem_handles;
-  memset(&gem_close, 0, sizeof(gem_close));
-
- if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
-    num_gem_handles = 2;
- else
+    struct drm_gem_close gem_close;
+    int num_gem_handles;
+    memset(&gem_close, 0, sizeof(gem_close));
     num_gem_handles = 1;
 
- for (int i = 0; i < num_gem_handles; i++) {
-    if (!bo->gem_handles[i])
-      continue;
+    for (int i = 0; i < num_gem_handles; i++) {
+        if (!bo->gem_handles[i])
+            continue;
 
-    gem_close.handle = bo->gem_handles[i];
-    int ret = drmIoctl(drm_->fd(), DRM_IOCTL_GEM_CLOSE, &gem_close);
-    if (ret)
-      ALOGE("Failed to close gem handle %d %d", i, ret);
-    else
-      bo->gem_handles[i] = 0;
-  }
-
+        gem_close.handle = bo->gem_handles[i];
+        int ret = drmIoctl(drm_->fd(), DRM_IOCTL_GEM_CLOSE, &gem_close);
+        if (ret)
+            ALOGE("Failed to close gem handle %d %d", i, ret);
+        else
+            bo->gem_handles[i] = 0;
+    }
 #endif
   gralloc_drm_unlock_handle(handle);
 
