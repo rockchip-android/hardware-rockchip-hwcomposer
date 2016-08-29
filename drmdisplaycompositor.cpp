@@ -37,7 +37,7 @@
 #include "drmplane.h"
 #include "drmresources.h"
 #include "glworker.h"
-#if RK_VR
+#if 1
 #include "hwcutil.h"
 #endif
 
@@ -1051,18 +1051,36 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       break;
     }
 
-    int dst_l,dst_t,dst_r,dst_b;
-#if RK_VR
-    dst_l = display_frame.left * w_scale;
-    dst_t = display_frame.top * h_scale;
-    dst_r = display_frame.right * w_scale;
-    dst_b = display_frame.bottom * h_scale;
-    ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
-#else
+    int dst_l,dst_t,dst_w,dst_h;
+    int src_l,src_t,src_w,src_h;
+
+    src_l = (int)source_crop.left;
+    src_t = (int)source_crop.top;
+    src_w = (int)(source_crop.right - source_crop.left);
+    src_h = (int)(source_crop.bottom - source_crop.top);
+
     dst_l = display_frame.left;
     dst_t = display_frame.top;
-    dst_r = display_frame.right;
-    dst_b = display_frame.bottom;
+    dst_w = display_frame.right - display_frame.left;
+    dst_h = display_frame.bottom - display_frame.top;
+
+#if RK_VR
+    dst_l = dst_l * w_scale;
+    dst_t = dst_t * h_scale;
+    dst_w = dst_w * w_scale;
+    dst_h = dst_h * h_scale;
+    ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
+#endif
+
+//zxl: src_l/src_w need 16bytes aligned and src_t/src_h need 4bytes aligned in FBDC area.
+#if USE_AFBC_LAYER
+    if(afbc_plane_id == plane->id())
+    {
+        src_l = IS_ALIGN(src_l, 16)?src_l:ALIGN(src_l, 16);
+        src_t = IS_ALIGN(src_t, 4)?src_t:ALIGN(src_t, 4);
+        src_w = IS_ALIGN(src_w, 16)?src_w:(ALIGN(src_w - src_l, 16)-16);
+        src_h = IS_ALIGN(src_h, 4)?src_h:(ALIGN(src_h - src_t, 4)-4);
+    }
 #endif
 
     ret = drmModeAtomicAddProperty(pset, plane->id(),
@@ -1077,22 +1095,22 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                                     dst_t) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->crtc_w_property().id(),
-               dst_r - dst_l) < 0;
+               dst_w) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->crtc_h_property().id(),
-               dst_b - dst_t) < 0;
+               dst_h) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->src_x_property().id(),
-                                    (int)(source_crop.left) << 16) < 0;
+                                    src_l << 16) < 0;
     ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                     plane->src_y_property().id(),
-                                    (int)(source_crop.top) << 16) < 0;
+                                    src_t << 16) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->src_w_property().id(),
-               (int)(source_crop.right - source_crop.left) << 16) < 0;
+               src_w << 16) < 0;
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->src_h_property().id(),
-               (int)(source_crop.bottom - source_crop.top) << 16) < 0;
+               src_h << 16) < 0;
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
       break;
@@ -1106,12 +1124,12 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << " plane=" << (plane ? plane->id() : -1)
             << " crct id=" << crtc->id()
             << " fb id=" << fb_id
-            << " display_frame[" << display_frame.left << ","
-            << display_frame.top << "," << display_frame.right - display_frame.left
-            << "," << display_frame.bottom - display_frame.top << "]"
-            << " source_crop[" << source_crop.left << ","
-            << source_crop.top << "," << source_crop.right - source_crop.left
-            << "," << source_crop.bottom - source_crop.top << "]";
+            << " display_frame[" << dst_l << ","
+            << dst_t << "," << dst_w
+            << "," << dst_h << "]"
+            << " source_crop[" << src_l << ","
+            << src_t << "," << src_w
+            << "," << src_h << "]";
     index++;
 #endif
 
