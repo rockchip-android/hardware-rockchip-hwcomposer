@@ -249,6 +249,7 @@ struct DrmHwcLayer {
   int share_id;
   std::string name;
   size_t index;
+  hwc_layer_1_t *mlayer;
 
   int InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer,
                         const gralloc_module_t *gralloc);

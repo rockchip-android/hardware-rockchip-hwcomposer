@@ -597,7 +597,8 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     bpp = android::bytesPerPixel(format);
     size = (source_crop.right - source_crop.left) * (source_crop.bottom - source_crop.top) * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
-    name=sf_layer->LayerName;
+    name = sf_layer->LayerName;
+    mlayer = sf_layer;
 
     ALOGV("\tsourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
     source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
@@ -623,6 +624,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     if (sf_layer->transform & HWC_TRANSFORM_ROT_90)
       transform |= DrmHwcTransform::kRotate90;
   }
+
+  if(!strcmp(sf_layer->LayerName,"SurfaceView"))
+    transform |= DrmHwcTransform::kRotate90;
 
   switch (sf_layer->blending) {
     case HWC_BLENDING_NONE:
@@ -812,7 +816,7 @@ static bool check_layer(hwc_layer_1_t * Layer) {
 struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
-#if RK_RGA
+#if !RK_RGA
         || (Layer->transform)
 #endif
         ||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha!=0xFF)
