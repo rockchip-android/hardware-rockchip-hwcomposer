@@ -625,8 +625,10 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       transform |= DrmHwcTransform::kRotate90;
   }
 
+#if RK_RGA_TEST
   if(!strcmp(sf_layer->LayerName,"SurfaceView"))
     transform |= DrmHwcTransform::kRotate90;
+#endif
 
   switch (sf_layer->blending) {
     case HWC_BLENDING_NONE:
