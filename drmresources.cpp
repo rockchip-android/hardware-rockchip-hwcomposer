@@ -415,14 +415,17 @@ int DrmResources::Init() {
     */
     ret = hw_get_module(DRMRGA_HARDWARE_MODULE_ID, &rga_module_);
     if (ret) {
-        ALOGE("%s,%d faile get hw moudle\n",__FUNCTION__,__LINE__);
-        return ret;
+        ALOGE("%s,%d faile get rga hw moudle\n",__FUNCTION__,__LINE__);
+        rga_module_ = NULL;
+        rga_device_ = NULL;
     }
-
-    ret = rga_open(rga_module_, &rga_device_);
-    if (ret) {
-        ALOGE("device failed to initialize (%s)\n", strerror(-ret));
-        return ret;
+    else
+    {
+        ret = rga_open(rga_module_, &rga_device_);
+        if (ret) {
+            ALOGE("rga device failed to initialize (%s)\n", strerror(-ret));
+            //return ret;
+        }
     }
 #endif
 

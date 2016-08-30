@@ -812,11 +812,13 @@ static bool vop_support_format(uint32_t hal_format) {
   }
 }
 
-static bool check_layer(hwc_layer_1_t * Layer) {
+static bool check_layer(struct hwc_context_t *ctx, hwc_layer_1_t * Layer) {
 struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
-#if !RK_RGA
+#if RK_RGA
+        || (NULL == ctx->drm.GetRgaDevice() && Layer->transform)
+#else
         || (Layer->transform)
 #endif
         ||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha!=0xFF)
@@ -1080,7 +1082,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 #if RK_DRM_HWC
-      if(j<(num_layers-1) && !use_framebuffer_target && !check_layer(layer))
+      if(j<(num_layers-1) && !use_framebuffer_target && !check_layer(ctx, layer))
         use_framebuffer_target = true;
 #endif
       if (!(layer->flags & HWC_SKIP_LAYER))

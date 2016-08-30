@@ -454,6 +454,14 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     hwc_rect_t  rect_merge;
     int left_min = 0, top_min = 0, right_max = 0, bottom_max=0;
 
+    if(!mRga_) {
+        mRga_ = drm_->GetRgaDevice();
+        if(!mRga_) {
+            ALOGE("You cann't get rga device");
+            return -1;
+        }
+    }
+
     for (int r = 0; r < (int) visible_region->numRects; r++) {
         int r_left;
         int r_top;
@@ -556,9 +564,6 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
 
     if (layer.transform & DrmHwcTransform::kFlipV)
         rga_transform |= DRM_RGA_TRANSFORM_FLIP_V;
-
-    if(!mRga_)
-        mRga_ = drm_->GetRgaDevice();
 
     rga_set_rect(&rects.src,
                 (int)layer.source_crop.left, (int)layer.source_crop.top,
@@ -839,7 +844,7 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         break;
 #if RK_RGA
       case DrmCompositionPlane::Type::kLayer:
-        if(!source_layers.empty())
+        if(drm_->GetRgaDevice() && !source_layers.empty())
         {
             DrmHwcLayer &layer = layers[source_layers.front()];
             if(/*layer.is_yuv &&*/ layer.transform!=0)

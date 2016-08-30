@@ -243,21 +243,25 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
                                 continue;
                             }
-#if !RK_RGA
-                            rotation = 0;
-                            if ((*iter_layer)->transform & DrmHwcTransform::kFlipH)
-                                rotation |= 1 << DRM_REFLECT_X;
-                            if ((*iter_layer)->transform & DrmHwcTransform::kFlipV)
-                                rotation |= 1 << DRM_REFLECT_Y;
-                            if ((*iter_layer)->transform & DrmHwcTransform::kRotate90)
-                                rotation |= 1 << DRM_ROTATE_90;
-                            else if ((*iter_layer)->transform & DrmHwcTransform::kRotate180)
-                                rotation |= 1 << DRM_ROTATE_180;
-                            else if ((*iter_layer)->transform & DrmHwcTransform::kRotate270)
-                                rotation |= 1 << DRM_ROTATE_270;
-                            if(rotation && !(rotation & (*iter_plane)->get_rotate()))
-                                continue;
+#if RK_RGA
+                            if(NULL == drm->GetRgaDevice())
 #endif
+                            {
+                                rotation = 0;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kFlipH)
+                                    rotation |= 1 << DRM_REFLECT_X;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kFlipV)
+                                    rotation |= 1 << DRM_REFLECT_Y;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kRotate90)
+                                    rotation |= 1 << DRM_ROTATE_90;
+                                else if ((*iter_layer)->transform & DrmHwcTransform::kRotate180)
+                                    rotation |= 1 << DRM_ROTATE_180;
+                                else if ((*iter_layer)->transform & DrmHwcTransform::kRotate270)
+                                    rotation |= 1 << DRM_ROTATE_270;
+                                if(rotation && !(rotation & (*iter_plane)->get_rotate()))
+                                    continue;
+                            }
+
                             ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
                             //Find the match plane for layer,it will be commit.
@@ -436,7 +440,10 @@ int PlanStageProtected::ProvisionPlanes(
                                         ALOGV("layer alpha=0x%x,alpha id=%d",layer->alpha,(*iter_plane)->alpha_property().id());
                                         continue;
                                     }
-#if !RK_RGA
+#if RK_RGA
+                            if(NULL == drm->GetRgaDevice())
+#endif
+                            {
                                     rotation = 0;
                                     if (layer->transform & DrmHwcTransform::kFlipH)
                                         rotation |= 1 << DRM_REFLECT_X;
@@ -450,7 +457,7 @@ int PlanStageProtected::ProvisionPlanes(
                                         rotation |= 1 << DRM_ROTATE_270;
                                     if(rotation && !(rotation & (*iter_plane)->get_rotate()))
                                         continue;
-#endif
+                            }
 
                                     layer->is_take = true;  //mark layer which take a plane.
                                     ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
