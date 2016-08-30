@@ -38,8 +38,8 @@
 
 // One for the front, one for the back, and one for cases where we need to
 // squash a frame that the hw can't display with hw overlays.
-#define DRM_DISPLAY_BUFFERS 3
-#define MaxVideoBackBuffers             (3)
+#define DRM_DISPLAY_BUFFERS             (3)
+#define MaxRgaBuffers                   (3)
 #define RGA_MAX_WIDTH                   (4096)
 #define RGA_MAX_HEIGHT                  (2304)
 
@@ -188,7 +188,7 @@ class DrmDisplayCompositor {
   DrmFramebuffer framebuffers_[DRM_DISPLAY_BUFFERS];
 #if RK_RGA
   int rgaBuffer_index_;
-  DrmRgaBuffer rgaBuffers_[MaxVideoBackBuffers];
+  DrmRgaBuffer rgaBuffers_[MaxRgaBuffers];
   rga_device_t* mRga_;
 #endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;
