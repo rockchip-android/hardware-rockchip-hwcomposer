@@ -141,6 +141,9 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
                                            size_t num_exclude_rects) {
   DrmCompositionPlane *comp = NULL;
   std::vector<size_t> dedicated_layers;
+#if RK_SKIP_SUB
+  bool bSkipSub = false;
+#endif
   // Go through the composition and find the precomp layer as well as any
   // layers that have a dedicated plane located below the precomp layer.
   for (auto &i : composition_planes_) {
@@ -161,6 +164,21 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
     return;
   }
 
+#if RK_SKIP_SUB
+  if(comp_layers.size() > 0) {
+    DrmHwcLayer &comp_layer = layers_[comp_layers.front()];
+    if(!strcmp(comp_layer.name.c_str(),"SurfaceView")) {
+        if(dedicated_layers.size() > 0) {
+            DrmHwcLayer &dedicated_layer = layers_[dedicated_layers.front()];
+            if(!strcmp(dedicated_layer.name.c_str(),
+                "android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.VideoP")) {
+                ALOGD_IF(log_level(DBG_DEBUG), "%s skip subtract for video case", __FUNCTION__);
+                bSkipSub = true;
+            }
+        }
+    }
+  }
+#endif
   // Index at which the actual layers begin
   size_t layer_offset = num_exclude_rects + dedicated_layers.size();
   if (comp_layers.size() + layer_offset > 64) {
@@ -192,10 +210,11 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
   uint64_t exclude_mask = ((uint64_t)1 << num_exclude_rects) - 1;
   uint64_t dedicated_mask = (((uint64_t)1 << dedicated_layers.size()) - 1)
                             << num_exclude_rects;
-
   for (separate_rects::RectSet<uint64_t, int> &region : separate_regions) {
     if (region.id_set.getBits() & exclude_mask)
+    {
       continue;
+    }
 
     // If a rect intersects one of the dedicated layers, we need to remove the
     // layers from the composition region which appear *below* the dedicated
@@ -208,10 +227,14 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
       // Only exclude layers if they intersect this particular dedicated layer
       if (!(dedicated_intersect & (1 << (i + num_exclude_rects))))
         continue;
-
-      for (size_t j = 0; j < comp_layers.size(); ++j) {
-        if (comp_layers[j] < dedicated_layers[i])
-          region.id_set.subtract(j + layer_offset);
+#if RK_SKIP_SUB
+      if(!bSkipSub)
+#endif
+      {
+          for (size_t j = 0; j < comp_layers.size(); ++j) {
+            if (comp_layers[j] < dedicated_layers[i])
+              region.id_set.subtract(j + layer_offset);
+          }
       }
     }
     if (!(region.id_set.getBits() >> layer_offset))

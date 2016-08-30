@@ -813,7 +813,12 @@ static bool vop_support_format(uint32_t hal_format) {
 }
 
 static bool check_layer(struct hwc_context_t *ctx, hwc_layer_1_t * Layer) {
-struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
+    struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
+
+#if !RK_RGA
+    UN_USED(ctx);
+#endif
+
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
 #if RK_RGA
