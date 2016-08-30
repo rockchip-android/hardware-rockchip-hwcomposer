@@ -462,25 +462,38 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
         }
     }
 
-    for (int r = 0; r < (int) visible_region->numRects; r++) {
-        int r_left;
-        int r_top;
-        int r_right;
-        int r_bottom;
+    rect_merge.left = layer.display_frame.left;
+    rect_merge.top = layer.display_frame.top;
+    rect_merge.right = layer.display_frame.right;
+    rect_merge.bottom = layer.display_frame.bottom;
 
-        r_left = hwcMAX(layer.display_frame.left, visible_rects[r].left);
-        left_min = hwcMIN(r_left, left_min);
-        r_top = hwcMAX(layer.display_frame.top, visible_rects[r].top);
-        top_min = hwcMIN(r_top, top_min);
-        r_right = hwcMIN(layer.display_frame.right, visible_rects[r].right);
-        right_max = hwcMAX(r_right, right_max);
-        r_bottom = hwcMIN(layer.display_frame.bottom, visible_rects[r].bottom);
-        bottom_max  = hwcMAX(r_bottom, bottom_max);
+    if(visible_rects){
+        left_min = visible_rects[0].left;
+        top_min = visible_rects[0].top;
+        right_max = visible_rects[0].right;
+        bottom_max = visible_rects[0].bottom;
+
+        for (int r = 0; r < (int) visible_region->numRects; r++) {
+            int r_left;
+            int r_top;
+            int r_right;
+            int r_bottom;
+
+            r_left = hwcMAX(layer.display_frame.left, visible_rects[r].left);
+            left_min = hwcMIN(r_left, left_min);
+            r_top = hwcMAX(layer.display_frame.top, visible_rects[r].top);
+            top_min = hwcMIN(r_top, top_min);
+            r_right = hwcMIN(layer.display_frame.right, visible_rects[r].right);
+            right_max = hwcMAX(r_right, right_max);
+            r_bottom = hwcMIN(layer.display_frame.bottom, visible_rects[r].bottom);
+            bottom_max  = hwcMAX(r_bottom, bottom_max);
+        }
+
+        rect_merge.left = hwcMAX(layer.display_frame.left, left_min);
+        rect_merge.top = hwcMAX(layer.display_frame.top, top_min);
+        rect_merge.right =  hwcMIN(layer.display_frame.right, right_max);
+        rect_merge.bottom = hwcMIN(layer.display_frame.bottom, bottom_max);
     }
-    rect_merge.left = hwcMAX(layer.display_frame.left, left_min);
-    rect_merge.top = hwcMAX(layer.display_frame.top, top_min);
-    rect_merge.right =  hwcMIN(layer.display_frame.right, right_max);
-    rect_merge.bottom = hwcMIN(layer.display_frame.bottom, bottom_max);
 
     ret = rgaBuffer.WaitReleased(-1);
     if (ret) {
@@ -489,15 +502,8 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     }
     rgaBuffer.set_release_fence_fd(-1);
 
-    if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12) {
-        dst_w = layer.display_frame.right - layer.display_frame.left;
-        dst_h = layer.display_frame.bottom - layer.display_frame.top;
-    } else {
-        dst_w = rect_merge.right - rect_merge.left;
-        dst_h = rect_merge.bottom - rect_merge.top;
-    }
-
-    ALOGD("dst_w=%d,dst_h=%d",dst_w,dst_h);
+    dst_w = rect_merge.right - rect_merge.left;
+    dst_h = rect_merge.bottom - rect_merge.top;
 
     if((layer.transform & DrmHwcTransform::kRotate90) ||
         (layer.transform & DrmHwcTransform::kRotate270)) {
