@@ -60,6 +60,13 @@
 
 namespace android {
 
+#if USE_AFBC_LAYER
+bool isAfbcInternalFormat(uint64_t internal_format)
+{
+    return (internal_format & GRALLOC_ARM_INTFMT_AFBC);
+}
+#endif
+
 #if RK_DRM_HWC_DEBUG
 unsigned int g_log_level;
 unsigned int g_frame;
@@ -626,8 +633,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   }
 
 #if RK_RGA_TEST
-  if(!strcmp(sf_layer->LayerName,"SurfaceView"))
+  if((format==HAL_PIXEL_FORMAT_RGB_565) && !strcmp(sf_layer->LayerName,"SurfaceView"))
     transform |= DrmHwcTransform::kRotate90;
+
 #endif
 
   switch (sf_layer->blending) {

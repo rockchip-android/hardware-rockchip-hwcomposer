@@ -161,7 +161,6 @@ class Planner {
       DrmCrtc *crtc, std::vector<DrmPlane *> *primary_planes,
       std::vector<DrmPlane *> *overlay_planes);
 #if RK_DRM_HWC
-  void rkSetPlaneFlag(DrmCrtc *crtc, DrmPlane* plane);
   std::vector<DrmPlane *> rkGetUsablePlanes(DrmCrtc *crtc);
 #endif
   std::vector<std::unique_ptr<PlanStage>> stages_;

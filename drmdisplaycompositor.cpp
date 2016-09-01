@@ -524,7 +524,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     dst_stride = rgaBuffer.buffer()->getStride();
 
 #if RK_DRM_HWC_DEBUG
-     // DumpLayer("rga", layer.sf_handle);
+      //DumpLayer("rga", layer.sf_handle);
 #endif
 
     if(layer.transform & DrmHwcTransform::kRotate90) {
@@ -890,13 +890,6 @@ static const char *RotatingToString(uint64_t rotating) {
     default:
       return "<invalid>";
   }
-}
-#endif
-
-#if USE_AFBC_LAYER
-inline static bool isAfbcInternalFormat(uint64_t internal_format)
-{
-    return (internal_format & GRALLOC_ARM_INTFMT_AFBC);
 }
 #endif
 

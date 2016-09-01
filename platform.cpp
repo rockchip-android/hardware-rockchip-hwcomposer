@@ -37,7 +37,7 @@ std::vector<DrmPlane *> Planner::GetUsablePlanes(
 }
 
 #if RK_DRM_HWC
-void Planner::rkSetPlaneFlag(DrmCrtc *crtc, DrmPlane* plane) {
+static void rkSetPlaneFlag(DrmCrtc *crtc, DrmPlane* plane) {
     DrmResources* drm = crtc->getDrmReoources();
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
 
@@ -244,7 +244,11 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 continue;
                             }
 #if RK_RGA
-                            if(NULL == drm->GetRgaDevice())
+                                    if(NULL == drm->GetRgaDevice()
+#if USE_AFBC_LAYER
+                                    || isAfbcInternalFormat((*iter_layer)->internal_format)
+#endif
+                                    )
 #endif
                             {
                                 rotation = 0;
@@ -441,23 +445,27 @@ int PlanStageProtected::ProvisionPlanes(
                                         continue;
                                     }
 #if RK_RGA
-                            if(NULL == drm->GetRgaDevice())
+                                    if(NULL == drm->GetRgaDevice()
+#if USE_AFBC_LAYER
+                                    || isAfbcInternalFormat(layer->internal_format)
 #endif
-                            {
-                                    rotation = 0;
-                                    if (layer->transform & DrmHwcTransform::kFlipH)
-                                        rotation |= 1 << DRM_REFLECT_X;
-                                    if (layer->transform & DrmHwcTransform::kFlipV)
-                                        rotation |= 1 << DRM_REFLECT_Y;
-                                    if (layer->transform & DrmHwcTransform::kRotate90)
-                                        rotation |= 1 << DRM_ROTATE_90;
-                                    else if (layer->transform & DrmHwcTransform::kRotate180)
-                                        rotation |= 1 << DRM_ROTATE_180;
-                                    else if (layer->transform & DrmHwcTransform::kRotate270)
-                                        rotation |= 1 << DRM_ROTATE_270;
-                                    if(rotation && !(rotation & (*iter_plane)->get_rotate()))
-                                        continue;
-                            }
+                                    )
+#endif
+                                    {
+                                        rotation = 0;
+                                        if (layer->transform & DrmHwcTransform::kFlipH)
+                                            rotation |= 1 << DRM_REFLECT_X;
+                                        if (layer->transform & DrmHwcTransform::kFlipV)
+                                            rotation |= 1 << DRM_REFLECT_Y;
+                                        if (layer->transform & DrmHwcTransform::kRotate90)
+                                            rotation |= 1 << DRM_ROTATE_90;
+                                        else if (layer->transform & DrmHwcTransform::kRotate180)
+                                            rotation |= 1 << DRM_ROTATE_180;
+                                        else if (layer->transform & DrmHwcTransform::kRotate270)
+                                            rotation |= 1 << DRM_ROTATE_270;
+                                        if(rotation && !(rotation & (*iter_plane)->get_rotate()))
+                                            continue;
+                                    }
 
                                     layer->is_take = true;  //mark layer which take a plane.
                                     ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
@@ -481,6 +489,33 @@ int PlanStageProtected::ProvisionPlanes(
         if(layer)
                 ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: cann't match layer=%s,layer->index=%d",
                         layer->name.c_str(),layer->index);
+
+#if RK_EARLY_PRECOMP
+  // reserved plane for precomp when find failed plane earlyer.
+  DrmCompositionPlane *precomp = GetPrecomp(composition);
+  if (!precomp) {
+        //loop plane groups.
+        for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+        iter != plane_groups.end(); ++iter) {
+                //find the useful plane group
+                if(!(*iter)->bUse) {
+                     //loop plane
+                    for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
+                        !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane) {
+                            if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
+                            {
+                                DrmPlane *precomp_plane = (*iter_plane);
+                                rkSetPlaneFlag(crtc,precomp_plane);
+                                composition->emplace_back(DrmCompositionPlane::Type::kPrecomp,
+                                                        precomp_plane, crtc);
+                                return -1;
+                             }
+                   }
+                }
+         }
+  }
+#endif
+
         return -1;
     }
 #endif

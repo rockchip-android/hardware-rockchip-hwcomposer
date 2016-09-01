@@ -51,6 +51,11 @@ namespace android {
 #define	    GRALLOC_ARM_INTFMT_AFBC                     (1ULL << (GRALLOC_ARM_INTFMT_EXTENSION_BIT_START+0))
 #define SKIP_BOOT                                       (1)
 #define MAGIC_USAGE_FOR_AFBC_LAYER                      (0x88)
+
+#if USE_AFBC_LAYER
+bool isAfbcInternalFormat(uint64_t internal_format);
+#endif
+
 #endif
 
 #if SKIP_BOOT

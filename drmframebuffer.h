@@ -67,7 +67,7 @@ struct DrmRgaBuffer {
       Clear();
     }
     buffer_ = new GraphicBuffer(w, h, format,
-                                 GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK);
+                                 GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN);
     release_fence_fd_ = -1;
     return is_valid();
   }
