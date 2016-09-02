@@ -20,7 +20,7 @@
 #include "platform.h"
 #include "platformdrmgeneric.h"
 
-#include <drm/drm_fourcc.h>
+#include <drm_fourcc.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
@@ -86,6 +86,9 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
   }
 }
 
+#ifndef u64
+#define u64 uint64_t
+#endif
 int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(handle);
   if (!gr_handle)
@@ -116,8 +119,20 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
     bo->gem_handles[1] = gem_handle;
     bo->offsets[1] = gr_handle->width * gr_handle->height;
   }
+#if USE_AFBC_LAYER
+  __u64 modifier[4];
+  memset(modifier, 0, sizeof(modifier));
+
+  if (isAfbcInternalFormat(gr_handle->internal_format))
+    modifier[0] = DRM_FORMAT_MOD_ARM_AFBC;
+
+  ret = drmModeAddFB2_ext(drm_->fd(), bo->width, bo->height, bo->format,
+                      bo->gem_handles, bo->pitches, bo->offsets, modifier,
+		      &bo->fb_id, DRM_MODE_FB_MODIFIERS);
+#else
   ret = drmModeAddFB2(drm_->fd(), bo->width, bo->height, bo->format,
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
+#endif
   if (ret) {
     ALOGE("could not create drm fb %d", ret);
     ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",

@@ -1031,7 +1031,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     {
         afbc_plane_id = plane->id();
         ALOGD_IF(log_level(DBG_VERBOSE),"fbdc layer %s,plane id=%d",layer.name.c_str(),afbc_plane_id);
-        //crtc->set_afbc_property(plane->id());
     }
 #endif
 
@@ -1201,19 +1200,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
   }
 
 out:
-
-#if RK_DRM_HWC
-  ret = drmModeAtomicAddProperty(pset, crtc->id(),
-                                 crtc->afbc_property().id(),
-                                 afbc_plane_id) < 0;
-  if (ret) {
-    ALOGE("Failed to add afbc_property property %d to crtc %d",
-          crtc->afbc_property().id(), crtc->id());
-  }
-
-    ALOGD_IF(log_level(DBG_VERBOSE),"Add plane=%d for afbc_property property %d of crtc %d",
-            afbc_plane_id,crtc->afbc_property().id(), crtc->id());
-#endif
 
   if (!ret) {
     uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
