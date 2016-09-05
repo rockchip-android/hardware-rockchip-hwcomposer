@@ -398,23 +398,8 @@ static bool has_layer(std::vector<DrmHwcLayer*>& layer_vector,DrmHwcLayer &layer
 
           return false;
 }
+
 #define MOST_WIN_ZONES                  4
-
-static void add_layer_by_xpos(std::vector<DrmHwcLayer*>& layers,DrmHwcLayer& layer)
-{
-    std::vector<DrmHwcLayer*>::iterator iter_layer;
-    for(iter_layer = layers.begin();iter_layer != layers.end();++iter_layer) {
-        if((*iter_layer)->display_frame.left > layer.display_frame.left) {
-            layers.insert(iter_layer,&layer);
-            break;
-        }
-    }
-
-    if(iter_layer == layers.end()) {
-        layers.emplace_back(&layer);
-    }
-}
-
 int DrmDisplayComposition::combine_layer()
 {
     /*Group layer*/
@@ -454,18 +439,12 @@ int DrmDisplayComposition::combine_layer()
                     //append layer into layer_vector of layer_map_.
                     if(!bHasLayerOne && !bHasLayerTwo)
                     {
-#if 1
                         layer_map_[zpos].emplace_back(&layer_one);
                         layer_map_[zpos].emplace_back(&layer_two);
                         is_combine = true;
-#else
-                        add_layer_by_xpos(layer_map_[zpos],layer_one);
-                        add_layer_by_xpos(layer_map_[zpos],layer_two);
-#endif
                     }
                     else if(!bHasLayerTwo)
                     {
-#if 1
                         is_combine = true;
                         for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map_[zpos].begin();
                             iter != layer_map_[zpos].end();++iter)
@@ -482,13 +461,9 @@ int DrmDisplayComposition::combine_layer()
 
                         if(is_combine)
                             layer_map_[zpos].emplace_back(&layer_two);
-#else
-                        add_layer_by_xpos(layer_map_[zpos],layer_two);
-#endif
                     }
                     else if(!bHasLayerOne)
                     {
-#if 1
                         is_combine = true;
                         for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map_[zpos].begin();
                             iter != layer_map_[zpos].end();++iter)
@@ -505,9 +480,6 @@ int DrmDisplayComposition::combine_layer()
 
                         if(is_combine)
                             layer_map_[zpos].emplace_back(&layer_one);
-#else
-                        add_layer_by_xpos(layer_map_[zpos],layer_one);
-#endif
                     }
                 }
 
@@ -517,11 +489,7 @@ int DrmDisplayComposition::combine_layer()
                     if(!bHasLayerOne)
                     {
                         zpos++;
-#if 1
                         layer_map_[zpos].emplace_back(&layer_one);
-#else
-                        add_layer_by_xpos(layer_map_[zpos],layer_one);
-#endif
                     }
                     is_combine = false;
                     break;

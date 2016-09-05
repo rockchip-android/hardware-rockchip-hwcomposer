@@ -1213,7 +1213,7 @@ PRINT_TIME_START;
     int new_value;
     property_get("sys.hwc.msleep", value, "0");
     new_value = atoi(value);
-    usleep(new_value*100);
+    usleep(new_value*1000);
 
     ret = drmModeAtomicCommit(drm_->fd(), pset, flags, drm_);
     if (ret) {
