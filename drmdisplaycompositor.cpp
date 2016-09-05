@@ -1414,12 +1414,16 @@ int DrmDisplayCompositor::Composite() {
       if (ret)
         ALOGE("Failed to apply dpms for display %d", display_);
 
+#if 0
         //zxl:Fix fence timeout bug when plug out HDMI.
         if(composition.get()->dpms_mode() == DRM_MODE_DPMS_OFF && active_composition_)
         {
                 active_composition_->SignalCompositionDone();
         }
-
+#else
+        if(composition.get()->dpms_mode() == DRM_MODE_DPMS_OFF)
+            ClearDisplay();
+#endif
       return ret;
     case DRM_COMPOSITION_TYPE_MODESET:
       mode_.mode = composition->display_mode();
