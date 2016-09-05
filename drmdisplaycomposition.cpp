@@ -457,6 +457,7 @@ int DrmDisplayComposition::combine_layer()
 #if 1
                         layer_map_[zpos].emplace_back(&layer_one);
                         layer_map_[zpos].emplace_back(&layer_two);
+                        is_combine = true;
 #else
                         add_layer_by_xpos(layer_map_[zpos],layer_one);
                         add_layer_by_xpos(layer_map_[zpos],layer_two);
@@ -465,7 +466,22 @@ int DrmDisplayComposition::combine_layer()
                     else if(!bHasLayerTwo)
                     {
 #if 1
-                        layer_map_[zpos].emplace_back(&layer_two);
+                        is_combine = true;
+                        for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map_[zpos].begin();
+                            iter != layer_map_[zpos].end();++iter)
+                        {
+                            if((*iter)->sf_handle==layer_one.sf_handle)
+                                continue;
+
+                            if(!is_layer_combine(*iter,&layer_two))
+                            {
+                                is_combine = false;
+                                break;
+                            }
+                        }
+
+                        if(is_combine)
+                            layer_map_[zpos].emplace_back(&layer_two);
 #else
                         add_layer_by_xpos(layer_map_[zpos],layer_two);
 #endif
@@ -473,14 +489,29 @@ int DrmDisplayComposition::combine_layer()
                     else if(!bHasLayerOne)
                     {
 #if 1
-                        layer_map_[zpos].emplace_back(&layer_one);
+                        is_combine = true;
+                        for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map_[zpos].begin();
+                            iter != layer_map_[zpos].end();++iter)
+                        {
+                            if((*iter)->sf_handle==layer_two.sf_handle)
+                                continue;
+
+                            if(!is_layer_combine(*iter,&layer_one))
+                            {
+                                is_combine = false;
+                                break;
+                            }
+                        }
+
+                        if(is_combine)
+                            layer_map_[zpos].emplace_back(&layer_one);
 #else
                         add_layer_by_xpos(layer_map_[zpos],layer_one);
 #endif
                     }
-                    is_combine = true;
                 }
-                else
+
+                if(!is_combine)
                 {
                     //if it cann't combine two layer,it need start a new group.
                     if(!bHasLayerOne)
@@ -644,7 +675,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       to_composite.emplace(std::make_pair(i, &layers_[i]));
 #endif
 
-  int ret=0;
+ int ret=-1;
 #if USE_MULTI_AREAS
   ret = combine_layer();
 
@@ -655,7 +686,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
         ALOGD_IF(log_level(DBG_VERBOSE),"Planner failed MatchPlanes planes ret=%d", ret);
       }
   }
-
 #endif
 
   std::vector<DrmCompositionPlane> plan;
