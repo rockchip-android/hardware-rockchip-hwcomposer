@@ -157,6 +157,7 @@ class DrmDisplayCompositor {
 #if RK_RGA
   int ApplyPreRotate(DrmDisplayComposition *display_comp,
                 DrmHwcLayer &layer);
+  void freeRgaBuffers();
 #endif
   int PrepareFrame(DrmDisplayComposition *display_comp);
   int CommitFrame(DrmDisplayComposition *display_comp, bool test_only);
@@ -191,6 +192,7 @@ class DrmDisplayCompositor {
   int rgaBuffer_index_;
   DrmRgaBuffer rgaBuffers_[MaxRgaBuffers];
   rga_device_t* mRga_;
+  bool mUseRga_;
 #endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;
 

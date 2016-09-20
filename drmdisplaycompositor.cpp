@@ -253,6 +253,7 @@ DrmDisplayCompositor::DrmDisplayCompositor()
 #if RK_RGA
       rgaBuffer_index_(0),
       mRga_(NULL),
+      mUseRga_(false),
 #endif
       squash_framebuffer_index_(0),
       dump_frames_composited_(0),
@@ -724,6 +725,12 @@ int DrmDisplayCompositor::ApplyPreRotate(
 
   return 0;
 }
+
+void DrmDisplayCompositor::freeRgaBuffers() {
+    for(int i = 0; i < MaxRgaBuffers; i++) {
+        rgaBuffers_[i].Clear();
+    }
+}
 #endif
 
 int DrmDisplayCompositor::DisablePlanes(DrmDisplayComposition *display_comp) {
@@ -827,6 +834,10 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
     framebuffer_index_ = (framebuffer_index_ + 1) % DRM_DISPLAY_BUFFERS;
   }
 
+#if RK_RGA
+    bool bUseRga = false;
+#endif
+
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     std::vector<size_t> &source_layers = comp_plane.source_layers();
 
@@ -857,9 +868,15 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
             {
                 ret = ApplyPreRotate(display_comp,layer);
                 if (ret)
+                {
+                    freeRgaBuffers();
+                    mUseRga_ = mUseRga_ ? false : mUseRga_;
                     return ret;
+                }
 
                 rgaBuffer_index_ = (rgaBuffer_index_ + 1) % MaxRgaBuffers;
+                bUseRga = true;
+                mUseRga_ = mUseRga_ ? mUseRga_ : true;
             }
         }
         break;
@@ -868,6 +885,14 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         break;
     }
   }
+
+#if RK_RGA
+    if(mUseRga_ && !bUseRga)
+    {
+        freeRgaBuffers();
+        mUseRga_ = false;
+    }
+#endif
 
   return ret;
 }

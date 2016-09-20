@@ -53,9 +53,9 @@ struct DrmRgaBuffer {
     release_fence_fd_ = fd;
   }
 
-  bool Allocate(uint32_t w, uint32_t h, uint32_t format) {
+  bool Allocate(uint32_t w, uint32_t h, int32_t format) {
     if (is_valid()) {
-      if (buffer_->getWidth() == w && buffer_->getHeight() == h)
+      if (buffer_->getWidth() == w && buffer_->getHeight() == h && buffer_->getPixelFormat() == format)
         return true;
 
       if (release_fence_fd_ >= 0) {
@@ -66,6 +66,7 @@ struct DrmRgaBuffer {
       }
       Clear();
     }
+    ALOGD_IF(log_level(DBG_DEBUG), "RGA Allocate buffer %d x %d", w, h);
     buffer_ = new GraphicBuffer(w, h, format,
                                  GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN);
     release_fence_fd_ = -1;
@@ -80,7 +81,7 @@ struct DrmRgaBuffer {
       close(release_fence_fd_);
       release_fence_fd_ = -1;
     }
-
+    ALOGD_IF(log_level(DBG_DEBUG), "RGA free buffer %d x %d", buffer_->getWidth(), buffer_->getHeight());
     buffer_.clear();
   }
 
