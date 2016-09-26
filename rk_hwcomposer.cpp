@@ -310,6 +310,9 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
     int bottom_max = 0;
     hwcRECT dstRects ;
     hwcRECT srcRects ;
+    float hfactor = 1.0;
+    float vfactor = 1.0;
+    struct private_handle_t* hnd = NULL;
     
     unsigned int i;
     for (i = 0; i < (unsigned int) Region->numRects ;i++)
@@ -361,9 +364,59 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
     if((dstRects.right - dstRects.left ) <= 2
         || (dstRects.bottom - dstRects.top) <= 2)
     {
-        ALOGW("zone is small ,LCDC can not support");
+        if(is_out_log())
+			ALOGW("zone is small ,LCDC can not support");
         return -1;
     }
+
+    hfactor = (float)(Layer->sourceCrop.right - Layer->sourceCrop.left)
+                     / (Layer->displayFrame.right - Layer->displayFrame.left);
+
+    vfactor = (float)(Layer->sourceCrop.bottom - Layer->sourceCrop.top)
+                     / (Layer->displayFrame.bottom - Layer->displayFrame.top);
+
+    srcRects.left   = hwcMAX ((SrcRect->left \
+                 - (int) ((DstRect->left   - dstRects.left)   * hfactor)),0);
+    srcRects.top    = hwcMAX ((SrcRect->top \
+                 - (int) ((DstRect->top    - dstRects.top)    * vfactor)),0);
+
+    srcRects.right  = SrcRect->right \
+                      - (int) ((DstRect->right  - dstRects.right)  * hfactor);
+    srcRects.bottom = SrcRect->bottom \
+                      - (int) ((DstRect->bottom - dstRects.bottom) * vfactor);
+
+    if((srcRects.right - srcRects.left ) <= 16
+        || (srcRects.bottom - srcRects.top) <= 16)
+    {
+        if(is_out_log())
+			ALOGW("source is too small ,LCDC can not support");
+        return -1;
+    }
+
+    hfactor = (float)(Layer->sourceCrop.right - Layer->sourceCrop.left)
+          / (Layer->displayFrame.right - Layer->displayFrame.left);
+
+    vfactor = (float)(Layer->sourceCrop.bottom - Layer->sourceCrop.top)
+              / (Layer->displayFrame.bottom - Layer->displayFrame.top);
+
+    if(hfactor >= 8 || hfactor <= 0.125 || vfactor >= 8 || vfactor <= 0.125)
+    {
+        if(is_out_log())
+            ALOGD("line=%d,scale over[%d,%d]",__LINE__,hfactor,vfactor);
+        return -1;
+    }
+
+    if (Layer)
+        hnd = (struct private_handle_t*)Layer->handle;
+
+    if (hnd) {
+        if (srcRects.right - srcRects.left > hnd->width)
+            return -1;
+        if (srcRects.bottom - srcRects.top > hnd->height)
+            return -1;
+    } else
+        return -1;
+
     return 0;
 }
 
@@ -873,6 +926,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     ctx->Is_Lvideo = false;
     ctx->Is_Secure = false;
     ctx->special_app = false;
+    ctx->secureLayerFlag = 0;
     is_debug_log();    
     
     if(cnt < 2)
@@ -899,7 +953,9 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                     ALOGD("layer[%d],fmt=%d,usage=%x,protect=%x",i,handle->format,handle->usage,GRALLOC_USAGE_PROTECTED);                   
                 }
                 
-            }           
+            }
+            if (handle && (handle->usage & GRALLOC_USAGE_PROTECTED))
+                ctx->secureLayerFlag |= 1 << i;
             if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
             {
                 ctx->Is_video = true; 
@@ -1067,8 +1123,8 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         else
         {
             #if VIDEO_WIN1_UI_DISABLE
-            if(/*context->vop_mbshake && */context->Is_video || (context->special_app && i == 1)
-                || forceUiDetect)
+            if(/*context->vop_mbshake && */(context->Is_video || (context->special_app && i == 1)
+                || forceUiDetect) && !context->secureLayerFlag)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
@@ -1385,7 +1441,7 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
                 return -1;
             }
             #if VIDEO_WIN1_UI_DISABLE
-            if(context->vop_mbshake && context->Is_video)
+            if(context->vop_mbshake && context->Is_video && !context->secureLayerFlag)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
@@ -1668,7 +1724,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         || handle == NULL
         || layer->transform != 0
         // ||(list->numHwLayers - 1)>4
-        ||(list->numHwLayers - 1)<3)
+        ||((list->numHwLayers - 1)<3 && !context->secureLayerFlag))
     {
         if(is_out_log())
           ALOGD("policy skip,flag=%x,hanlde=%x,tra=%d,num=%d,line=%d",layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);

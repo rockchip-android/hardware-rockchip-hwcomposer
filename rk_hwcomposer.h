@@ -404,6 +404,7 @@ FenceMangrRga;
         unsigned long phy_addr;
         struct private_handle_t fbhandle ;
         lastStatus mLastStatus;
+        unsigned int      secureLayerFlag;
     }
     hwcContext;
 
