@@ -1050,6 +1050,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
         if(layer->handle)
         {
+#if RK_DRM_HWC_DEBUG
+            DumpLayer(layer->LayerName,layer->handle);
+#endif
             format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
             if(layer->transform)
             {
