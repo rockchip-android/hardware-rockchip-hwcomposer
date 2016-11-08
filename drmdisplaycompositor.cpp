@@ -41,7 +41,12 @@
 #include "hwcutil.h"
 #endif
 
+#if RK_DRM_HWC
+#define DRM_QUEUE_USLEEP 10
+#define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 5
+#else
 #define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 2
+#endif
 
 namespace android {
 
@@ -364,7 +369,12 @@ int DrmDisplayCompositor::QueueComposition(
   // to eat our buffer handles when we get about 1 second behind.
   while (composite_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH) {
     pthread_mutex_unlock(&lock_);
+#if RK_DRM_HWC
+    //sched_yield will lead cpu schedule abnormal.
+    usleep(DRM_QUEUE_USLEEP);
+#else
     sched_yield();
+#endif
     pthread_mutex_lock(&lock_);
   }
 
