@@ -50,6 +50,7 @@
 #if RK_DRM_HWC_DEBUG | RK_DRM_HWC
 #include <drm_fourcc.h>
 #include "gralloc_drm_handle.h"
+#include <linux/fb.h>
 #endif
 
 #if RK_VR
@@ -366,6 +367,10 @@ struct hwc_context_t {
   DummySwSyncTimeline dummy_timeline;
   VirtualCompositorWorker virtual_compositor_worker;
   DrmHotplugHandler hotplug_handler;
+#if RK_DRM_HWC
+  int fb_fd;
+  int fb_blanked;
+#endif
 };
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
@@ -607,9 +612,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     name = sf_layer->LayerName;
     mlayer = sf_layer;
 
-    ALOGV("\tsourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
+    ALOGV("\t layerName=%s,sourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
     source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
-    ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large",h_scale_mul,v_scale_mul,is_scale,is_large);
+    ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large=%d",h_scale_mul,v_scale_mul,is_scale,is_large);
 
 #endif
 
@@ -898,7 +903,7 @@ int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attr
 
     if(!hnd)
     {
-        ALOGE("%s handle is null");
+        ALOGE("%s handle is null",__FUNCTION__);
         return -1;
     }
 
@@ -1300,7 +1305,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         {
             bFindDisplay = true;
 #if RK_DRM_HWC_DEBUG
-            ALOGD_IF(log_level(DBG_VERBOSE),"%s:line=%d,Find fail display %d",__FUNCTION__,__LINE__,i);
+            ALOGD_IF(log_level(DBG_VERBOSE),"%s:line=%d,Find fail display %zu",__FUNCTION__,__LINE__,i);
 #endif
             break;
         }
@@ -1364,7 +1369,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         {
             bFindDisplay = true;
 #if RK_DRM_HWC_DEBUG
-            ALOGD_IF(log_level(DBG_DEBUG),"%s:line=%d,Find fail display %d",__FUNCTION__,__LINE__,i);
+            ALOGD_IF(log_level(DBG_DEBUG),"%s:line=%d,Find fail display %zu",__FUNCTION__,__LINE__,i);
 #endif
             break;
         }
@@ -1413,6 +1418,32 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
       dpmsValue = DRM_MODE_DPMS_ON;
       break;
   };
+
+#if RK_DRM_HWC
+    int fb_blank = 0;
+    if(dpmsValue == DRM_MODE_DPMS_OFF)
+        fb_blank = FB_BLANK_POWERDOWN;
+    else if(dpmsValue == DRM_MODE_DPMS_ON)
+        fb_blank = FB_BLANK_UNBLANK;
+    else
+        ALOGE("dpmsValue is invalid value= %d",dpmsValue);
+    int err = ioctl(ctx->fb_fd, FBIOBLANK, fb_blank);
+    ALOGD_IF(log_level(DBG_DEBUG),"%s Notice fb_blank to fb=%d", __FUNCTION__, fb_blank);
+    if (err < 0) {
+        if (errno == EBUSY)
+            ALOGD("fb_blank ioctl failed display=%d,fb_blank=%d,dpmsValue=%d",
+                    display,fb_blank,dpmsValue);
+        else
+            ALOGE("fb_blank ioctl failed(%s) display=%d,fb_blank=%d,dpmsValue=%d",
+                    strerror(errno),display,fb_blank,dpmsValue);
+        return -errno;
+    }
+    else
+    {
+        ctx->fb_blanked = fb_blank;
+    }
+#endif
+
   return ctx->drm.SetDpmsMode(display, dpmsValue);
 }
 
@@ -1747,6 +1778,13 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
 
 
 #if RK_DRM_HWC
+    ctx->fb_fd = open("/dev/graphics/fb0", O_RDWR, 0);
+    if(ctx->fb_fd < 0)
+    {
+         ALOGE("Open fb0 fail in %s",__FUNCTION__);
+         return -1;
+    }
+
   hwc_init_version();
 #endif
 
