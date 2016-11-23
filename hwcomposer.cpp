@@ -821,6 +821,7 @@ static bool vop_support_format(uint32_t hal_format) {
     case HAL_PIXEL_FORMAT_RGBA_8888:
     case HAL_PIXEL_FORMAT_RGB_565:
     case HAL_PIXEL_FORMAT_YCrCb_NV12:
+    case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
         return true;
     default:
       return false;
@@ -1105,7 +1106,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 #if RK_DRM_HWC
-      if(j<(num_layers-1) && !use_framebuffer_target && !check_layer(ctx, layer))
+      if(j<(num_layers-1) && !check_layer(ctx, layer))
         use_framebuffer_target = true;
 #endif
       if (!(layer->flags & HWC_SKIP_LAYER))

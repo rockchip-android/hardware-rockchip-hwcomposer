@@ -80,6 +80,8 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
       return DRM_FORMAT_YVU420;
     case HAL_PIXEL_FORMAT_YCrCb_NV12:
       return DRM_FORMAT_NV12;
+    case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
+      return DRM_FORMAT_NV12_10;
     default:
       ALOGE("Cannot convert hal format to drm format %u", hal_format);
       return -EINVAL;
@@ -106,18 +108,25 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   }
 
   memset(bo, 0, sizeof(hwc_drm_bo_t));
-  bo->width = gr_handle->width;
+  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+  {
+      bo->width = gr_handle->width/1.25;
+  }
+  else
+  {
+      bo->width = gr_handle->width;
+  }
+  bo->pitches[0] = gr_handle->stride;
   bo->height = gr_handle->height;
   bo->format = ConvertHalFormatToDrm(gr_handle->format);
-  bo->pitches[0] = gr_handle->stride;
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
-  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
     bo->pitches[1] = gr_handle->stride;
     bo->gem_handles[1] = gem_handle;
-    bo->offsets[1] = gr_handle->width * gr_handle->height;
+    bo->offsets[1] = bo->pitches[1] * gr_handle->height;
   }
 #if USE_AFBC_LAYER
   __u64 modifier[4];

@@ -196,7 +196,8 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
     //loop plane groups.
     for (iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
-       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,plane group zpos=%d,plane group bUse=%d,crtc=0x%x",__LINE__,*zpos,(*iter)->zpos,(*iter)->bUse,(1<<crtc->pipe()));
+       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,group(%d) zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
+                    __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
         //find the match zpos plane group
         if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
         {
