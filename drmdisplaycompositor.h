@@ -30,7 +30,7 @@
 #include <tuple>
 
 #if RK_RGA
-#include <drmrga.h>
+#include <RockchipRga.h>
 #endif
 
 #include <hardware/hardware.h>
@@ -191,7 +191,7 @@ class DrmDisplayCompositor {
 #if RK_RGA
   int rgaBuffer_index_;
   DrmRgaBuffer rgaBuffers_[MaxRgaBuffers];
-  rga_device_t* mRga_;
+  RockchipRga& mRga_;
   bool mUseRga_;
 #endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;

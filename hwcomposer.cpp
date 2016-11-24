@@ -640,7 +640,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
   }
 
 #if RK_RGA_TEST
-  if((format==HAL_PIXEL_FORMAT_RGB_565) && !strcmp(sf_layer->LayerName,"SurfaceView"))
+  if((format==HAL_PIXEL_FORMAT_RGB_565) && strstr(sf_layer->LayerName,"SurfaceView"))
     transform |= DrmHwcTransform::kRotate90;
 
 #endif
@@ -840,7 +840,7 @@ static bool check_layer(struct hwc_context_t *ctx, hwc_layer_1_t * Layer) {
     if (Layer->flags & HWC_SKIP_LAYER
         || (drm_handle && !vop_support_format(drm_handle->format))
 #if RK_RGA
-        || (NULL == ctx->drm.GetRgaDevice() && Layer->transform)
+        || (!ctx->drm.isSupportRkRga() && Layer->transform)
 #else
         || (Layer->transform)
 #endif
@@ -1539,15 +1539,15 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
     else if(dpmsValue == DRM_MODE_DPMS_ON)
         fb_blank = FB_BLANK_UNBLANK;
     else
-        ALOGE("dpmsValue is invalid value= %d",dpmsValue);
+        ALOGE("dpmsValue is invalid value= %" PRIu64 "",dpmsValue);
     int err = ioctl(ctx->fb_fd, FBIOBLANK, fb_blank);
     ALOGD_IF(log_level(DBG_DEBUG),"%s Notice fb_blank to fb=%d", __FUNCTION__, fb_blank);
     if (err < 0) {
         if (errno == EBUSY)
-            ALOGD("fb_blank ioctl failed display=%d,fb_blank=%d,dpmsValue=%d",
+            ALOGD("fb_blank ioctl failed display=%d,fb_blank=%d,dpmsValue=%" PRIu64 "",
                     display,fb_blank,dpmsValue);
         else
-            ALOGE("fb_blank ioctl failed(%s) display=%d,fb_blank=%d,dpmsValue=%d",
+            ALOGE("fb_blank ioctl failed(%s) display=%d,fb_blank=%d,dpmsValue=%" PRIu64 "",
                     strerror(errno),display,fb_blank,dpmsValue);
         return -errno;
     }

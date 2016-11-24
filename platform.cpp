@@ -20,6 +20,7 @@
 #include "platform.h"
 
 #include <cutils/log.h>
+#include <inttypes.h>
 
 namespace android {
 
@@ -196,12 +197,12 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
     //loop plane groups.
     for (iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
-       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%d,group(%d) zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
+       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%" PRIu64 ",group(%" PRIu64 ") zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
                     __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
         //find the match zpos plane group
         if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
         {
-            ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%d",__LINE__,layer_size,(*iter)->planes.size());
+            ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%zu",__LINE__,layer_size,(*iter)->planes.size());
 
             //find the match combine layer count with plane size.
             if(layer_size <= (*iter)->planes.size())
@@ -245,7 +246,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 continue;
                             }
 #if RK_RGA
-                                    if(NULL == drm->GetRgaDevice()
+                                    if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
                                     || isAfbcInternalFormat((*iter_layer)->internal_format)
 #endif
@@ -267,7 +268,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                     continue;
                             }
 
-                            ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%d",(*iter_layer)->name.c_str(),
+                            ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%zu",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
                             //Find the match plane for layer,it will be commit.
                             composition_plane->emplace_back(DrmCompositionPlane::Type::kLayer, (*iter_plane), crtc, (*iter_layer)->index);
@@ -446,7 +447,7 @@ int PlanStageProtected::ProvisionPlanes(
                                         continue;
                                     }
 #if RK_RGA
-                                    if(NULL == drm->GetRgaDevice()
+                                    if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
                                     || isAfbcInternalFormat(layer->internal_format)
 #endif
@@ -469,7 +470,7 @@ int PlanStageProtected::ProvisionPlanes(
                                     }
 
                                     layer->is_take = true;  //mark layer which take a plane.
-                                    ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%d",
+                                    ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: match layer=%s,plane=%d,layer->index=%zu",
                                             layer->name.c_str(),(*iter_plane)->id(),layer->index);
                                 }
 
@@ -488,7 +489,7 @@ int PlanStageProtected::ProvisionPlanes(
         }
 
         if(layer)
-                ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: cann't match layer=%s,layer->index=%d",
+                ALOGD_IF(log_level(DBG_DEBUG),"TakePlane: cann't match layer=%s,layer->index=%zu",
                         layer->name.c_str(),layer->index);
 
 #if RK_EARLY_PRECOMP

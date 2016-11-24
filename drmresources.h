@@ -26,7 +26,7 @@
 
 #include <stdint.h>
 #if RK_RGA
-#include <drmrga.h>
+#include <RockchipRga.h>
 #endif
 
 namespace android {
@@ -112,9 +112,10 @@ class DrmResources {
 #endif
 
 #if RK_RGA
-  inline rga_device_t* GetRgaDevice() {
-        return rga_device_;
-  };
+  bool isSupportRkRga() {
+	RockchipRga& rkRga(RockchipRga::get());
+	return rkRga.RkRgaIsReady();
+  }
 #endif
 
  private:
@@ -144,10 +145,6 @@ class DrmResources {
 #endif
   DrmCompositor compositor_;
   DrmEventListener event_listener_;
-#if RK_RGA
-  const hw_module_t *rga_module_;
-  rga_device_t      *rga_device_;
-#endif
   const gralloc_module_t *gralloc_;
 };
 }

@@ -421,7 +421,7 @@ int DrmDisplayComposition::combine_layer()
         if(i == min_size)
         {
             //We can use pre-comp to optimise.
-            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: it remain layer i=%d, min_size=%d",i,min_size);
+            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: it remain layer i=%zu, min_size=%zu",i,min_size);
             return -1;
         }
 
@@ -529,7 +529,7 @@ int DrmDisplayComposition::combine_layer()
 #if RK_DRM_HWC_DEBUG
   for (LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
-        ALOGD_IF(log_level(DBG_DEBUG),"layer map id=%d,size=%d",iter->first,iter->second.size());
+        ALOGD_IF(log_level(DBG_DEBUG),"layer map id=%d,size=%zu",iter->first,iter->second.size());
         for(std::vector<DrmHwcLayer*>::const_iterator iter_layer = iter->second.begin();
             iter_layer != iter->second.end();++iter_layer)
         {
@@ -631,7 +631,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       else
       {
         layers_[i].is_match = true;
-        ALOGD_IF(log_level(DBG_DEBUG),"add Squash layer[%d] %s",i,layers_[i].name.c_str());
+        ALOGD_IF(log_level(DBG_DEBUG),"add Squash layer[%zu] %s",i,layers_[i].name.c_str());
       }
     }
   } else {

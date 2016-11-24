@@ -34,6 +34,8 @@
 #include <cutils/properties.h>
 #include <drm_fourcc.h>
 
+#include <inttypes.h>
+
 //you can define it in external/libdrm/include/drm/drm.h
 #define DRM_CLIENT_CAP_SHARE_PLANES     4
 
@@ -354,13 +356,13 @@ int DrmResources::Init() {
        uint64_t share_id,zpos;
        (*iter)->share_id_property().value(&share_id);
        (*iter)->zpos_property().value(&zpos);
-       ALOGD_IF(log_level(DBG_VERBOSE),"sort_planes_ share_id=%d,zpos=%d",share_id,zpos);
+       ALOGD_IF(log_level(DBG_VERBOSE),"sort_planes_ share_id=%" PRIu64 ",zpos=%" PRIu64 "",share_id,zpos);
     }
 
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
-        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d",
+        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%" PRIu64 ",plane size=%zu",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size());
         for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
@@ -377,7 +379,7 @@ int DrmResources::Init() {
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
            iter != plane_groups_.end(); ++iter)
     {
-        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%d,plane size=%d,possible_crtcs=0x%x",
+        ALOGD_IF(log_level(DBG_VERBOSE),"Plane groups: zpos=%d,share_id=%" PRIu64 ",plane size=%zu,possible_crtcs=0x%x",
             (*iter)->zpos,(*iter)->share_id,(*iter)->planes.size(),(*iter)->possible_crtcs);
         for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
            iter_plane != (*iter)->planes.end(); ++iter_plane)
@@ -408,26 +410,6 @@ int DrmResources::Init() {
       return ret;
     }
   }
-
-#if RK_RGA
-    /*
-    *init rga moudle
-    */
-    ret = hw_get_module(DRMRGA_HARDWARE_MODULE_ID, &rga_module_);
-    if (ret) {
-        ALOGE("%s,%d faile get rga hw moudle\n",__FUNCTION__,__LINE__);
-        rga_module_ = NULL;
-        rga_device_ = NULL;
-    }
-    else
-    {
-        ret = rga_open(rga_module_, &rga_device_);
-        if (ret) {
-            ALOGE("rga device failed to initialize (%s)\n", strerror(-ret));
-            //return ret;
-        }
-    }
-#endif
 
   return 0;
 }

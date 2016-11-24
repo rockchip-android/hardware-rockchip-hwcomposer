@@ -26,8 +26,8 @@ LOCAL_SHARED_LIBRARIES := \
 	liblog \
 	libsync \
 	libui \
-	libutils
-
+	libutils \
+	librga
 
 LOCAL_C_INCLUDES := \
         hardware/rockchip/libgralloc \
