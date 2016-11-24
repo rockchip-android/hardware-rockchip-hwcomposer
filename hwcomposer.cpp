@@ -276,7 +276,9 @@ struct CheckedOutputFd {
 typedef struct hwc_drm_display {
   struct hwc_context_t *ctx;
   int display;
-
+#if RK_VIDEO_UI_OPT
+  int iUiFd;
+#endif
   std::vector<uint32_t> config_ids;
 
   VSyncWorker vsync_worker;
@@ -979,6 +981,61 @@ void hwc_sync_release(hwc_display_contents_1_t  *list)
 	}
 }
 
+#if RK_VIDEO_UI_OPT
+static int CompareLines(int *da,int w)
+{
+    int i,j;
+    for(i = 0;i<1;i++) // compare 4 lins
+    {
+        for(j= 0;j<w;j+=8)
+        {
+            if((unsigned int)*da != 0xff000000 && (unsigned int)*da != 0x0)
+            {
+                return 1;
+            }
+            da +=8;
+
+        }
+    }
+    return 0;
+}
+
+static int DetectValidData(int *data,int w,int h)
+{
+    int i,j;
+    int *da;
+    int ret;
+    /*  detect model
+    -------------------------
+    |   |   |    |    |      |
+    |   |   |    |    |      |
+    |------------------------|
+    |   |   |    |    |      |
+    |   |   |    |    |      |
+    |   |   |    |    |      |
+    |------------------------|
+    |   |   |    |    |      |
+    |   |   |    |    |      |
+    |------------------------|
+    |   |   |    |    |      |
+    |   |   |    |    |      |
+    |------------------------|
+    |   |   |    |    |      |
+    --------------------------
+    */
+    if(data == NULL)
+        return 1;
+    for(i = 2; i<h; i+= 8)
+    {
+        da = data +  i *w;
+        if(CompareLines(da,w))
+            return 1;
+    }
+
+    return 0;
+}
+#endif
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
@@ -1091,6 +1148,61 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     {
         ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES",iFbdcCnt);
         use_framebuffer_target = true;
+    }
+#endif
+
+#if RK_VIDEO_UI_OPT
+    hwc_drm_display_t *hd = &ctx->displays[i];
+    bool bHideUi = false;
+    if(num_layers == 3)
+    {
+        hwc_layer_1_t *first_layer = &display_contents[i]->hwLayers[0];
+        if(first_layer->handle)
+        {
+            format = hwc_get_handle_attibute(ctx,first_layer->handle,ATT_FORMAT);
+            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+            {
+                bool bDiff = true;
+                int iUiFd = 0;
+                hwc_layer_1_t * second_layer =  &display_contents[i]->hwLayers[1];
+                format = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_FORMAT);
+                if(second_layer->handle &&
+                    (format == HAL_PIXEL_FORMAT_RGBA_8888 ||
+                    format == HAL_PIXEL_FORMAT_RGBX_8888 ||
+                    format == HAL_PIXEL_FORMAT_BGRA_8888)
+                  )
+                {
+                    iUiFd = hwc_get_handle_primefd(ctx, second_layer->handle);
+                    bDiff = (iUiFd != hd->iUiFd);
+
+                    if(bDiff)
+                    {
+                        bHideUi = false;
+                        /* Update the backup ui fd */
+                        hd->iUiFd = iUiFd;
+                    }
+                    else
+                    {
+                        int iWidth = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_WIDTH);
+                        int iHeight = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_HEIGHT);
+                        unsigned int *cpu_addr;
+                        ctx->gralloc->lock(ctx->gralloc, second_layer->handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
+                                0, 0, iWidth, iHeight, (void **)&cpu_addr);
+                        ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
+                        if(!ret){
+                            bHideUi = true;
+                            ALOGD_IF(log_level(DBG_VERBOSE),"@video UI close");
+                        }
+                        ctx->gralloc->unlock(ctx->gralloc, second_layer->handle);
+                    }
+
+                    if(bHideUi)
+                    {
+                        second_layer->compositionType = HWC_NODRAW;
+                    }
+                }
+            }
+        }
     }
 #endif
 
@@ -1673,6 +1785,9 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
   hwc_drm_display_t *hd = &ctx->displays[display];
   hd->ctx = ctx;
   hd->display = display;
+#if RK_VIDEO_UI_OPT
+  hd->iUiFd = -1;
+#endif
 
   int ret = hwc_set_initial_config(hd);
   if (ret) {
