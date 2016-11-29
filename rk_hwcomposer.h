@@ -97,6 +97,20 @@
 #define ONLY_USE_ONE_VOP  1
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
+#elif defined(TARGET_BOARD_PLATFORM_RK3036)
+#define RGA_USE_FENCE     0
+#define VIDEO_USE_PPROT   0
+#define HOTPLUG_MODE      1
+#define ONLY_USE_ONE_VOP  1
+#define VIDEO_WIN1_UI_DISABLE     1
+#define VIRTUAL_UI_RESOLUTION     0
+#elif defined(TARGET_BOARD_PLATFORM_RK3328)
+#define RGA_USE_FENCE     0
+#define VIDEO_USE_PPROT   0
+#define HOTPLUG_MODE      0
+#define ONLY_USE_ONE_VOP  1
+#define VIDEO_WIN1_UI_DISABLE     0
+#define VIRTUAL_UI_RESOLUTION     0
 #endif
 
 #define IQIY_SPECIAL_PROCESS 0
@@ -105,7 +119,7 @@
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
 
-#define GHWC_VERSION  "2.73"
+#define GHWC_VERSION  "2.77"
 
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"
@@ -370,13 +384,21 @@ FenceMangrRga;
         int     flag;
         int     fb_blanked;
         bool    IsRk3188;
+        bool    IsRk312x;
         bool    IsRk3126;
         bool    IsRk3128;
         bool    IsRk322x;
+        bool    IsRk3036;
+	bool	IsRk3328;
         bool    IsRkBox;
+        bool    isBox;
+        bool    isVr;
+        bool    isMid;
+        bool    isPhone;
+        bool    isDongle;
         int     IsInput;
         int     mFbFd;
-        int     mFbBase;
+        void    *mFbBase;
         int     vui_fd;
         int     vui_hide;
         int     videoCnt;
@@ -395,16 +417,15 @@ FenceMangrRga;
         int     *video_ui;
         int rga_fence_relfd[RGA_REL_FENCE_NUM];
         int membk_fds[FB_BUFFERS_NUM];
-        int membk_base[FB_BUFFERS_NUM];
-		int membk_type[FB_BUFFERS_NUM];
+	int membk_type[FB_BUFFERS_NUM];
         int membk_fence_acqfd[FB_BUFFERS_NUM];	  // RGA do ,output fence	
         int membk_fence_fd[FB_BUFFERS_NUM];		
+        void *membk_base[FB_BUFFERS_NUM];
         buffer_handle_t phd_bk[FB_BUFFERS_NUM];		
         int membk_index;
-        unsigned long phy_addr;
+        void *phy_addr;
         struct private_handle_t fbhandle ;
         lastStatus mLastStatus;
-        unsigned int      secureLayerFlag;
     }
     hwcContext;
 

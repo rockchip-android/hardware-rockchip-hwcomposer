@@ -24,6 +24,8 @@ endif
 #
 include $(CLEAR_VARS)
 
+$(info $(shell $(LOCAL_PATH)/version.sh))
+
 LOCAL_SRC_FILES := \
 	rk_hwcomposer.cpp \
 	rk_hwcomposer_blit.cpp \
@@ -62,7 +64,9 @@ LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	libion \
 	libhardware_legacy \
-	libsync \
+	libsync
+
+#LOCAL_SHARED_LIBRARIES += \
 	libvpu
 
 ifeq ($(BUILD_SECVM_LIB),true)
@@ -120,6 +124,51 @@ ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),phone)
 endif
 endif
 
+ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3036)
+LOCAL_CFLAGS += -DTARGET_BOARD_PLATFORM_RK3036
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),tablet)
+        LOCAL_CFLAGS += -DRK3036_MID
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),box)
+        LOCAL_CFLAGS += -DRK3036_BOX
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),phone)
+        LOCAL_CFLAGS += -DRK3036_PHONE
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),dongle)
+        LOCAL_CFLAGS += -DRK3036_DONGLE
+endif
+endif
+
+ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3328)
+LOCAL_CFLAGS += -DTARGET_BOARD_PLATFORM_RK3328
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),tablet)
+        LOCAL_CFLAGS += -DRK3328_MID
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),box)
+        LOCAL_CFLAGS += -DRK3328_BOX
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),phone)
+        LOCAL_CFLAGS += -DRK3328_PHONE
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),dongle)
+        LOCAL_CFLAGS += -DRK3328_DONGLE
+endif
+endif
+
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),tablet)
+        LOCAL_CFLAGS += -DRK_MID
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),box)
+        LOCAL_CFLAGS += -DRK_BOX
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),phone)
+        LOCAL_CFLAGS += -DRK_PHONE
+endif
+ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),dongle)
+        LOCAL_CFLAGS += -DRK_DONGLE
+endif
+
 ifeq ($(strip $(BOARD_USE_LCDC_COMPOSER)),true)
 LOCAL_CFLAGS += -DUSE_LCDC_COMPOSER
 ifeq ($(strip $(BOARD_LCDC_COMPOSER_LANDSCAPE_ONLY)),false)
@@ -141,12 +190,15 @@ endif
 
 LOCAL_CFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
-MAJOR_VERSION := "RK_GRAPHICS_VER=commit-id:$(shell cd $(LOCAL_PATH) && git log  -1 --oneline | awk '{print $1}')"
-LOCAL_CFLAGS += -DRK_GRAPHICS_VER=\"$(MAJOR_VERSION)\"
-
 LOCAL_MODULE := hwcomposer.$(TARGET_BOARD_HARDWARE)
 LOCAL_MODULE_TAGS    := optional
-LOCAL_MODULE_PATH    := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 21 && echo OK),OK)
+        LOCAL_MODULE_RELATIVE_PATH := hw
+else
+        LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+endif
+
 LOCAL_PRELINK_MODULE := false
 include $(BUILD_SHARED_LIBRARY)
 

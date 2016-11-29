@@ -126,7 +126,6 @@ hwcGetBufferInfo(
             *Width         =  rkmALIGN(Context->fbWidth,32);
             *Height        =  Context->fbHeight;
             *Stride        = Context->fbStride;
-            ALOGV("hwcGetBufferInfo:phy_addr=%p,w=%d,h=%d,stride=%d",*Physical,*Width,*Height,*Stride);
             *Info          = NULL;
         }
         else //if (Handle->flags & private_handle_t::PRIV_FLAGS_USES_UMP)

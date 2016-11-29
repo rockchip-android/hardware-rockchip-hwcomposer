@@ -388,6 +388,8 @@ hwcBlit(
     unsigned char   scale_mode = 2;
     unsigned char   dither_en = 0;
     int retv  = 0;
+    int srcMmuType = 0;
+    int dstMmuType = 0;
     
     struct private_handle_t* handle = srchnd;
     dither_en = android::bytesPerPixel(GPU_FORMAT) == android::bytesPerPixel(GPU_DST_FORMAT) ? 0 : 1;
@@ -481,12 +483,17 @@ hwcBlit(
         rga_set_fds_offsets(&Rga_Request, srchnd->share_fd, dstFd, 0, 0);
     }
     else*/
+#ifndef TARGET_BOARD_PLATFORM_RK3328 
     if(handle->usage & GRALLOC_USAGE_PROTECTED)
     {
-        RGA_set_src_vir_info(&Rga_Request, handle->phy_addr, handle->phy_addr +(handle->width * handle->height ),  \
-                                 handle->phy_addr +(handle->width * handle->height ), srcStride, srcHeight, srcFormat, 0);
-        #if defined(TARGET_BOARD_PLATFORM_RK312X)
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        RGA_set_src_vir_info(&Rga_Request, (unsigned long)handle->phy_addr, (unsigned long)handle->phy_addr + (handle->width * handle->height ),  \
+                                 (unsigned long)handle->phy_addr +(handle->width * handle->height ), srcStride, srcHeight, srcFormat, 0);
+        #if defined(TARGET_BOARD_PLATFORM_RK312X) || defined(TARGET_BOARD_PLATFORM_RK3328)
+	#if defined(__arm64__) || defined(__aarch64__)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<long>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#else
+	RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#endif
         rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
         #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
@@ -494,10 +501,16 @@ hwcBlit(
         #endif
     }
     else
+#endif
     {
-        #if defined(TARGET_BOARD_PLATFORM_RK312X)
-        RGA_set_src_vir_info(&Rga_Request, srchnd->share_fd, reinterpret_cast<int>(srchnd->base),  0, srcStride, srcHeight, srcFormat, 0);
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        #if defined(TARGET_BOARD_PLATFORM_RK312X) || defined(TARGET_BOARD_PLATFORM_RK3328)
+	#if defined(__arm64__) || defined(__aarch64__)
+        RGA_set_src_vir_info(&Rga_Request, srchnd->share_fd, reinterpret_cast<long>(srchnd->base),  0, srcStride, srcHeight, srcFormat, 0);
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<long>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#else
+	RGA_set_src_vir_info(&Rga_Request, srchnd->share_fd, reinterpret_cast<int>(srchnd->base),  0, srcStride, srcHeight, srcFormat, 0);
+	RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#endif
         rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
         #else
         RGA_set_src_vir_info(&Rga_Request, 0, 0,  0, srcStride, srcHeight, srcFormat, 0);
@@ -942,12 +955,14 @@ hwcBlit(
             RGA_set_src_act_info(&Rga_Request, srcRects[i].right -  srcRects[i].left, srcRects[i].bottom - srcRects[i].top,  srcRects[i].left, srcRects[i].top);
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
 
-			ALOGV("src_type=%d,dst_type=%d,index=%d",
-				srchnd->type,Context->membk_type[Context->membk_index],Context->membk_index);
-            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
+	    srcMmuType = srchnd->type ? 1 : 0;
+	    dstMmuType = Context->membk_type[Context->membk_index] ? 1 : 0;
+	    ALOGV("src_type=%d,dst_type=%d,index=%d",
+				srcMmuType, srcMmuType,Context->membk_index);
+            if (srcMmuType || dstMmuType)
             {
                 RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (dstMmuType << 10) | (srcMmuType << 8);
 				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
             if(FceMrga->use_fence)
@@ -1104,6 +1119,9 @@ hwcDim(
     unsigned int      WidthAct;
     unsigned int      HeightAct;
     struct private_handle_t* srchnd = (struct private_handle_t *) Src->handle;
+    int srcMmuType = 0;
+    int dstMmuType = 0;
+
     memset(&Rga_Request, 0x0, sizeof(Rga_Request));
 
     /* >>> Begin dest surface information. */
@@ -1147,8 +1165,12 @@ hwcDim(
     }
     else*/
     {
-        #if defined(TARGET_BOARD_PLATFORM_RK312X)
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        #if defined(TARGET_BOARD_PLATFORM_RK312X) || defined(TARGET_BOARD_PLATFORM_RK3328)
+	#if defined(__arm64__) || defined(__aarch64__)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<long>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#else
+	RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#endif
         rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
         #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
@@ -1246,11 +1268,12 @@ hwcDim(
                 );
             RGA_set_dst_act_info(&Rga_Request, WidthAct, HeightAct, Xoffset, Yoffset);
 
-
-            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
+	    srcMmuType = srchnd->type ? 1 : 0;
+	    dstMmuType = Context->membk_type[Context->membk_index] ? 1 : 0;
+            if (srcMmuType || dstMmuType)
             {
                 RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (dstMmuType << 10) | (srcMmuType << 8);
 				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
             if (ioctl(Context->engine_fd, RGA_BLIT_ASYNC, &Rga_Request) != 0)
@@ -1304,6 +1327,8 @@ hwcClear(
     unsigned int      HeightAct;
     COLOR_FILL FillColor ;
     struct private_handle_t* srchnd = (struct private_handle_t *) Src->handle;
+    int srcMmuType = 0;
+    int dstMmuType = 0;
 
     memset(&FillColor , 0x0, sizeof(COLOR_FILL));
 
@@ -1356,8 +1381,12 @@ hwcClear(
     }
     else*/
     {
-        #if defined(TARGET_BOARD_PLATFORM_RK312X)
-        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+        #if defined(TARGET_BOARD_PLATFORM_RK312X) || defined(TARGET_BOARD_PLATFORM_RK3328)
+	#if defined(__arm64__) || defined(__aarch64__)
+        RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<long>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#else
+	RGA_set_dst_vir_info(&Rga_Request, dstFd, reinterpret_cast<int>(DstHandle->base),  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
+	#endif
         rga_set_fds_offsets(&Rga_Request, 0, 0, 0, 0);
         #else
         RGA_set_dst_vir_info(&Rga_Request, 0, 0,  0, DstHandle->stride, dstHeight, &clip, dstFormat, 0);
@@ -1438,11 +1467,12 @@ hwcClear(
                  WidthAct,
                  HeightAct
                 );
-
-            if (srchnd->type == 1 || Context->membk_type[Context->membk_index] == 1)
+	    srcMmuType = srchnd->type ? 1 : 0;
+	    dstMmuType = Context->membk_type[Context->membk_index] ? 1 : 0;
+            if (srcMmuType || dstMmuType)
             {
                 RGA_set_mmu_info(&Rga_Request, 1, 0, 0, 0, 0, 2);
-                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (Context->membk_type[Context->membk_index] << 10) | (srchnd->type << 8);
+                Rga_Request.mmu_info.mmu_flag |= (1 << 31) | (dstMmuType << 10) | (srcMmuType << 8);
 				ALOGV("rga_flag=%x",Rga_Request.mmu_info.mmu_flag); 
             }
 

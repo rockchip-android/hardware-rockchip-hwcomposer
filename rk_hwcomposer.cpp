@@ -15,6 +15,7 @@
 #include <EGL/eglext.h>
 
 #include "rk_hwcomposer.h"
+#include "version.h"
 
 #include <hardware/hardware.h>
 
@@ -312,7 +313,7 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
     hwcRECT srcRects ;
     float hfactor = 1.0;
     float vfactor = 1.0;
-    struct private_handle_t* hnd = NULL;
+
     
     unsigned int i;
     for (i = 0; i < (unsigned int) Region->numRects ;i++)
@@ -405,17 +406,6 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
             ALOGD("line=%d,scale over[%d,%d]",__LINE__,hfactor,vfactor);
         return -1;
     }
-
-    if (Layer)
-        hnd = (struct private_handle_t*)Layer->handle;
-
-    if (hnd) {
-        if (srcRects.right - srcRects.left > hnd->width)
-            return -1;
-        if (srcRects.bottom - srcRects.top > hnd->height)
-            return -1;
-    } else
-        return -1;
 
     return 0;
 }
@@ -599,6 +589,7 @@ bool is_boot_skip_platform(hwcContext * context)
     skipPlatform = skipPlatform || context->IsRk3126;
     skipPlatform = skipPlatform || context->IsRk3128;
     skipPlatform = skipPlatform || context->IsRk322x;
+    skipPlatform = skipPlatform || context->IsRk3036;
 
     return skipPlatform;
 }
@@ -926,7 +917,6 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     ctx->Is_Lvideo = false;
     ctx->Is_Secure = false;
     ctx->special_app = false;
-    ctx->secureLayerFlag = 0;
     is_debug_log();    
     
     if(cnt < 2)
@@ -953,9 +943,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                     ALOGD("layer[%d],fmt=%d,usage=%x,protect=%x",i,handle->format,handle->usage,GRALLOC_USAGE_PROTECTED);                   
                 }
                 
-            }
-            if (handle && (handle->usage & GRALLOC_USAGE_PROTECTED))
-                ctx->secureLayerFlag |= 1 << i;
+            }           
             if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
             {
                 ctx->Is_video = true; 
@@ -976,13 +964,15 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 if(!temp)
                    ctx->special_app = false;
             } 
-            #endif          
+            #endif
+	    #if !defined(TARGET_BOARD_PLATFORM_RK3328) 
             if(handle && handle->type && !ctx->iommuEn)
             {
                 if(is_out_log())
                     ALOGW("kernel iommu disable,but use mmu buffer,so hwc can not support!");
                 return -1;
             }
+	    #endif
             if(handle && handle->format == HAL_PIXEL_FORMAT_YV12 )
             {   
                 if(is_out_log())
@@ -1123,8 +1113,8 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         else
         {
             #if VIDEO_WIN1_UI_DISABLE
-            if(/*context->vop_mbshake && */(context->Is_video || (context->special_app && i == 1)
-                || forceUiDetect) && !context->secureLayerFlag)
+            if(/*context->vop_mbshake && */context->Is_video || (context->special_app && i == 1)
+                || forceUiDetect)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
@@ -1154,6 +1144,15 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int  i ;
     hwcContext * context = (hwcContext *)ctx;
 
+    if (context->IsRk3328)
+	return -1;
+
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
     // RGA_POLICY_MAX_SIZE
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
@@ -1245,6 +1244,16 @@ int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
+
+    if (context->IsRk3328)
+	return -1;
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
+
     if(list->numHwLayers - 1 < 3 || context->engine_err_cnt > RGA_ALLOW_MAX_ERR)//optimazation
     {
         if(is_out_log())
@@ -1363,6 +1372,14 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
+    if (context->IsRk3328)
+	return -1;
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
     if(context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
@@ -1418,8 +1435,15 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
-      
-        if(i>0)
+
+        if(0 == i && LayerZoneCheck(layer,context) != 0)
+        {
+            if(is_out_log())
+                ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
+            return -1;
+        }
+
+	if(i>0)
         {
             float hfactor = 1.0;
             float vfactor = 1.0;
@@ -1434,14 +1458,11 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             )   // wop has only one support scale        
             {
                 if(is_out_log())
-                {
                     ALOGD("[%f,%f,%d],nmae=%s,line=%d",hfactor,vfactor,layer->transform,layer->LayerName,__LINE__);
-                                       
-                }    
                 return -1;
             }
             #if VIDEO_WIN1_UI_DISABLE
-            if(context->vop_mbshake && context->Is_video && !context->secureLayerFlag)
+            if(context->vop_mbshake && context->Is_video)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
@@ -1487,6 +1508,15 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
+    if (context->IsRk3328)
+	return -1;
+
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
 
     hwc_rect_t * drest = NULL;
     hwc_layer_1_t * layer = &list->hwLayers[0];
@@ -1592,6 +1622,12 @@ int try_hwc_vop_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     hwcContext * context = (hwcContext *)ctx;
     int  pixelSize  = 0;
 
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
    // RGA_POLICY_MAX_SIZE
     if(context->engine_err_cnt > RGA_ALLOW_MAX_ERR)
     {
@@ -1724,7 +1760,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         || handle == NULL
         || layer->transform != 0
         // ||(list->numHwLayers - 1)>4
-        ||((list->numHwLayers - 1)<3 && !context->secureLayerFlag))
+        ||((list->numHwLayers - 1)<3 && !(context->Is_video && context->IsRk322x)))
     {
         if(is_out_log())
           ALOGD("policy skip,flag=%x,hanlde=%x,tra=%d,num=%d,line=%d",layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);
@@ -1873,6 +1909,12 @@ int try_hwc_rga_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
    // RGA_POLICY_MAX_SIZE
     hwcContext * context = (hwcContext *)ctx;
 
+    if(context->engine_fd <= 0)
+    {
+        if(is_out_log())
+            ALOGW("err !!!! RGA not exit");
+        return -1;
+    }
     if(getHdmiMode() == 1)
         return -1;
     if(context->IsRk322x || context->IsRk3126)
@@ -2429,7 +2471,58 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
     }
 
     //if(context->composer_mode == HWC_NODRAW_GPU_VOP)
+    context->last_composer_mode = context->composer_mode;
+    return 0;
+}
 
+static int initPlatform(hwcContext* ctx)
+{
+    if (!ctx)
+        return -EINVAL;
+
+    ctx->IsRk3036 = false;
+
+#ifdef USE_X86
+
+#elif defined(TARGET_BOARD_PLATFORM_RK312X)
+
+#elif defined(TARGET_BOARD_PLATFORM_RK322X)
+
+#elif defined(TARGET_BOARD_PLATFORM_RK3188)
+
+#elif defined(TARGET_BOARD_PLATFORM_RK3036)
+    ctx->IsRk3036 = true;
+#elif defined(TARGET_BOARD_PLATFORM_RK3328)
+    ctx->IsRk3328 = true;
+#else
+    ALOGE("Who is this platform?");
+#endif
+
+    ALOGI("rk3036:%s", ctx->IsRk3036 ? "Yes" : "No");
+
+    ctx->isVr = false;
+    ctx->isMid = false;
+    ctx->isPhone = false;
+    ctx->isDongle = false;
+
+#ifdef RK_MID
+    ctx->isMid = true;
+#elif RK_BOX
+    ctx->isBox = true;
+#elif RK_PHONE
+    ctx->isPhone = true;
+#elif RK_VR
+    ctx->isVr = true;
+#elif RK_DONGLE
+    ctx->isDongle = true;
+#else
+    ALOGE("Who is the platform?NOT these:box,mid,phone?");
+#endif
+
+    ALOGI("isBox:%s;  isMid:%s;  isPhone:%s;  isVr:%s; isDongle:%s",
+           ctx->isBox ? "Yes" : "No",ctx->isMid ? "Yes" : "No",
+           ctx->isPhone ? "Yes" : "No",ctx->isVr ? "Yes" : "No",
+           ctx->isDongle ? "Yes" : "No");
     return 0;
 }
 
@@ -3039,8 +3132,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         float hfactor = 1.0;
         float vfactor = 1.0;
         hwc_region_t * Region = &layer->visibleRegionScreen;
-        hwc_rect_t * SrcRect = &layer->sourceCrop;
-        hwc_rect_t * DstRect = &layer->displayFrame;
+        hwc_rect_t const * SrcRect = &layer->sourceCrop;
+        hwc_rect_t const * DstRect = &layer->displayFrame;
         hwc_rect_t const * rects = Region->rects;
         hwc_rect_t  rect_merge;
         int left_min =0; 
@@ -3216,11 +3309,13 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             fb_info.win_par[winIndex].area_par[0].xact -= fb_info.win_par[winIndex].area_par[0].xact%2;
             fb_info.win_par[winIndex].area_par[0].yact -= fb_info.win_par[winIndex].area_par[0].yact%2;
 			 //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
+/*
             if(handle->usage & GRALLOC_USAGE_PROTECTED)
             {
                  fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
                  //ALOGD("video @protect phy=%x",handle->phy_addr);
-            }     
+            }
+*/
         }
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         {
@@ -3231,11 +3326,13 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             fb_info.win_par[winIndex].area_par[0].xact -= fb_info.win_par[winIndex].area_par[0].xact%2;
             fb_info.win_par[winIndex].area_par[0].yact -= fb_info.win_par[winIndex].area_par[0].yact%2;
 			 //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
-            if(handle->usage & GRALLOC_USAGE_PROTECTED)
+/*  
+          if(handle->usage & GRALLOC_USAGE_PROTECTED)
             {
                  fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
                  //ALOGD("video @protect phy=%x",handle->phy_addr);
             }
+*/
         }
         winIndex ++;
         i += step;
@@ -3291,6 +3388,9 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
    // if(!context->fb_blanked)
     {
+        if(context->IsRk322x && context->IsRkBox)
+            hotplug_reset_dstpos(&fb_info,2);
+
 #if (defined(HOTPLUG_MODE) && !defined(TARGET_BOARD_PLATFORM_RK3188))
         if(context == gcontextAnchor[0] && gcontextAnchor[0]->mHtg.HtgOn 
             && (gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked))
@@ -3313,9 +3413,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
         if(context->mIsVirUiResolution)
             hotplug_reset_dstpos(&fb_info,3);
-
-        if(context->IsRk322x && context->IsRkBox)
-            hotplug_reset_dstpos(&fb_info,2);
 
         if(context->IsRk322x && context->IsRkBox)
             sync_fbinfo_fence(&fb_info);
@@ -3939,12 +4036,12 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
         force_skip = context->bootCount < 1;
     else
         force_skip = context->bootCount < 5;
-    if (list->skipflag || force_skip /*|| list->numHwLayers <=1*/)
+    if (/*list->skipflag || */force_skip /*|| list->numHwLayers <=1*/)
     {
       
         hwc_sync_release(list);
         context->bootCount ++;
-        ALOGW("hwc skipflag!!!,list->numHwLayers=%d",list->numHwLayers);
+        ALOGW("hwc skip!,%d,numHwLayers=%d",list->skipflag, list->numHwLayers);
         return 0;
     }
 
@@ -4023,7 +4120,7 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
     }
 
     /* Check layer list. */
-    if (list->skipflag/* || black_cnt < 5 || list->numHwLayers <=1*/)
+    if (false && list->skipflag/* || black_cnt < 5 || list->numHwLayers <=1*/)
     {
 
         hwc_sync_release(list);
@@ -4155,13 +4252,13 @@ void handle_hotplug_event(int mode ,int flag )
 {
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
     bool isNeedRemove = true;
-#ifndef RK322X_BOX
+#if defined(RK322X_BOX) || defined(RK_DONGLE)
     context->procs->invalidate(context->procs);
 #endif
     if(flag == 1)
         return;
 
-#if RK322X_BOX
+#if defined(RK322X_BOX) || defined(RK_DONGLE)
     if(!context->mIsBootanimExit)
     {
         if(mode)
@@ -4580,9 +4677,11 @@ hwc_device_open(
     float ydpi;
     uint32_t vsync_period;
     char pro_value[PROPERTY_VALUE_MAX];
+    uint64_t inverseRefreshRate = 0;
 #if !ONLY_USE_FB_BUFFERS
     int stride_gr;
 #endif
+
 
     LOGD("%s(%d):Open hwc device in thread=%d",
          __FUNCTION__, __LINE__, gettid());
@@ -4641,12 +4740,15 @@ hwc_device_open(
     xdpi = 1000 * (info.xres * 25.4f) / info.width;
     ydpi = 1000 * (info.yres * 25.4f) / info.height;
 
-    refreshRate = 1000000000000LLU /
-                  (
-                      uint64_t(info.upper_margin + info.lower_margin + info.yres)
-                      * (info.left_margin  + info.right_margin + info.xres)
-                      * info.pixclock
-                  );
+
+    inverseRefreshRate = uint64_t(info.upper_margin + info.lower_margin + info.yres)
+                   * (info.left_margin  + info.right_margin + info.xres)
+                   * info.pixclock;
+
+    if (inverseRefreshRate)
+	    refreshRate = 1000000000000LLU / inverseRefreshRate;
+    else
+	    refreshRate = 0;
 
     if (refreshRate == 0)
     {
@@ -4697,21 +4799,33 @@ hwc_device_open(
     context->engine_fd = open("/dev/rga", O_RDWR, 0);
     if (context->engine_fd < 0)
     {
-        hwcONERROR(hwcRGA_OPEN_ERR);
-
+#ifdef TARGET_BOARD_PLATFORM_RK3036
+	    ALOGE("RGA no exit");
+#else
+	    hwcONERROR(hwcRGA_OPEN_ERR);
+#endif
     }
 
 #if ENABLE_WFD_OPTIMIZE
     property_set("sys.enable.wfd.optimize", "1");
 #endif
-    {
+
+#if defined(RK_DONGLE)
+    if (context->engine_fd > 0 ) {
+	close(context->engine_fd);
+	context->engine_fd = -1;
+    }
+#endif
+
+    if (context->engine_fd > 0) {
+        int ret = 0;
         char value[PROPERTY_VALUE_MAX];
         memset(value, 0, PROPERTY_VALUE_MAX);
         property_get("sys.enable.wfd.optimize", value, "0");
         int type = atoi(value);
         context->wfdOptimize = type;
-        init_rga_cfg(context->engine_fd);
-        if (type > 0 && !is_surport_wfd_optimize())
+        ret = init_rga_cfg(context->engine_fd);
+        if (type > 0 && !is_surport_wfd_optimize() && !ret)
         {
             property_set("sys.enable.wfd.optimize", "0");
         }
@@ -4765,8 +4879,13 @@ hwc_device_open(
     context->IsRk322x = !!strstr(pro_value, "rk322");
     property_get("ro.target.product", pro_value, "0");
     context->IsRkBox = !strcmp(pro_value, "box");
+
+    initPlatform(context);
+
     context->fbSize = context->fbStride * info.yres * 3;//info.xres*info.yres*4*3;
     context->lcdSize = context->fbStride * info.yres;//info.xres*info.yres*4;
+
+    if (context->engine_fd > 0)
     {
 
 #if !ONLY_USE_FB_BUFFERS
@@ -4788,8 +4907,10 @@ hwc_device_open(
                 {
                     struct private_handle_t*phandle_gr = (struct private_handle_t*)context->phd_bk[i];
                     context->membk_fds[i] = phandle_gr->share_fd;
-                    context->membk_base[i] = phandle_gr->base;
+                    context->membk_base[i] = phandle_gr->base;	    
+		    #if !defined(TARGET_BOARD_PLATFORM_RK3328)
                     context->membk_type[i] = phandle_gr->type;
+		    #endif
                     ALOGD("@hwc alloc [%dx%d,f=%d],fd=%d", phandle_gr->width, phandle_gr->height, phandle_gr->format, phandle_gr->share_fd);
                    
                 }
@@ -4873,7 +4994,7 @@ hwc_device_open(
          context,
          context->fb_fps);
 
-    char acVersion[30];
+    char acVersion[100];
     memset(acVersion,0,sizeof(acVersion));
     if(sizeof(GHWC_VERSION) > 12)
         strncpy(acVersion,GHWC_VERSION,12);
@@ -4889,18 +5010,26 @@ hwc_device_open(
 #else
     strcat(acVersion,"");
 #endif
+    strcat(acVersion,"");
+    strcat(acVersion,RK_GRAPHICS_VER);
     property_set("sys.ghwc.version", acVersion);
 
     LOGD(RK_GRAPHICS_VER);
 
-    char Version[32];
+    if (context->engine_fd > 0) {
+        char Version[32];
 
-    memset(Version, 0, sizeof(Version));
-    if (ioctl(context->engine_fd, RGA_GET_VERSION, Version) == 0)
+        memset(Version, 0, sizeof(Version));
+        if (ioctl(context->engine_fd, RGA_GET_VERSION, Version) == 0)
+        {
+            property_set("sys.grga.version", Version);
+            LOGD(" rga version =%s", Version);
+
+        }
+    }
+    else
     {
-        property_set("sys.grga.version", Version);
-        LOGD(" rga version =%s", Version);
-
+        LOGD(" rga not exit");
     }
     context->ippDev = new ipp_device_t();
     rel = ipp_open(context->ippDev);
@@ -4917,8 +5046,8 @@ hwc_device_open(
         LOGD("Create readHdmiMode thread error .");
     }
 #if (defined(USE_X86) || HOTPLUG_MODE)
-#ifdef RK322X_BOX
-    if(context->IsRk322x)
+#if defined(RK322X_BOX) || defined(RK_DONGLE)
+    if(context->IsRk322x || context->IsRk3036)
 #else
     if(getHdmiMode())
 #endif
@@ -5116,6 +5245,7 @@ int hotplug_parse_mode(int *outX, int *outY)
 
 int hotplug_get_config(int flag)
 {
+    uint64_t inverseRefreshRate = 0;
     int  status    = 0;
     int rel;
     int err;
@@ -5189,12 +5319,14 @@ int hotplug_get_config(int flag)
     xdpi = 1000 * (info.xres * 25.4f) / info.width;
     ydpi = 1000 * (info.yres * 25.4f) / info.height;
 
-    refreshRate = 1000000000000LLU /
-                  (
-                      uint64_t(info.upper_margin + info.lower_margin + info.yres)
-                      * (info.left_margin  + info.right_margin + info.xres)
-                      * info.pixclock
-                  );
+    inverseRefreshRate = uint64_t(info.upper_margin + info.lower_margin + info.yres)
+	    * (info.left_margin  + info.right_margin + info.xres)
+	    * info.pixclock;
+
+    if (inverseRefreshRate)
+	    refreshRate = 1000000000000LLU / inverseRefreshRate;
+    else
+	    refreshRate = 0;
 
     if (refreshRate == 0){
         ALOGW("invalid refresh rate, assuming 60 Hz");
@@ -5244,20 +5376,25 @@ int hotplug_get_config(int flag)
     if(gcontextAnchor[HWC_DISPLAY_PRIMARY]->engine_fd > 0)
         context->engine_fd = gcontextAnchor[HWC_DISPLAY_PRIMARY]->engine_fd;
     else
+#if RK_DONGLE
+	ALOGD("RGA no exit");
+#else
         hwcONERROR(hwcRGA_OPEN_ERR);
+#endif
 
 
 #if ENABLE_WFD_OPTIMIZE
     property_set("sys.enable.wfd.optimize", "1");
 #endif
-    {
+    if (context->engine_fd > 0) {
+	int ret = 0;
         char value[PROPERTY_VALUE_MAX];
         memset(value, 0, PROPERTY_VALUE_MAX);
         property_get("sys.enable.wfd.optimize", value, "0");
         int type = atoi(value);
         context->wfdOptimize = type;
         init_rga_cfg(context->engine_fd);
-        if (type > 0 && !is_surport_wfd_optimize()){
+        if (type > 0 && !is_surport_wfd_optimize() && !ret) {
             property_set("sys.enable.wfd.optimize", "0");
         }
     }
@@ -5302,10 +5439,13 @@ int hotplug_get_config(int flag)
     context->IsRk322x = !!strstr(pro_value, "rk322");
     property_get("ro.target.product", pro_value, "0");
     context->IsRkBox = !strcmp(pro_value, "box");
+
+    initPlatform(context);
+
     context->fbSize = context->fbStride * info.yres * 3;//info.xres*info.yres*4*3;
     context->lcdSize = context->fbStride * info.yres;//info.xres*info.yres*4;
 	context->fb_blanked = 1;
-    {
+    if (context->engine_fd > 0) {
 
 #if 0//!ONLY_USE_FB_BUFFERS
         hw_module_t const* module_gr;
@@ -5549,19 +5689,20 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
     char new_valuep[PROPERTY_VALUE_MAX];
     char new_valuee[PROPERTY_VALUE_MAX];
 
-    hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+    hwcContext * ctxp = gcontextAnchor[HWC_DISPLAY_PRIMARY];
+    hwcContext * ctxe = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
 
     switch(flag){
     case 0:
-        w_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
-        h_source = context->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
-        w_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        w_dstpos = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_dstpos = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         break;
 
     case 1:
-        w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         hotplug_parse_scale(&xpersent,&ypersent);
 
         if(xpersent < 80) xpersent = 80;
@@ -5578,8 +5719,8 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         break;
 
     case 2:
-        w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
 
         property_get("persist.sys.overscan.main", new_valuep, "false");
         property_get("persist.sys.overscan.aux",  new_valuee, "false");
@@ -5605,14 +5746,14 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         tscale = ((float)tpersent / 100);
         lscale = ((float)lpersent / 100);
         tscale = ((float)tpersent / 100);
-        //ALOGD("%f,%f,%f,%f",lscale,tscale,rscale,bscale);
+        ALOGD_IF(is_out_log()>2,"%f,%f,%f,%f",lscale,tscale,rscale,bscale);
         break;
 
     case 3:
-        w_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_source = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
-        w_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
-        h_dstpos = context->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
+        w_dstpos = ctxe->dpyAttr[HWC_DISPLAY_EXTERNAL].xres;
+        h_dstpos = ctxe->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         break;
 
     default:
@@ -5679,8 +5820,8 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
                     int xsize = fb_info->win_par[i].area_par[j].xsize;
                     int ysize = fb_info->win_par[i].area_par[j].ysize;
 
-                    fb_info->win_par[i].area_par[j].xpos = xpos + (int)(xsize * lscale);
-                    fb_info->win_par[i].area_par[j].ypos = ypos + (int)(ysize * tscale);
+                    fb_info->win_par[i].area_par[j].xpos = ((int)(xpos * (1.0 - 2 * lscale)) + (int)(w_source * lscale));
+                    fb_info->win_par[i].area_par[j].ypos = ((int)(ypos * (1.0 - 2 * tscale)) + (int)(h_source * tscale));
                     fb_info->win_par[i].area_par[j].xsize -= ((int)(xsize * lscale) + (int)(xsize * lscale));
                     fb_info->win_par[i].area_par[j].ysize -= ((int)(ysize * tscale) + (int)(ysize * tscale));
                     ALOGD_IF(is_out_log()>2,"Adjust [%d,%d,%d,%d] => [%d,%d,%d,%d]",xpos,ypos,xsize,ysize,
@@ -5712,7 +5853,7 @@ void  *hotplug_init_thread(void *arg)
         }
     }
     handle_hotplug_event(1,0);
-#ifdef RK322X_BOX
+#if defined(RK322X_BOX) || defined(RK_DONGLE)
     while(!context->mIsBootanimExit){
         int i = 0;
         char value[PROPERTY_VALUE_MAX];
