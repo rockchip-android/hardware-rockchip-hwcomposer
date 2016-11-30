@@ -1114,12 +1114,12 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         if(layer->handle)
         {
 #if RK_DRM_HWC_DEBUG
-            DumpLayer(layer->LayerName,layer->handle);
+            //DumpLayer(layer->LayerName,layer->handle);
 #endif
             format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
             if(layer->transform)
             {
-                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
                     transform_nv12++;
                 else
                     transform_normal++;

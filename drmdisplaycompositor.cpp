@@ -464,6 +464,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     hwc_rect_t  rect_merge;
     int left_min = 0, top_min = 0, right_max = 0, bottom_max=0;
     rga_info_t src, dst;
+    int alloc_format = 0;
 
     memset(&src, 0, sizeof(rga_info_t));
     memset(&dst, 0, sizeof(rga_info_t));
@@ -513,18 +514,24 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     dst_w = rect_merge.right - rect_merge.left;
     dst_h = rect_merge.bottom - rect_merge.top;
 
+    //If the layer's format is NV12_10,then use RGA to switch it to NV12.
+    if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+        alloc_format = HAL_PIXEL_FORMAT_YCrCb_NV12;
+    else
+        alloc_format = layer.format;
+
     if((layer.transform & DrmHwcTransform::kRotate90) ||
         (layer.transform & DrmHwcTransform::kRotate270)) {
         dst_w = ALIGN(dst_w, 2);
         dst_h = ALIGN(dst_h, 2);
-        if (!rgaBuffer.Allocate(dst_h, dst_w, layer.format)) {
+        if (!rgaBuffer.Allocate(dst_h, dst_w, alloc_format)) {
             ALOGE("Failed to allocate rga buffer with size %dx%d", dst_h, dst_w);
             return -ENOMEM;
         }
     } else {
         dst_w = ALIGN(dst_w, 2);
         dst_h = ALIGN(dst_h, 2);
-        if (!rgaBuffer.Allocate(dst_w, dst_h, layer.format)) {
+        if (!rgaBuffer.Allocate(dst_w, dst_h, alloc_format)) {
             ALOGE("Failed to allocate rga buffer with size %dx%d", dst_w, dst_h);
             return -ENOMEM;
         }
@@ -584,13 +591,13 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
                 (int)(layer.source_crop.right - layer.source_crop.left),
                 (int)(layer.source_crop.bottom - layer.source_crop.top),
                 layer.stride, (int)(layer.source_crop.bottom - layer.source_crop.top), layer.format);
-    rga_set_rect(&dst.rect, dst_l, dst_t, dst_r - dst_l, dst_b - dst_t, dst_stride, dst_b - dst_t, layer.format);
+    rga_set_rect(&dst.rect, dst_l, dst_t, dst_r - dst_l, dst_b - dst_t, dst_stride, dst_b - dst_t, alloc_format);
 
     layer.source_crop = DrmHwcRect<float>(dst_l,dst_t,dst_r,dst_b);
 
-    ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale  : src[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d],dst[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d]",
-        src.rect.xoffset, src.rect.yoffset, src.rect.width, src.rect.height, src.rect.wstride, src.rect.hstride,
-        dst.rect.xoffset, dst.rect.yoffset, dst.rect.width, dst.rect.height, dst.rect.wstride, dst.rect.hstride);
+    ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale  : src[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x],dst[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x]",
+        src.rect.xoffset, src.rect.yoffset, src.rect.width, src.rect.height, src.rect.wstride, src.rect.hstride, src.rect.format,
+        dst.rect.xoffset, dst.rect.yoffset, dst.rect.width, dst.rect.height, dst.rect.wstride, dst.rect.hstride, dst.rect.format);
     ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale : src hnd=%p,dst hnd=%p, format=0x%x, transform=0x%x\n",
         (void*)layer.sf_handle, (void*)(rgaBuffer.buffer()->handle), layer.format, rga_transform);
 
@@ -599,9 +606,9 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     src.rotation = rga_transform;
     ret = mRga_.RkRgaBlit(&src, &dst, NULL);
     if(ret) {
-        ALOGE("rgaRotateScale error : src[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d],dst[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d]",
-            src.rect.xoffset, src.rect.yoffset, src.rect.width, src.rect.height, src.rect.wstride, src.rect.hstride,
-            dst.rect.xoffset, dst.rect.yoffset, dst.rect.width, dst.rect.height, dst.rect.wstride, dst.rect.hstride);
+        ALOGE("rgaRotateScale error : src[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x],dst[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x]",
+            src.rect.xoffset, src.rect.yoffset, src.rect.width, src.rect.height, src.rect.wstride, src.rect.hstride, src.rect.format,
+            dst.rect.xoffset, dst.rect.yoffset, dst.rect.width, dst.rect.height, dst.rect.wstride, dst.rect.hstride, dst.rect.format);
         ALOGE("rgaRotateScale error : %s,src hnd=%p,dst hnd=%p",
             strerror(errno), (void*)layer.sf_handle, (void*)(rgaBuffer.buffer()->handle));
     }
@@ -609,6 +616,10 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
 #if RK_DRM_HWC_DEBUG
       DumpLayer("rga", rgaBuffer.buffer()->handle);
 #endif
+
+    //The dst layer's format is NV12.
+    if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+        layer.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
 
     //instead of the original DrmHwcLayer
     layer.is_rotate_by_rga = true;
