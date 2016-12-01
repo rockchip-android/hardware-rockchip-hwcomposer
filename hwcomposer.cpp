@@ -188,6 +188,7 @@ static unsigned int g_boot_cnt = 0;
 int hwc_init_version()
 {
     char acVersion[50];
+    char acCommit[50];
     memset(acVersion,0,sizeof(acVersion));
     if(sizeof(GHWC_VERSION) > 12) {
         strncpy(acVersion,GHWC_VERSION,12);
@@ -196,8 +197,11 @@ int hwc_init_version()
     }
 
     strcat(acVersion,"-rk3399");
+    /* RK_GRAPHICS_VER=commit-id:067e5d0: only keep string after '=' */
+    sscanf(RK_GRAPHICS_VER, "%*[^=]=%s", acCommit);
 
     property_set("sys.ghwc.version", acVersion);
+    property_set("sys.ghwc.commit", acCommit);
     ALOGD(RK_GRAPHICS_VER);
     return 0;
 }
