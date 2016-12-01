@@ -102,7 +102,7 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
         FILE * pfile = NULL;
         char data_name[100] ;
         const gralloc_module_t *gralloc;
-        unsigned int *cpu_addr;
+        void* cpu_addr;
         int i;
 
         int ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID,
@@ -123,28 +123,24 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
             return -EINVAL;
         }
 
-        //if (test == 0) {
-            system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
-
-          //  test = 1;
-
-            DumpSurfaceCount++;
-            sprintf(data_name,"/data/dump/dmlayer%d_%d_%d.bin", DumpSurfaceCount,
-                    gr_handle->pixel_stride,gr_handle->height);
-            gralloc->lock(gralloc, handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
-                            0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
-            pfile = fopen(data_name,"wb");
-            if(pfile)
-            {
-                fwrite((const void *)cpu_addr,(size_t)(gr_handle->size),1,pfile);
-                fclose(pfile);
-                ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,stride :%d,size=%d,cpu_addr=%p",
-                    layer_name,data_name,gr_handle->width,gr_handle->height,gr_handle->stride,gr_handle->size,cpu_addr);
-            }
-
-            gralloc->unlock(gralloc, handle);
-        //}
-
+        system("mkdir /data/dump/ && chmod /data/dump/ 777 ");
+        DumpSurfaceCount++;
+        sprintf(data_name,"/data/dump/dmlayer%d_%d_%d.bin", DumpSurfaceCount,
+                gr_handle->pixel_stride,gr_handle->height);
+        gralloc->lock(gralloc, handle, gr_handle->usage,
+                        0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
+        pfile = fopen(data_name,"wb");
+        if(pfile)
+        {
+            fwrite((const void *)cpu_addr,(size_t)(gr_handle->size),1,pfile);
+            fflush(pfile);
+            fclose(pfile);
+            ALOGD(" dump surface layer_name: %s,data_name %s,w:%d,h:%d,stride :%d,size=%d,cpu_addr=%p",
+                layer_name,data_name,gr_handle->width,gr_handle->height,gr_handle->stride,gr_handle->size,cpu_addr);
+        }
+        gralloc->unlock(gralloc, handle);
+        //only dump once time.
+        property_set("sys.dump","0");
         gralloc_drm_unlock_handle(handle);
     }
 
@@ -1191,7 +1187,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                         ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
                         if(!ret){
                             bHideUi = true;
-                            ALOGD_IF(log_level(DBG_VERBOSE),"@video UI close");
+                            ALOGD_IF(log_level(DBG_VERBOSE), "@video UI close,iWidth=%d,iHeight=%d",iWidth,iHeight);
                         }
                         ctx->gralloc->unlock(ctx->gralloc, second_layer->handle);
                     }
@@ -1199,6 +1195,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                     if(bHideUi)
                     {
                         second_layer->compositionType = HWC_NODRAW;
+                    }
+                    else
+                    {
+                        second_layer->compositionType = HWC_FRAMEBUFFER;
                     }
                 }
             }
