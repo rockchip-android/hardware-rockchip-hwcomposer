@@ -201,6 +201,31 @@ bool is_suit_nodraw(hwc_layer_1_t * layer,hwcContext * context)
     return true;
 }
 
+bool is_not_suit_mix_policy(hwc_display_contents_1_t *list)
+{
+    struct private_handle_t * handle = NULL;
+    hwc_layer_1_t * layer = NULL;
+
+    if (!list)
+        return true;
+
+    if (list->numHwLayers <= 0)
+        return true;
+
+    layer = &list->hwLayers[list->numHwLayers - 1];
+    handle = (struct private_handle_t *)layer->handle;
+
+    switch (handle->format) {
+        case HAL_PIXEL_FORMAT_RGBA_8888:
+        case HAL_PIXEL_FORMAT_BGRA_8888:
+            return false;
+        default:
+            break;
+    }
+
+    return true;
+}
+
 bool is_same_rect(hwc_rect_t rs,hwc_rect_t ls)
 {
     bool res = true;
@@ -1748,6 +1773,12 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
         forceSkip = true;
 
+    if (is_not_suit_mix_policy(list)) {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
+        return -1;
+    }
+
     if(getHdmiMode() == 1 && forceSkip)
     {
         if(is_out_log())
@@ -1843,6 +1874,12 @@ int try_hwc_nodraw_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     if((list->numHwLayers - 1) < 5)  // too less
     {
 
+        return -1;
+    }
+
+    if (is_not_suit_mix_policy(list)) {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
         return -1;
     }
     
@@ -2015,6 +2052,12 @@ int try_hwc_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 
+    if (is_not_suit_mix_policy(list)) {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
+        return -1;
+    }
+
     for ( i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -2097,6 +2140,12 @@ int try_hwc_gpu_nodraw_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
         forceSkip = true;
+
+    if (is_not_suit_mix_policy(list)) {
+        if(is_out_log())
+            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
+        return -1;
+    }
 
     if(getHdmiMode() == 1 && forceSkip)
     {
