@@ -588,15 +588,15 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
 
    if((sf_layer->transform == HWC_TRANSFORM_ROT_90)
        ||(sf_layer->transform == HWC_TRANSFORM_ROT_270)){
-	h_scale_mul = (float) (source_crop.bottom - source_crop.top)
-          / (display_frame.right - display_frame.left);
-	v_scale_mul = (float) (source_crop.right - source_crop.left)
-	 / (display_frame.bottom - display_frame.top);
+	    h_scale_mul = (float) (source_crop.bottom - source_crop.top)
+                        / (display_frame.right - display_frame.left);
+	    v_scale_mul = (float) (source_crop.right - source_crop.left)
+	                    / (display_frame.bottom - display_frame.top);
     } else {
         h_scale_mul = (float) (source_crop.right - source_crop.left)
-	/ (display_frame.right - display_frame.left);
+	                    / (display_frame.right - display_frame.left);
         v_scale_mul = (float) (source_crop.bottom - source_crop.top)
-	/ (display_frame.bottom - display_frame.top);
+	                    / (display_frame.bottom - display_frame.top);
     }
     width = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_WIDTH);
     height = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_HEIGHT);
@@ -815,6 +815,39 @@ static int hwc_get_string_property(const char* pcProperty,const char* default_va
     return 0;
 }
 
+static bool vop_support_scale(hwc_layer_1_t *layer) {
+    float hfactor;
+    float vfactor;
+    DrmHwcRect<float> source_crop;
+    DrmHwcRect<int> display_frame;
+
+    source_crop = DrmHwcRect<float>(
+      layer->sourceCropf.left, layer->sourceCropf.top,
+      layer->sourceCropf.right, layer->sourceCropf.bottom);
+    display_frame = DrmHwcRect<int>(
+      layer->displayFrame.left, layer->displayFrame.top,
+      layer->displayFrame.right, layer->displayFrame.bottom);
+
+    if((layer->transform == HWC_TRANSFORM_ROT_90)
+       ||(layer->transform == HWC_TRANSFORM_ROT_270)){
+        hfactor = (float) (source_crop.bottom - source_crop.top)
+                    / (display_frame.right - display_frame.left);
+        vfactor = (float) (source_crop.right - source_crop.left)
+                    / (display_frame.bottom - display_frame.top);
+    } else {
+            hfactor = (float) (source_crop.right - source_crop.left)
+                        / (display_frame.right - display_frame.left);
+            vfactor = (float) (source_crop.bottom - source_crop.top)
+                        / (display_frame.bottom - display_frame.top);
+    }
+    if(hfactor >= 8.0 || vfactor >= 8.0 || hfactor <= 0.125 || vfactor <= 0.125  ){
+        ALOGD_IF(log_level(DBG_DEBUG), "scale [%f,%f]not support! at line=%d", hfactor, vfactor, __LINE__);
+        return false;
+    }
+
+    return true;
+}
+
 static bool vop_support_format(uint32_t hal_format) {
   switch (hal_format) {
     case HAL_PIXEL_FORMAT_RGB_888:
@@ -830,27 +863,115 @@ static bool vop_support_format(uint32_t hal_format) {
   }
 }
 
-static bool check_layer(struct hwc_context_t *ctx, hwc_layer_1_t * Layer) {
-    struct gralloc_drm_handle_t* drm_handle =(struct gralloc_drm_handle_t*)(Layer->handle);
+static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t *display_content, int display_id)
+{
+    int num_layers = display_content->numHwLayers;
 
-#if !RK_RGA
-    UN_USED(ctx);
+    //force go into GPU
+    /*
+        <=0: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into GPU.
+        =1: DISPLAY_PRIMARY go into overlay,DISPLAY_EXTERNAL go into GPU.
+        =2: DISPLAY_EXTERNAL go into overlay,DISPLAY_PRIMARY go into GPU.
+        others: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into overlay.
+    */
+    int iMode = hwc_get_int_property("sys.hwc.compose_policy","0");
+    if( iMode <= 0 || (iMode == 1 && display_id == 1) || (iMode == 2 && display_id == 0) )
+        return true;
+
+    //If the transform nv12 layers is bigger than one,then go into GPU GLES.
+    //If the transform normal layers is bigger than zero,then go into GPU GLES.
+    int transform_nv12 = 0;
+    int transform_normal = 0;
+    int ret = 0;
+    int format = 0;
+#if USE_AFBC_LAYER
+    uint64_t internal_format = 0;
+    int iFbdcCnt = 0;
 #endif
 
-    if (Layer->flags & HWC_SKIP_LAYER
-        || (drm_handle && !vop_support_format(drm_handle->format))
+    for (int j = 0; j < num_layers-1; j++) {
+        hwc_layer_1_t *layer = &display_content->hwLayers[j];
+
+        if (layer->flags & HWC_SKIP_LAYER)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"layer is skipped,go to GPU GLES at line=%d", __LINE__);
+            return true;
+        }
+
+        if(
 #if RK_RGA
-        || (!ctx->drm.isSupportRkRga() && Layer->transform)
+            !ctx->drm.isSupportRkRga() && layer->transform
 #else
-        || (Layer->transform)
+            layer->transform
 #endif
-        ||((Layer->blending == HWC_BLENDING_PREMULT)&& Layer->planeAlpha!=0xFF)
-        ){
-        return false;
+          )
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"layer's transform=0x%x,go to GPU GLES at line=%d", layer->transform, __LINE__);
+            return true;
+        }
+
+        if( (layer->blending == HWC_BLENDING_PREMULT)&& layer->planeAlpha!=0xFF )
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"layer's blending planeAlpha=0x%x,go to GPU GLES at line=%d", layer->planeAlpha, __LINE__);
+            return true;
+        }
+
+        if(layer->handle)
+        {
+#if RK_DRM_HWC_DEBUG
+            //DumpLayer(layer->LayerName,layer->handle);
+#endif
+            format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
+            if(!vop_support_format(format))
+            {
+                ALOGD_IF(log_level(DBG_DEBUG),"layer's format=0x%x is not support,go to GPU GLES at line=%d", format, __LINE__);
+                return true;
+            }
+
+#if 1
+            if(!vop_support_scale(layer))
+            {
+                ALOGD_IF(log_level(DBG_DEBUG),"layer's scale is not support,go to GPU GLES at line=%d", __LINE__);
+                return true;
+            }
+#endif
+            if(layer->transform)
+            {
+                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+                    transform_nv12++;
+                else
+                    transform_normal++;
+            }
+
+#if USE_AFBC_LAYER
+            ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                                 layer->handle, &internal_format);
+            if (ret) {
+                ALOGE("Failed to get internal_format for buffer %p (%d)", layer->handle, ret);
+                return false;
+            }
+
+            if(internal_format & GRALLOC_ARM_INTFMT_AFBC)
+                iFbdcCnt++;
+#endif
+        }
     }
-    return true;
-}
+    if(transform_nv12 > 1 || transform_normal > 0)
+    {
+        return true;
+    }
+
+#if USE_AFBC_LAYER
+    if(iFbdcCnt > 1)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES",iFbdcCnt);
+        return true;
+    }
 #endif
+
+    return false;
+}
+
 
 bool log_level(LOG_LEVEL log_level)
 {
@@ -1034,129 +1155,16 @@ static int DetectValidData(int *data,int w,int h)
 
     return 0;
 }
-#endif
 
-static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
-                       hwc_display_contents_1_t **display_contents) {
-  struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-
-#if RK_DRM_HWC_DEBUG
-    init_log_level();
-    hwc_dump_fps();
-    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
-#endif
-
-
-
-
-  for (int i = 0; i < (int)num_displays; ++i) {
-    if (!display_contents[i])
-      continue;
-
-#if SKIP_BOOT
-    if(g_boot_cnt < BOOT_COUNT)
-    {
-        hwc_list_nodraw(display_contents[i]);
-        ALOGD_IF(log_level(DBG_DEBUG),"prepare skip %d",g_boot_cnt);
-        return 0;
-    }
-#endif
-
-    bool use_framebuffer_target = false;
-    DrmMode mode;
-    drmModeConnection state;
-    if (i == HWC_DISPLAY_VIRTUAL) {
-      use_framebuffer_target = true;
-    } else {
-      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
-      if (!c) {
-        ALOGE("Failed to get DrmConnector for display %d", i);
-        return -ENODEV;
-      }
-      mode = c->active_mode();
-      state = c->state();
-    }
-
-    // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
-    // handle all layers in between the first and last skip layers. So find the
-    // outer indices and mark everything in between as HWC_FRAMEBUFFER
-    std::pair<int, int> skip_layer_indices(-1, -1);
-    int num_layers = display_contents[i]->numHwLayers;
-
-#if RK_DRM_HWC
-    //force go into GPU
-    /*
-        <=0: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into GPU.
-        =1: DISPLAY_PRIMARY go into overlay,DISPLAY_EXTERNAL go into GPU.
-        =2: DISPLAY_EXTERNAL go into overlay,DISPLAY_PRIMARY go into GPU.
-        others: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into overlay.
-    */
-    int iMode = hwc_get_int_property("sys.hwc.compose_policy","0");
-    if( iMode <= 0 )
-        use_framebuffer_target = true;
-    else if( iMode == 1 && i == 1 )
-        use_framebuffer_target = true;
-    else if ( iMode == 2 && i == 0 )
-        use_framebuffer_target = true;
-
-    //If the transform nv12 layers is bigger than one,then go into GPU GLES.
-    //If the transform normal layers is bigger than zero,then go into GPU GLES.
-    int transform_nv12 = 0;
-    int transform_normal = 0;
+static void video_ui_optimize(struct hwc_context_t *ctx, hwc_display_contents_1_t *display_content, hwc_drm_display_t *hd)
+{
     int ret = 0;
     int format = 0;
-#if USE_AFBC_LAYER
-    uint64_t internal_format = 0;
-    int iFbdcCnt = 0;
-#endif
-    for (int j = 0; j < num_layers-1; j++) {
-        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-        if(layer->handle)
-        {
-#if RK_DRM_HWC_DEBUG
-            //DumpLayer(layer->LayerName,layer->handle);
-#endif
-            format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
-            if(layer->transform)
-            {
-                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
-                    transform_nv12++;
-                else
-                    transform_normal++;
-            }
-
-#if USE_AFBC_LAYER
-        ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
-                             layer->handle, &internal_format);
-        if (ret) {
-            ALOGE("Failed to get internal_format for buffer %p (%d)", layer->handle, ret);
-            return ret;
-        }
-
-        if(internal_format & GRALLOC_ARM_INTFMT_AFBC)
-            iFbdcCnt++;
-#endif
-        }
-    }
-    if(transform_nv12 > 1 || transform_normal > 0)
-    {
-        use_framebuffer_target = true;
-    }
-
-#if USE_AFBC_LAYER
-    if(iFbdcCnt > 1)
-    {
-        ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES",iFbdcCnt);
-        use_framebuffer_target = true;
-    }
-#endif
-
-#if RK_VIDEO_UI_OPT
-    hwc_drm_display_t *hd = &ctx->displays[i];
     bool bHideUi = false;
+    int num_layers = display_content->numHwLayers;
     if(num_layers == 3)
     {
-        hwc_layer_1_t *first_layer = &display_contents[i]->hwLayers[0];
+        hwc_layer_1_t *first_layer = &display_content->hwLayers[0];
         if(first_layer->handle)
         {
             format = hwc_get_handle_attibute(ctx,first_layer->handle,ATT_FORMAT);
@@ -1164,7 +1172,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             {
                 bool bDiff = true;
                 int iUiFd = 0;
-                hwc_layer_1_t * second_layer =  &display_contents[i]->hwLayers[1];
+                hwc_layer_1_t * second_layer =  &display_content->hwLayers[1];
                 format = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_FORMAT);
                 if(second_layer->handle &&
                     (format == HAL_PIXEL_FORMAT_RGBA_8888 ||
@@ -1208,6 +1216,60 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             }
         }
     }
+}
+#endif
+
+#endif
+
+static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
+                       hwc_display_contents_1_t **display_contents) {
+  struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
+
+#if RK_DRM_HWC_DEBUG
+    init_log_level();
+    hwc_dump_fps();
+    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
+#endif
+
+  for (int i = 0; i < (int)num_displays; ++i) {
+    if (!display_contents[i])
+      continue;
+
+#if SKIP_BOOT
+    if(g_boot_cnt < BOOT_COUNT)
+    {
+        hwc_list_nodraw(display_contents[i]);
+        ALOGD_IF(log_level(DBG_DEBUG),"prepare skip %d",g_boot_cnt);
+        return 0;
+    }
+#endif
+
+    bool use_framebuffer_target = false;
+    DrmMode mode;
+    drmModeConnection state;
+    if (i == HWC_DISPLAY_VIRTUAL) {
+      use_framebuffer_target = true;
+    } else {
+      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
+      if (!c) {
+        ALOGE("Failed to get DrmConnector for display %d", i);
+        return -ENODEV;
+      }
+      mode = c->active_mode();
+      state = c->state();
+    }
+
+    // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
+    // handle all layers in between the first and last skip layers. So find the
+    // outer indices and mark everything in between as HWC_FRAMEBUFFER
+    std::pair<int, int> skip_layer_indices(-1, -1);
+    int num_layers = display_contents[i]->numHwLayers;
+
+#if RK_DRM_HWC
+    use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
+
+#if RK_VIDEO_UI_OPT
+    video_ui_optimize(ctx, display_contents[i], &ctx->displays[i]);
 #endif
 
 #endif
@@ -1221,24 +1283,21 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     for (int j = 0; !use_framebuffer_target && j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-#if RK_DRM_HWC
-      if(j<(num_layers-1) && !check_layer(ctx, layer))
-        use_framebuffer_target = true;
-#endif
+
       if (!(layer->flags & HWC_SKIP_LAYER))
         continue;
 
       if (skip_layer_indices.first == -1)
         skip_layer_indices.first = j;
-      skip_layer_indices.second = j;
+        skip_layer_indices.second = j;
     }
 
     for (int j = 0; j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
       if (state != DRM_MODE_CONNECTED) {
-	layer->compositionType = HWC_NODRAW;
-	continue;
+        layer->compositionType = HWC_NODRAW;
+        continue;
       }
 
       if (!use_framebuffer_target && !hwc_skip_layer(skip_layer_indices, j)) {

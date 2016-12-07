@@ -231,10 +231,23 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             }
 #endif
                             b_scale = (*iter_plane)->get_scale();
-                            if((*iter_layer)->is_scale && !b_scale)
+                            if((*iter_layer)->is_scale)
                             {
-                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale",(*iter_plane)->id());
-                                continue;
+                                if(!b_scale)
+                                {
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale",(*iter_plane)->id());
+                                    continue;
+                                }
+                                else
+                                {
+                                    if((*iter_layer)->h_scale_mul >= 8.0 || (*iter_layer)->v_scale_mul >= 8.0 ||
+                                        (*iter_layer)->h_scale_mul <= 0.125 || (*iter_layer)->v_scale_mul <= 0.125)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale factor(%f,%f)",
+                                                (*iter_plane)->id(), (*iter_layer)->h_scale_mul, (*iter_layer)->v_scale_mul);
+                                        continue;
+                                    }
+                                }
                             }
 
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
@@ -246,11 +259,11 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 continue;
                             }
 #if RK_RGA
-                                    if(!drm->isSupportRkRga()
+                            if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
-                                    || isAfbcInternalFormat((*iter_layer)->internal_format)
+                               || isAfbcInternalFormat((*iter_layer)->internal_format)
 #endif
-                                    )
+                               )
 #endif
                             {
                                 rotation = 0;
@@ -435,8 +448,25 @@ int PlanStageProtected::ProvisionPlanes(
                                         continue;
 #endif
                                     b_scale = (*iter_plane)->get_scale();
-                                    if(layer->is_scale && !b_scale)
-                                        continue;
+                                    if(layer->is_scale)
+                                    {
+                                        if(!b_scale)
+                                        {
+                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale",(*iter_plane)->id());
+                                            continue;
+                                        }
+                                        else
+                                        {
+                                            if(layer->h_scale_mul >= 8.0 || layer->v_scale_mul >= 8.0 ||
+                                                layer->h_scale_mul <= 0.125 || layer->v_scale_mul <= 0.125)
+                                            {
+                                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale factor(%f,%f)",
+                                                        (*iter_plane)->id(), layer->h_scale_mul, layer->v_scale_mul);
+                                                continue;
+                                            }
+                                        }
+                                    }
+
 
                                    if (layer->blending == DrmHwcBlending::kPreMult)
                                         alpha = layer->alpha;
