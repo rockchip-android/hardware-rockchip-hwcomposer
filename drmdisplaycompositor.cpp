@@ -498,10 +498,20 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
             bottom_max  = hwcMAX(r_bottom, bottom_max);
         }
 
+       if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO
+            || layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12){
+        rect_merge.left = layer.display_frame.left;
+        rect_merge.top = layer.display_frame.top;
+        rect_merge.right =  layer.display_frame.right;
+        rect_merge.bottom = layer.display_frame.bottom;
+       }
+       else
+       {
         rect_merge.left = hwcMAX(layer.display_frame.left, left_min);
         rect_merge.top = hwcMAX(layer.display_frame.top, top_min);
         rect_merge.right =  hwcMIN(layer.display_frame.right, right_max);
         rect_merge.bottom = hwcMIN(layer.display_frame.bottom, bottom_max);
+       }
     }
 
     ret = rgaBuffer.WaitReleased(-1);
@@ -513,7 +523,11 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
 
     dst_w = rect_merge.right - rect_merge.left;
     dst_h = rect_merge.bottom - rect_merge.top;
-    dst_w = ALIGN(dst_w, 2);
+
+    if(dst_w < 0 || dst_h <0 )
+      ALOGE("RGA invalid dst_w=%d,dst_h=%d",dst_w,dst_h);
+
+    dst_w = ALIGN(dst_w, 8);
     dst_h = ALIGN(dst_h, 2);
 
     //If the layer's format is NV12_10,then use RGA to switch it to NV12.
