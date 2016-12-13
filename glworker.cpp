@@ -327,6 +327,16 @@ static void ConstructCommand(const DrmHwcLayer *layers,
     float crop_size[2] = {crop_rect.bounds[2] - crop_rect.bounds[0],
                           crop_rect.bounds[3] - crop_rect.bounds[1]};
 
+#if RK_DRM_HWC_DEBUG
+    ALOGD_IF(log_level(DBG_DEBUG),"ConstructCommand name[%d]=%s,source_crop(%f,%f,%f,%f),display_rect(%d,%d,%d,%d)",
+            texture_index,layer.name.c_str(),layer.source_crop.left,layer.source_crop.top,
+            layer.source_crop.right,layer.source_crop.bottom,layer.display_frame.left,
+            layer.display_frame.top,layer.display_frame.right,layer.display_frame.bottom);
+    ALOGD_IF(log_level(DBG_DEBUG),"ConstructCommand crop_rect(%f,%f,%f,%f),tex_width=%f,tex_height=%f",crop_rect.left,crop_rect.top,
+            crop_rect.right,crop_rect.bottom,tex_width,tex_height);
+    ALOGD_IF(log_level(DBG_DEBUG),"ConstructCommand cmd.bounds[%f,%f,%f,%f]",cmd.bounds[0],cmd.bounds[1],cmd.bounds[2],cmd.bounds[3]);
+#endif
+
     RenderingCommand::TextureSource &src = cmd.textures[cmd.texture_count];
     cmd.texture_count++;
     src.texture_index = texture_index;
@@ -334,33 +344,37 @@ static void ConstructCommand(const DrmHwcLayer *layers,
     bool swap_xy = false;
     bool flip_xy[2] = { false, false };
 
-    if (layer.transform == DrmHwcTransform::kRotate180) {
-      swap_xy = false;
-      flip_xy[0] = true;
-      flip_xy[1] = true;
-    } else if (layer.transform == DrmHwcTransform::kRotate270) {
-      swap_xy = true;
-      flip_xy[0] = true;
-      flip_xy[1] = false;
-    } else if (layer.transform & DrmHwcTransform::kRotate90) {
-      swap_xy = true;
-      if (layer.transform & DrmHwcTransform::kFlipH) {
-        flip_xy[0] = true;
-        flip_xy[1] = true;
-      } else if (layer.transform & DrmHwcTransform::kFlipV) {
-        flip_xy[0] = false;
-        flip_xy[1] = false;
-      } else {
-        flip_xy[0] = false;
-        flip_xy[1] = true;
-      }
-    } else {
-      if (layer.transform & DrmHwcTransform::kFlipH)
-        flip_xy[0] = true;
-      if (layer.transform & DrmHwcTransform::kFlipV)
-        flip_xy[1] = true;
+#if RK_RGA
+    if(!layer.is_rotate_by_rga)
+#endif
+    {
+        if (layer.transform == DrmHwcTransform::kRotate180) {
+          swap_xy = false;
+          flip_xy[0] = true;
+          flip_xy[1] = true;
+        } else if (layer.transform == DrmHwcTransform::kRotate270) {
+          swap_xy = true;
+          flip_xy[0] = true;
+          flip_xy[1] = false;
+        } else if (layer.transform & DrmHwcTransform::kRotate90) {
+          swap_xy = true;
+          if (layer.transform & DrmHwcTransform::kFlipH) {
+            flip_xy[0] = true;
+            flip_xy[1] = true;
+          } else if (layer.transform & DrmHwcTransform::kFlipV) {
+            flip_xy[0] = false;
+            flip_xy[1] = false;
+          } else {
+            flip_xy[0] = false;
+            flip_xy[1] = true;
+          }
+        } else {
+          if (layer.transform & DrmHwcTransform::kFlipH)
+            flip_xy[0] = true;
+          if (layer.transform & DrmHwcTransform::kFlipV)
+            flip_xy[1] = true;
+        }
     }
-
     if (swap_xy)
       std::copy_n(&kTextureTransformMatrices[4], 4, src.texture_matrix);
     else

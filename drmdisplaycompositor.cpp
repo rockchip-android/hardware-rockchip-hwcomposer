@@ -615,7 +615,13 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
                                            display_comp->importer());
     if (ret) {
-        ALOGE("Failed to import rga buffer for display %d", ret);
+        ALOGE("Failed to import rga buffer ret=%d", ret);
+        return ret;
+    }
+
+    ret = layer.handle.CopyBufferHandle(rgaBuffer.buffer()->handle, gralloc_);
+    if (ret) {
+        ALOGE("Failed to copy rga handle ret=%d", ret);
         return ret;
     }
 
