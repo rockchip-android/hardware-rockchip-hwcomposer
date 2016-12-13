@@ -31,7 +31,7 @@ LOCAL_SRC_FILES := \
 	rk_hwcomposer_blit.cpp \
 	rk_hwc_com.cpp \
 	rga_api.cpp \
-	rk_hwcomposer_hdmi.cpp \
+	rk_hwcomposer_htg.cpp \
 	hwc_ipp.cpp \
 	hwc_rga.cpp 
 

@@ -255,6 +255,8 @@ FenceMangrRga;
         uint32_t vsync_period; //nanos
         uint32_t xres;
         uint32_t yres;
+        uint32_t relxres;
+        uint32_t relyres;
         uint32_t stride;
         float xdpi;
         float ydpi;
@@ -340,6 +342,7 @@ FenceMangrRga;
         int       fbWidth;
         int       fbHeight;
         bool      fb1_cflag;
+        bool      mScreenChanged;
         char      cupcore_string[16];
         DisplayAttributes              dpyAttr[HWC_NUM_DISPLAY_TYPES];
         struct                         fb_var_screeninfo info;

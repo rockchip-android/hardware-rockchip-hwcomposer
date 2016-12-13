@@ -93,6 +93,7 @@ int         hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag);
 void*       hotplug_init_thread(void *arg);
 void*       hotplug_invalidate_refresh(void *arg);
 
+
 static int  hwc_device_close(struct hw_device_t * dev);
 static int  hwc_device_open(const struct hw_module_t * module,const char * name,struct hw_device_t ** device);
 static int  DetectValidData( hwcContext * context,int *data,int w,int h);
@@ -605,6 +606,24 @@ int is_need_stereo(hwcContext* ctx, hwc_display_contents_1_t *list)
     }
 
     return 0;
+}
+
+bool is_screen_changed(hwcContext* ctx, int dpyId)
+{
+    if (!ctx)
+        return false;
+
+    if (ctx->dpyAttr[dpyId].xres != ctx->dpyAttr[dpyId].relxres) {
+        ctx->mScreenChanged = true;
+        return true;
+    }
+
+    if (ctx->dpyAttr[dpyId].yres != ctx->dpyAttr[dpyId].relyres) {
+        ctx->mScreenChanged = true;
+        return true;
+    }
+
+    return false;
 }
 
 bool is_boot_skip_platform(hwcContext * context)
@@ -2371,26 +2390,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
          list->numHwLayers);
 
     is_need_stereo(context,list);
+    is_screen_changed(context, HWC_DISPLAY_PRIMARY);
 
-#if ONLY_USE_ONE_VOP
-    if(is_out_log())
-        ALOGD("Is need nodraw[%d,%d]",context->mHtg.HtgOn,
-            gcontextAnchor[1]?(!gcontextAnchor[1]->fb_blanked):-1);
-    if(context->mHtg.HtgOn && gcontextAnchor[1] && !gcontextAnchor[1]->fb_blanked)
-    {
-        if(is_out_log())
-            ALOGD("Prepare:Primary no draw");
-        for (i = 0; i < (list->numHwLayers - 1); i++)
-        {
-            hwc_layer_1_t * layer = &list->hwLayers[i];
-            layer->compositionType = HWC_NODRAW;
-        }
-        context->composer_mode = HWC_GPU;
-    }
-    else if(!try_prepare_first(context,list))
-#else
     if(!try_prepare_first(context,list))
-#endif
     {
         for(i = 0;i < HWC_POLICY_NUM;i++)
         {
@@ -2475,8 +2477,8 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
          list->numHwLayers);
 
     is_need_stereo(context,list);
+    is_screen_changed(context, HWC_DISPLAY_EXTERNAL);
 
-#ifndef USE_X86
     if(!try_prepare_first(context,list))
     {
         for(i = 0;i < HWC_POLICY_NUM;i++)
@@ -2492,9 +2494,7 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
     {
         try_hwc_gpu_policy((void*)context,list);
     }    
-#else
-    try_hwc_gpu_policy((void*)context,list);
-#endif
+
     context->NoDrMger.composer_mode_pre = context->composer_mode;
     if(is_out_log())
         ALOGD("ext:cmp_mode=%s,num=%d",compositionModeName[context->composer_mode],list->numHwLayers -1);
@@ -3451,6 +3451,9 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
                 hotplug_reset_dstpos(&fb_info,3);
         }
 #endif
+        if (context->mScreenChanged)
+            hotplug_reset_dstpos(&fb_info, 4);
+
         if(getHdmiMode() && context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
             sync_fbinfo_fence(&fb_info);
 
@@ -4921,6 +4924,7 @@ hwc_device_open(
     context->scaleFd      = -1;
     context->mIsBootanimExit = false;
     context->mIsFirstCallbackToHotplug = false;
+    context->mScreenChanged = false;
     property_get("ro.rk.soc", pro_value, "0");
     context->IsRk3188 = !!strstr(pro_value, "rk3188");
     context->IsRk3126 = !!strstr(pro_value, "rk3126");
@@ -5116,6 +5120,7 @@ hwc_device_open(
         LOGD("Create hotplug_invalidate_refresh error .");
     }
 #endif
+    hotplug_change_screen_config(HWC_DISPLAY_PRIMARY, 0, 1);
     return 0;
 
 OnError:
@@ -5805,6 +5810,14 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         h_dstpos = ctxe->dpyAttr[HWC_DISPLAY_EXTERNAL].yres;
         break;
 
+    case 4:
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+        w_dstpos = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
+        h_dstpos = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
+        break;
+
+
     default:
         break;
     }
@@ -5812,7 +5825,7 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
     float w_scale = (float)w_dstpos / w_source;
     float h_scale = (float)h_dstpos / h_source;
 
-    if(w_source != w_dstpos && (flag == 0 || flag == 3))
+    if(w_source != w_dstpos && (flag == 0 || flag == 3 || flag == 4))
     {
         for(int i = 0;i<4;i++)
         {
@@ -5919,6 +5932,41 @@ void  *hotplug_init_thread(void *arg)
 #endif
     pthread_exit(NULL);
     return NULL;
+}
+
+void hotplug_change_screen_config(int dpy, int fb, int state) {
+    hwcContext * context = gcontextAnchor[0];
+    if (context) {
+        char buf[100];
+        int width = 0;
+        int height = 0;
+        int fd = -1;
+        fd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
+        if(fd < 0)
+        {
+            ALOGE("hwc_change_config:open fb0 screen_info error,fd=%d",fd);
+            return;
+        }
+        if(read(fd,buf,sizeof(buf)) < 0)
+        {
+            ALOGE("error reading fb0 screen_info: %s", strerror(errno));
+            return;
+        }
+        close(fd);
+        sscanf(buf,"xres:%d yres:%d",&width,&height);
+        ALOGD("hwc_change_config:width=%d,height=%d",width,height);
+        context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
+        context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
+#if FORCE_REFRESH
+        pthread_mutex_lock(&context->mRefresh.mlk);
+        context->mRefresh.count = 0;
+        ALOGD_IF(log(HLLTWO),"Htg:mRefresh.count=%d",context->mRefresh.count);
+        pthread_mutex_unlock(&context->mRefresh.mlk);
+        pthread_cond_signal(&context->mRefresh.cond);
+#endif
+    }
+
+    return;
 }
 
 void  *hotplug_invalidate_refresh(void *arg)
