@@ -435,6 +435,11 @@ int DrmDisplayComposition::combine_layer()
                 //juage the layer is contained in layer_vector
                 bool bHasLayerOne = has_layer(layer_map_[zpos],layer_one);
                 bool bHasLayerTwo = has_layer(layer_map_[zpos],layer_two);
+
+                //If it contain both of layers,then don't need to go down.
+                if(bHasLayerOne && bHasLayerTwo)
+                    continue;
+
                 if(is_layer_combine(&layer_one,&layer_two)) {
                     //append layer into layer_vector of layer_map_.
                     if(!bHasLayerOne && !bHasLayerTwo)
@@ -519,7 +524,6 @@ int DrmDisplayComposition::combine_layer()
                      if(iter->second[i]->display_frame.left > iter->second[j]->display_frame.left) {
                         ALOGD_IF(log_level(DBG_DEBUG),"swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
                         std::swap(iter->second[i],iter->second[j]);
-                        break;
                      }
                  }
             }
