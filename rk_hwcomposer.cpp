@@ -39,6 +39,7 @@
 #include "hwc_ipp.h"
 #include "hwc_rga.h"
 #include <ui/PixelFormat.h>
+#include "TVInfo.h"
 
 #define MAX_DO_SPECIAL_COUNT        5
 #define RK_FBIOSET_ROTATE            0x5003
@@ -92,12 +93,26 @@ int         hotplug_set_overscan(int flag);
 int         hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag);
 void*       hotplug_init_thread(void *arg);
 void*       hotplug_invalidate_refresh(void *arg);
+int         hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct private_handle_t* src_handle);
+
 
 
 static int  hwc_device_close(struct hw_device_t * dev);
 static int  hwc_device_open(const struct hw_module_t * module,const char * name,struct hw_device_t ** device);
 static int  DetectValidData( hwcContext * context,int *data,int w,int h);
 int         getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *list);
+int init_tv_hdr_info(hwcContext *ctx) {
+
+   int r = HdmiSupportedDataSpace();
+   ctx->hdrSupportType = r;    
+   return 0;
+}
+int deinit_tv_hdr_info() {
+ 
+    HdmiSetHDR(0);
+    HdmiSetColorimetry(HAL_DATASPACE_UNKNOWN);
+    return 0;
+}
 
 static struct hw_module_methods_t hwc_module_methods =
 {
@@ -221,6 +236,7 @@ bool is_not_suit_mix_policy(hwc_display_contents_1_t *list)
         case HAL_PIXEL_FORMAT_BGRA_8888:
             return false;
         default:
+            ALOGD("%d", handle->format);
             break;
     }
 
@@ -1798,12 +1814,6 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 
-    if(getHdmiMode() == 1 && forceSkip)
-    {
-        if(is_out_log())
-            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
-        return -1;
-    }
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -2147,14 +2157,6 @@ int try_hwc_gpu_nodraw_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     struct private_handle_t * handle = NULL;
     hwcContext * context = (hwcContext *)ctx;
 
-#if ONLY_USE_ONE_VOP
-    if(getHdmiMode() == 1)
-    {
-        if(is_out_log())
-            ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
-        return -1;
-    }
-#endif
     forceSkip = context->IsRk3126;
 
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
@@ -2391,6 +2393,17 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
 
     is_need_stereo(context,list);
     is_screen_changed(context, HWC_DISPLAY_PRIMARY);
+
+    for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
+    {
+    	hwc_layer_1_t * layer = &list->hwLayers[i];
+    	struct private_handle_t * handle = NULL;
+
+    	if (layer) {
+                layer->dospecialflag = 0;
+                handle = (struct private_handle_t *)layer->handle;
+        }
+    }
 
     if(!try_prepare_first(context,list))
     {
@@ -3383,6 +3396,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             }
 */
         }
+        hotpulg_did_hdr_video(context, &fb_info.win_par[winIndex], handle);
         winIndex ++;
         i += step;
         
@@ -3479,6 +3493,14 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
         //debug info
         dump_config_info(context,fb_info);
+        if (context->hdrFrameStatus > 0) {
+            context->hdrFrameStatus = 0;
+        } else {
+            if (context->hdrStatus > 0) {
+                deinit_tv_hdr_info();
+                context->hdrStatus = 0;
+            }
+        }
 #if 0
         for (int k = 0;k < RK_MAX_BUF_NUM;k++)
         {
@@ -5120,6 +5142,7 @@ hwc_device_open(
         LOGD("Create hotplug_invalidate_refresh error .");
     }
 #endif
+    init_tv_hdr_info(context);
     hotplug_change_screen_config(HWC_DISPLAY_PRIMARY, 0, 1);
     return 0;
 
@@ -5941,6 +5964,10 @@ void hotplug_change_screen_config(int dpy, int fb, int state) {
         int width = 0;
         int height = 0;
         int fd = -1;
+
+        if (state)
+            init_tv_hdr_info(context);
+
         fd = open("/sys/class/graphics/fb0/screen_info", O_RDONLY);
         if(fd < 0)
         {
@@ -6029,4 +6056,55 @@ int hotplug_set_overscan(int flag)
         close(fdp);
     }
     return 0;
+}
+
+int hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct private_handle_t* src_handle) {
+
+   if (src_handle == NULL) {
+      return -1;
+   }
+
+   if ((src_handle->format != HAL_PIXEL_FORMAT_YCrCb_NV12_10))
+        return -1;
+   //rk_nv12_10_color_space_t hdrFormat = hwc_get_int_property("sys.hwc.test", "0");  //test
+   rk_nv12_10_color_space_t hdrFormat = get_rk_color_space_from_usage(src_handle->usage);  //realy
+   ALOGD("did_hdr_video: hdrFormat=0x%x, usage=0x%x", hdrFormat, src_handle->usage);
+   if (hdrFormat > 0 ) {	
+		win_par->area_par[0].data_format =0x22  | 0x80;	  
+ 
+       if (hdrFormat == 2) { 
+	        win_par->area_par[0].data_space = 0x01;
+			if (ctx->hdrSupportType & HAL_DATASPACE_TRANSFER_ST2084) {
+				if (ctx->hdrStatus==0) {
+					HdmiSetHDR(4);
+					ALOGD("did_hdr_video:HdmiSetHDR"); 
+					ctx->hdrStatus = 1;
+				}
+				ctx->hdrFrameStatus = 1;
+				
+			} else if ((ctx->hdrSupportType & HAL_DATASPACE_STANDARD_BT2020)) {
+				if (ctx->hdrStatus==0) {
+				  HdmiSetColorimetry(HAL_DATASPACE_STANDARD_BT2020);
+				  ALOGD("did_hdr_video:HAL_DATASPACE_STANDARD_BT2020");
+				  ctx->hdrStatus = 1;
+				} 
+				ctx->hdrFrameStatus = 1;
+				
+			} else {
+				ctx->hdrFrameStatus = 0;
+			}
+	   } else if (hdrFormat == 1) {
+			if (ctx->hdrStatus==0) {
+			  HdmiSetColorimetry(HAL_DATASPACE_STANDARD_BT2020);
+			  ALOGD("did_hdr_video:HAL_DATASPACE_STANDARD_BT2020");
+			  ctx->hdrStatus = 1;
+			} 
+			ctx->hdrFrameStatus = 1;
+			win_par->area_par[0].data_space = 0x00;
+	   }
+   } else {
+	  // ALOGD("hdrFormat=%d",hdrFormat);
+   }
+   
+   return 0;
 }

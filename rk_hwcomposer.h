@@ -429,6 +429,9 @@ FenceMangrRga;
         void *phy_addr;
         struct private_handle_t fbhandle ;
         lastStatus mLastStatus;
+        int hdrStatus;
+		int hdrFrameStatus;
+        int hdrSupportType;
     }
     hwcContext;
 

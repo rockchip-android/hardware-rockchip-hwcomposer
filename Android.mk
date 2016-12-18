@@ -33,7 +33,8 @@ LOCAL_SRC_FILES := \
 	rga_api.cpp \
 	rk_hwcomposer_htg.cpp \
 	hwc_ipp.cpp \
-	hwc_rga.cpp 
+	hwc_rga.cpp \
+	TVInfo.cpp
 
 LOCAL_CFLAGS := \
 	$(CFLAGS) \
@@ -53,6 +54,7 @@ LOCAL_C_INCLUDES += hardware/rockchip/libgralloc_ump
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/intel/libgralloc
 LOCAL_C_INCLUDES += hardware/rockchip/librkvpu
+LOCAL_C_INCLUDES += system/core/include/system
 LOCAL_LDFLAGS := \
 	-Wl,-z,defs 
 
