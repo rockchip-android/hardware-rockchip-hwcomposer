@@ -149,7 +149,11 @@ class DrmHwcBuffer {
 
   void Clear();
 
+#if RK_VIDEO_SKIP_LINE
+  int ImportBuffer(buffer_handle_t handle, Importer *importer, bool bSkipLine);
+#else
   int ImportBuffer(buffer_handle_t handle, Importer *importer);
+#endif
 
  private:
   hwc_drm_bo bo_;
@@ -245,6 +249,9 @@ struct DrmHwcLayer {
 #endif
   float h_scale_mul;
   float v_scale_mul;
+#if RK_VIDEO_SKIP_LINE
+  bool bSkipLine;
+#endif
   int format;
   int width;
   int height;

@@ -328,7 +328,7 @@ static void ConstructCommand(const DrmHwcLayer *layers,
                           crop_rect.bounds[3] - crop_rect.bounds[1]};
 
 #if RK_DRM_HWC_DEBUG
-    ALOGD_IF(log_level(DBG_DEBUG),"ConstructCommand name[%d]=%s,source_crop(%f,%f,%f,%f),display_rect(%d,%d,%d,%d)",
+    ALOGD_IF(log_level(DBG_DEBUG),"ConstructCommand name[%zu]=%s,source_crop(%f,%f,%f,%f),display_rect(%d,%d,%d,%d)",
             texture_index,layer.name.c_str(),layer.source_crop.left,layer.source_crop.top,
             layer.source_crop.right,layer.source_crop.bottom,layer.display_frame.left,
             layer.display_frame.top,layer.display_frame.right,layer.display_frame.bottom);

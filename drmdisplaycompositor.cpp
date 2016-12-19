@@ -433,7 +433,11 @@ int DrmDisplayCompositor::PrepareFramebuffer(
   pre_comp_layer.source_crop = DrmHwcRect<float>(0, 0, width, height);
   pre_comp_layer.display_frame = DrmHwcRect<int>(0, 0, width, height);
   ret = pre_comp_layer.buffer.ImportBuffer(fb.buffer()->handle,
-                                           display_comp->importer());
+                                           display_comp->importer()
+#if RK_VIDEO_SKIP_LINE
+                                           , false
+#endif
+                                           );
   if (ret) {
     ALOGE("Failed to import framebuffer for display %d", ret);
     return ret;
@@ -613,7 +617,11 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     layer.sf_handle = rgaBuffer.buffer()->handle;
 
     ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
-                                           display_comp->importer());
+                                           display_comp->importer()
+#if RK_VIDEO_SKIP_LINE
+                                           , false
+#endif
+                                           );
     if (ret) {
         ALOGE("Failed to import rga buffer ret=%d", ret);
         return ret;
@@ -806,7 +814,11 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
       squash_layer_index = layers.size() - 1;
       DrmHwcLayer &squash_layer = layers.back();
       ret = squash_layer.buffer.ImportBuffer(fb.buffer()->handle,
-                                             display_comp->importer());
+                                             display_comp->importer()
+#if RK_VIDEO_SKIP_LINE
+                                             , false
+#endif
+                                             );
       if (ret) {
         ALOGE("Failed to import old squashed framebuffer %d", ret);
         return ret;
@@ -1009,11 +1021,15 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     int fb_id = -1;
     DrmHwcRect<int> display_frame = DrmHwcRect<int>(0, 0, 0, 0);
     DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);
+#if RK_VIDEO_SKIP_LINE
+    bool bSkipLine = false;
+#endif
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
 #if RK_RGA
     bool is_rotate_by_rga = false;
 #endif
+
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
         ALOGE("Can't handle more than one source layer sz=%zu type=%d",
@@ -1058,6 +1074,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       //DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 #endif
 
+#if RK_VIDEO_SKIP_LINE
+      bSkipLine = layer.bSkipLine;
+#endif
       fb_id = layer.buffer->fb_id;
       display_frame = layer.display_frame;
       source_crop = layer.source_crop;
@@ -1124,7 +1143,12 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     src_l = (int)source_crop.left;
     src_t = (int)source_crop.top;
     src_w = (int)(source_crop.right - source_crop.left);
-    src_h = (int)(source_crop.bottom - source_crop.top);
+#if RK_VIDEO_SKIP_LINE
+    if(bSkipLine)
+        src_h = (int)(source_crop.bottom - source_crop.top)/2;
+    else
+#endif
+        src_h = (int)(source_crop.bottom - source_crop.top);
 
     dst_l = display_frame.left;
     dst_t = display_frame.top;

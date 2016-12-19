@@ -418,10 +418,18 @@ void DrmHwcBuffer::Clear() {
   }
 }
 
-int DrmHwcBuffer::ImportBuffer(buffer_handle_t handle, Importer *importer) {
+int DrmHwcBuffer::ImportBuffer(buffer_handle_t handle, Importer *importer
+#if RK_VIDEO_SKIP_LINE
+, bool bSkipLine
+#endif
+) {
   hwc_drm_bo tmp_bo;
 
-  int ret = importer->ImportBuffer(handle, &tmp_bo);
+  int ret = importer->ImportBuffer(handle, &tmp_bo
+#if RK_VIDEO_SKIP_LINE
+  , bSkipLine
+#endif
+  );
   if (ret)
     return ret;
 
@@ -562,7 +570,10 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_l
 int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
                                     const gralloc_module_t *gralloc) {
 #endif
-    int ret = 0;
+  int ret = 0;
+#if RK_VIDEO_SKIP_LINE
+  bSkipLine = false;
+#endif
   sf_handle = sf_layer->handle;
   alpha = sf_layer->planeAlpha;
   frame_no = g_frame;
@@ -601,6 +612,19 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     width = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_WIDTH);
     height = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_HEIGHT);
     stride = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_STRIDE);
+
+#if RK_VIDEO_SKIP_LINE
+    if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+    {
+        if(width >= 3840)
+        {
+            if(h_scale_mul > 1.0 || v_scale_mul > 1.0)
+            {
+                bSkipLine = true;
+            }
+        }
+    }
+#endif
 
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
     is_match = false;
@@ -660,7 +684,11 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       return -EINVAL;
   }
 
-  ret = buffer.ImportBuffer(sf_layer->handle, importer);
+  ret = buffer.ImportBuffer(sf_layer->handle, importer
+#if RK_VIDEO_SKIP_LINE
+  , bSkipLine
+#endif
+  );
   if (ret)
     return ret;
 

@@ -27,6 +27,7 @@
 #include <cutils/log.h>
 #include <gralloc_drm_handle.h>
 #include <hardware/gralloc.h>
+#include "hwcutil.h"
 
 namespace android {
 
@@ -91,7 +92,11 @@ uint32_t DrmGenericImporter::ConvertHalFormatToDrm(uint32_t hal_format) {
 #ifndef u64
 #define u64 uint64_t
 #endif
-int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
+int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
+#if RK_VIDEO_SKIP_LINE
+, bool bSkipLine
+#endif
+) {
   gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(handle);
   if (!gr_handle)
   {
@@ -111,22 +116,35 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
       bo->width = gr_handle->width/1.25;
+      bo->width = ALIGN(bo->width,2)-2;
   }
   else
   {
       bo->width = gr_handle->width;
   }
-  bo->pitches[0] = gr_handle->stride;
-  bo->height = gr_handle->height;
+
+#if RK_VIDEO_SKIP_LINE
+  if(bSkipLine)
+  {
+      bo->pitches[0] = gr_handle->stride*2;
+      bo->height = gr_handle->height/2;
+  }
+  else
+#endif
+  {
+      bo->pitches[0] = gr_handle->stride;
+      bo->height = gr_handle->height;
+  }
+
   bo->format = ConvertHalFormatToDrm(gr_handle->format);
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
   if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
-    bo->pitches[1] = gr_handle->stride;
+    bo->pitches[1] = bo->pitches[0];
     bo->gem_handles[1] = gem_handle;
-    bo->offsets[1] = bo->pitches[1] * gr_handle->height;
+    bo->offsets[1] = bo->pitches[1] * bo->height;
   }
 #if USE_AFBC_LAYER
   __u64 modifier[4];
@@ -145,8 +163,11 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
   if (ret) {
     ALOGE("could not create drm fb %d", ret);
     ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",
-    drm_->fd(), bo->width, bo->height, gr_handle->format,bo->format,
-    gem_handle, bo->pitches[0], bo->fb_id);
+        drm_->fd(), bo->width, bo->height, gr_handle->format,bo->format,
+        gem_handle, bo->pitches[0], bo->fb_id);
+#if RK_VIDEO_SKIP_LINE
+    ALOGE("bSkipLine=%d",bSkipLine);
+#endif
     gralloc_drm_unlock_handle(handle);
     return ret;
   }

@@ -31,7 +31,11 @@ class DrmGenericImporter : public Importer {
 
   int Init();
 
+#if RK_VIDEO_SKIP_LINE
+  int ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo, bool bSkipLine) override;
+#else
   int ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) override;
+#endif
   int ReleaseBuffer(hwc_drm_bo_t *bo) override;
 
  private:

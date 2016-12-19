@@ -68,7 +68,14 @@ int NvImporter::Init() {
   return 0;
 }
 
-int NvImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo) {
+int NvImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
+#if RK_VIDEO_SKIP_LINE
+, bool bSkipLine
+#endif
+) {
+#if RK_VIDEO_SKIP_LINE
+  UN_USED(bSkipLine);
+#endif
   memset(bo, 0, sizeof(hwc_drm_bo_t));
   NvBuffer_t *buf = GrallocGetNvBuffer(handle);
   if (buf) {
