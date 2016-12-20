@@ -260,6 +260,9 @@ DrmDisplayCompositor::DrmDisplayCompositor()
       mRga_(RockchipRga::get()),
       mUseRga_(false),
 #endif
+#if RK_10BIT_BYPASS
+      mSkipTimeoutPreComp(false),
+#endif
       squash_framebuffer_index_(0),
       dump_frames_composited_(0),
       dump_last_timestamp_ns_(0) {

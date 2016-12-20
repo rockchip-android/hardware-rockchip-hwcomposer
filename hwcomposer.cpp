@@ -279,6 +279,9 @@ typedef struct hwc_drm_display {
 #if RK_VIDEO_UI_OPT
   int iUiFd;
 #endif
+#if RK_10BIT_BYPASS
+  bool is10bitVideo;
+#endif
   std::vector<uint32_t> config_ids;
 
   VSyncWorker vsync_worker;
@@ -1294,6 +1297,27 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int num_layers = display_contents[i]->numHwLayers;
 
 #if RK_DRM_HWC
+
+#if RK_10BIT_BYPASS
+    int format = 0;
+    hwc_drm_display_t *hd = &ctx->displays[i];
+    hd->is10bitVideo = false;
+    for (int j = 0; j < num_layers-1; j++) {
+        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+        if(layer->handle)
+        {
+           format = hwc_get_handle_attibute(ctx,layer->handle, ATT_FORMAT);
+           if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+           {
+                hd->is10bitVideo = true;
+                if(layer->compositionType == HWC_NODRAW)
+                    layer->compositionType = HWC_FRAMEBUFFER;
+                break;
+           }
+        }
+    }
+#endif
     use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
 
 #if RK_VIDEO_UI_OPT
@@ -1344,6 +1368,28 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
       } else {
+#if RK_10BIT_BYPASS
+        if(hd->is10bitVideo)
+        {
+            if(layer->handle)
+            {
+                format = hwc_get_handle_attibute(ctx,layer->handle, ATT_FORMAT);
+                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+                {
+#if 0
+                    void* cpu_addr;
+                    gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(layer->handle);
+                    ctx->gralloc->lock(ctx->gralloc, layer->handle, gr_handle->usage,
+                        0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
+                    memset(cpu_addr, 0x88, gr_handle->size);
+                    ALOGD("Clear 10bit video");
+                    gralloc_drm_unlock_handle(layer->handle);
+#endif
+                    layer->compositionType = HWC_NODRAW;
+                }
+            }
+        }
+#endif
         switch (layer->compositionType) {
           case HWC_OVERLAY:
           case HWC_BACKGROUND:
@@ -1390,6 +1436,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   std::vector<DrmCompositionDisplayLayersMap> layers_map;
   std::vector<std::vector<size_t>> layers_indices;
   std::vector<uint32_t> fail_displays;
+
 
   displays_contents.reserve(num_displays);
   // layers_map.reserve(num_displays);
@@ -1564,9 +1611,14 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 
   for (size_t i = 0; i < num_displays; ++i) {
     hwc_display_contents_1_t *dc = sf_display_contents[i];
+    hwc_drm_display_t *hd = &ctx->displays[i];
     bool bFindDisplay = false;
     if (!dc)
       continue;
+
+#if RK_10BIT_BYPASS
+    ctx->drm.compositor()->setSkipPreComp(i,hd->is10bitVideo);
+#endif
 
     for (auto &fail_display : fail_displays) {
         if( i == fail_display )

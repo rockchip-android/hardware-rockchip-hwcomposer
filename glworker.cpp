@@ -314,6 +314,14 @@ static void ConstructCommand(const DrmHwcLayer *layers,
   for (size_t texture_index : region.source_layers) {
     const DrmHwcLayer &layer = layers[texture_index];
 
+#if RK_10BIT_BYPASS
+    if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+    {
+        //don't show 10bit video layer when use GLES.
+        continue;
+    }
+#endif
+
     DrmHwcRect<float> display_rect(layer.display_frame);
     float display_size[2] = {display_rect.bounds[2] - display_rect.bounds[0],
                              display_rect.bounds[3] - display_rect.bounds[1]};
