@@ -558,7 +558,6 @@ int PlanStageGreedy::ProvisionPlanes(
     std::vector<DrmPlane *> *planes) {
   // Fill up the remaining planes
 #if RK_DRM_HWC
-  int iEmplaceFail=0;
   for (auto i = layers.begin(); i != layers.end(); ++i) {
     int ret = TakePlane(composition, planes, DrmCompositionPlane::Type::kLayer,
                       crtc, i->first,i->second);
@@ -573,7 +572,7 @@ int PlanStageGreedy::ProvisionPlanes(
     else if (ret)
     {
         ALOGD_IF(log_level(DBG_DEBUG),"Failed to emplace layer %zu, dropping it", i->first);
-        iEmplaceFail++;
+        break;
     }
   }
 
@@ -590,7 +589,6 @@ int PlanStageGreedy::ProvisionPlanes(
 #if RK_DRM_HWC
         if(!i->second->is_take)
         {
-            iEmplaceFail--;
             precomp->source_layers().emplace_back(i->first);
             ALOGD_IF(log_level(DBG_DEBUG),"line=%d,using precomp for layer=%s",__LINE__,
                 i->second->name.c_str());
@@ -600,12 +598,6 @@ int PlanStageGreedy::ProvisionPlanes(
 #endif
     }
   }
-#endif
-
-#if RK_DRM_HWC
-  //If it still contain layers which are not take.
-  if(iEmplaceFail)
-    return -1;
 #endif
 
   return 0;
