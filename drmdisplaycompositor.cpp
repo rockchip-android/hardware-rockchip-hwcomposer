@@ -619,10 +619,14 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
         layer.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
     layer.sf_handle = rgaBuffer.buffer()->handle;
 
+#if RK_VIDEO_SKIP_LINE
+    layer.bSkipLine = false;
+#endif
+
     ret = layer.buffer.ImportBuffer(rgaBuffer.buffer()->handle,
                                            display_comp->importer()
 #if RK_VIDEO_SKIP_LINE
-                                           , false
+                                           , layer.bSkipLine
 #endif
                                            );
     if (ret) {
