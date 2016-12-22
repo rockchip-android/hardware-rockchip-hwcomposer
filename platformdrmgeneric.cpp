@@ -116,7 +116,7 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
   if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
       bo->width = gr_handle->width/1.25;
-      bo->width = ALIGN(bo->width,2)-2;
+      bo->width = ALIGN_DOWN(bo->width,2);
   }
   else
   {
