@@ -3483,6 +3483,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(context->IsRk322x && context->IsRkBox)
             sync_fbinfo_fence(&fb_info);
 
+        hotplug_reset_dstpos(&fb_info, 2);
+
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
         {
             ALOGE("ioctl config done error");
