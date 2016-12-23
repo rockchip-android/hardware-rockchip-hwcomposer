@@ -109,6 +109,7 @@
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      0
 #define ONLY_USE_ONE_VOP  1
+#define FORCE_REFRESH     1
 #define VIDEO_WIN1_UI_DISABLE     0
 #define VIRTUAL_UI_RESOLUTION     0
 #endif

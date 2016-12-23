@@ -5987,7 +5987,7 @@ void hotplug_change_screen_config(int dpy, int fb, int state) {
 #if FORCE_REFRESH
         pthread_mutex_lock(&context->mRefresh.mlk);
         context->mRefresh.count = 0;
-        ALOGD_IF(log(HLLTWO),"Htg:mRefresh.count=%d",context->mRefresh.count);
+        ALOGD_IF(is_out_log(),"Htg:mRefresh.count=%d",context->mRefresh.count);
         pthread_mutex_unlock(&context->mRefresh.mlk);
         pthread_cond_signal(&context->mRefresh.cond);
 #endif
