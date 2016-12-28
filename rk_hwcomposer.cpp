@@ -3451,6 +3451,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
    // if(!context->fb_blanked)
     {
+        hotplug_reset_dstpos(&fb_info, 5);
+
         if(context->IsRk322x && context->IsRkBox)
             hotplug_reset_dstpos(&fb_info,2);
 
@@ -3483,7 +3485,6 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(context->IsRk322x && context->IsRkBox)
             sync_fbinfo_fence(&fb_info);
 
-        hotplug_reset_dstpos(&fb_info, 2);
 
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
         {
@@ -5842,6 +5843,34 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         h_dstpos = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
         break;
 
+    case 5:
+        w_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
+        h_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
+
+        property_get("persist.sys.overscan.main", new_valuep, "false");
+        property_get("persist.sys.overscan.aux",  new_valuee, "false");
+
+        sscanf(new_valuep,"overscan %d,%d,%d,%d",&lpersent,&tpersent,&rpersent,&bpersent);
+
+        if(lpersent < 80) lpersent = 80;
+        if(tpersent < 80) tpersent = 80;
+        if(rpersent < 80) rpersent = 80;
+        if(bpersent < 80) bpersent = 80;
+
+        if(lpersent > 100) lpersent = 100;
+        if(tpersent > 100) tpersent = 100;
+        if(rpersent > 100) rpersent = 100;
+        if(bpersent > 100) bpersent = 100;
+
+        lpersent = (100 - lpersent) / 2;
+        tpersent = (100 - tpersent) / 2;
+        rpersent = (100 - rpersent) / 2;
+        bpersent = (100 - bpersent) / 2;
+
+        lscale = ((float)lpersent / 100);
+        tscale = ((float)tpersent / 100);
+        ALOGD_IF(is_out_log()>2,"%f,%f,%f,%f",lscale,tscale,rscale,bscale);
+        break;
 
     default:
         break;
@@ -5894,7 +5923,7 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         }
     }
 
-    if(flag == 2)
+    if(flag == 2 || flag == 5)
     {
         for(int i = 0;i<4;i++)
         {
