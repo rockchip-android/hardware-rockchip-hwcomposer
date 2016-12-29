@@ -328,6 +328,14 @@ static void ConstructCommand(const DrmHwcLayer *layers,
 
     float tex_width = layer.buffer->width;
     float tex_height = layer.buffer->height;
+
+#if RK_VIDEO_SKIP_LINE
+    if(layer.bSkipLine)
+    {
+        tex_height*=2;
+    }
+#endif
+
     DrmHwcRect<float> crop_rect(layer.source_crop.left / tex_width,
                                 layer.source_crop.top / tex_height,
                                 layer.source_crop.right / tex_width,
