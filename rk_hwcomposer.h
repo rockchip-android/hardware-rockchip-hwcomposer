@@ -48,7 +48,6 @@
 #define EN_VIDEO_UI_MIX         0
 #define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
-#define VOP_WIN_NUM             2
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #define GPU_BASE           handle->iBase
 #define GPU_WIDTH          handle->iWidth
@@ -69,6 +68,7 @@
 #define GPUDRAWCNT          (20)
 
 #ifdef USE_X86
+#define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     1
 #define VIDEO_USE_PPROT   1
 #define HOTPLUG_MODE      0
@@ -76,6 +76,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
 #elif defined(TARGET_BOARD_PLATFORM_RK312X)
+#define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     0
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      1
@@ -83,6 +84,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
 #elif defined(TARGET_BOARD_PLATFORM_RK322X)
+#define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     0
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      1
@@ -91,6 +93,7 @@
 #define VIDEO_WIN1_UI_DISABLE     0
 #define VIRTUAL_UI_RESOLUTION     1
 #elif defined(TARGET_BOARD_PLATFORM_RK3188)
+#define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     1
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      0
@@ -98,6 +101,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
 #elif defined(TARGET_BOARD_PLATFORM_RK3036)
+#define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     0
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      1
@@ -105,6 +109,7 @@
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
 #elif defined(TARGET_BOARD_PLATFORM_RK3328)
+#define VOP_WIN_NUM       3
 #define RGA_USE_FENCE     0
 #define VIDEO_USE_PPROT   0
 #define HOTPLUG_MODE      0
@@ -383,7 +388,7 @@ FenceMangrRga;
         hwcArea *                        compositionArea;
 
         /* Pre-allocated area pool. */
-    hwcAreaPool                      areaMem;
+        hwcAreaPool                      areaMem;
 #endif
         int     flag;
         int     fb_blanked;
@@ -393,7 +398,7 @@ FenceMangrRga;
         bool    IsRk3128;
         bool    IsRk322x;
         bool    IsRk3036;
-	bool	IsRk3328;
+        bool	IsRk3328;
         bool    IsRkBox;
         bool    isBox;
         bool    isVr;
@@ -421,7 +426,7 @@ FenceMangrRga;
         int     *video_ui;
         int rga_fence_relfd[RGA_REL_FENCE_NUM];
         int membk_fds[FB_BUFFERS_NUM];
-	int membk_type[FB_BUFFERS_NUM];
+        int membk_type[FB_BUFFERS_NUM];
         int membk_fence_acqfd[FB_BUFFERS_NUM];	  // RGA do ,output fence	
         int membk_fence_fd[FB_BUFFERS_NUM];		
         void *membk_base[FB_BUFFERS_NUM];
@@ -431,8 +436,9 @@ FenceMangrRga;
         struct private_handle_t fbhandle ;
         lastStatus mLastStatus;
         int hdrStatus;
-		int hdrFrameStatus;
+        int hdrFrameStatus;
         int hdrSupportType;
+        int deviceConected;
     }
     hwcContext;
 
@@ -538,7 +544,7 @@ FenceMangrRga;
 
     int closeFb(int fd);
     int  getHdmiMode();
-    void init_hdmi_mode();
+    void  init_hdmi_mode();
     /******************************************************************************\
      ****************************** Rectangle split *******************************
     \******************************************************************************/

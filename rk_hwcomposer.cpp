@@ -101,16 +101,19 @@ static int  hwc_device_close(struct hw_device_t * dev);
 static int  hwc_device_open(const struct hw_module_t * module,const char * name,struct hw_device_t ** device);
 static int  DetectValidData( hwcContext * context,int *data,int w,int h);
 int         getFbInfo(hwc_display_t dpy, hwc_surface_t surf, hwc_display_contents_1_t *list);
-int init_tv_hdr_info(hwcContext *ctx) {
-
+int init_tv_hdr_info(hwcContext *ctx)
+{
    int r = HdmiSupportedDataSpace();
+
    ctx->hdrSupportType = r;    
    return 0;
 }
-int deinit_tv_hdr_info() {
- 
+int deinit_tv_hdr_info(hwcContext *ctx)
+{
     HdmiSetHDR(0);
     HdmiSetColorimetry(HAL_DATASPACE_UNKNOWN);
+    ctx->hdrStatus = 0;
+    ctx->hdrFrameStatus = 0;
     return 0;
 }
 
@@ -1004,12 +1007,20 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 }
                 
             }           
-            if(handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 )
+            if (handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12)
             {
                 ctx->Is_video = true; 
                 if(handle->width > 1440 || handle->height > 1440)
                     ctx->Is_Lvideo = true;;
                 if(handle->usage & GRALLOC_USAGE_PROTECTED )
+                    ctx->Is_Secure = true;
+            }
+            if (handle && handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+            {
+                ctx->Is_video = true;
+                if(handle->width > 1440 || handle->height > 1440)
+                    ctx->Is_Lvideo = true;;
+                if(handle->usage & GRALLOC_USAGE_PROTECTED)
                     ctx->Is_Secure = true;
             }
             if(handle && (handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || handle->format == HAL_PIXEL_FORMAT_YCrCb_420_SP))
@@ -1173,19 +1184,18 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         else
         {
             #if VIDEO_WIN1_UI_DISABLE
-            if(/*context->vop_mbshake && */context->Is_video || (context->special_app && i == 1)
-                || forceUiDetect)
+            if(/*context->vop_mbshake && */context->Is_video || (context->special_app && i == 1 &&
+                list->numHwLayers == 3) || forceUiDetect)
             {
                 int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
                 if(ret) // ui need display
                 {
                     return -1;
                 }  
-            }    
-            
+            }
             #endif
 
-            layer->compositionType = HWC_TOWIN1;     
+            layer->compositionType = HWC_LCDC;
         }    
         
     }
@@ -1820,10 +1830,11 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         || handle == NULL
         || layer->transform != 0
         // ||(list->numHwLayers - 1)>4
-        ||((list->numHwLayers - 1)<3 && !(context->Is_video && context->IsRk322x)))
+        ||((list->numHwLayers - 1)<3 && !(context->Is_video && (context->IsRk322x || context->IsRk3328))))
     {
         if(is_out_log())
-          ALOGD("policy skip,flag=%x,hanlde=%x,tra=%d,num=%d,line=%d",layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);
+          ALOGD("policy skip,flag=%x,hanlde=%x,tra=%d,num=%d,line=%d",
+                    layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);
         return -1;  
     }
 
@@ -1840,7 +1851,8 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 
         if(i == 0)
         {
-            if((context->vop_mbshake || context->Is_video)&& !(handle->usage & GRALLOC_USAGE_PROTECTED) && !context->IsRk322x)
+            if((context->vop_mbshake || context->Is_video)&& !(handle->usage & GRALLOC_USAGE_PROTECTED) &&
+								!(context->IsRk322x || context->IsRk3328))
             {
                 float vfactor = 1.0;
                 vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
@@ -3500,7 +3512,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
             context->hdrFrameStatus = 0;
         } else {
             if (context->hdrStatus > 0) {
-                deinit_tv_hdr_info();
+                deinit_tv_hdr_info(context);
                 context->hdrStatus = 0;
             }
         }
@@ -5146,6 +5158,7 @@ hwc_device_open(
     }
 #endif
     init_tv_hdr_info(context);
+    context->deviceConected = getHdmiMode();
     hotplug_change_screen_config(HWC_DISPLAY_PRIMARY, 0, 1);
     return 0;
 
@@ -6015,6 +6028,7 @@ void hotplug_change_screen_config(int dpy, int fb, int state) {
         ALOGD("hwc_change_config:width=%d,height=%d",width,height);
         context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
         context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
+        context->deviceConected = state;
 #if FORCE_REFRESH
         pthread_mutex_lock(&context->mRefresh.mlk);
         context->mRefresh.count = 0;
@@ -6106,7 +6120,7 @@ int hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct 
        if (hdrFormat == 2) { 
 	        win_par->area_par[0].data_space = 0x01;
 			if (ctx->hdrSupportType & HAL_DATASPACE_TRANSFER_ST2084) {
-				if (ctx->hdrStatus==0) {
+				if (ctx->hdrStatus == 0 && ctx->deviceConected) {
 					HdmiSetHDR(4);
 					ALOGD("did_hdr_video:HdmiSetHDR"); 
 					ctx->hdrStatus = 1;
@@ -6114,7 +6128,7 @@ int hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct 
 				ctx->hdrFrameStatus = 1;
 				
 			} else if ((ctx->hdrSupportType & HAL_DATASPACE_STANDARD_BT2020)) {
-				if (ctx->hdrStatus==0) {
+				if (ctx->hdrStatus == 0 && ctx->deviceConected) {
 				  HdmiSetColorimetry(HAL_DATASPACE_STANDARD_BT2020);
 				  ALOGD("did_hdr_video:HAL_DATASPACE_STANDARD_BT2020");
 				  ctx->hdrStatus = 1;
@@ -6125,7 +6139,7 @@ int hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct 
 				ctx->hdrFrameStatus = 0;
 			}
 	   } else if (hdrFormat == 1) {
-			if (ctx->hdrStatus==0) {
+			if (ctx->hdrStatus == 0 && ctx->deviceConected) {
 			  HdmiSetColorimetry(HAL_DATASPACE_STANDARD_BT2020);
 			  ALOGD("did_hdr_video:HAL_DATASPACE_STANDARD_BT2020");
 			  ctx->hdrStatus = 1;
