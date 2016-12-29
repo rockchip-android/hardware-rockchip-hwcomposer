@@ -255,8 +255,18 @@ int DrmResources::Init() {
 
   if (!found_primary) {
 	  display_num = 0;
-
 	  for (auto &conn : connectors_) {
+		  conn->UpdateModes();
+		  if (conn->state() == DRM_MODE_CONNECTED) {
+			  conn->set_display(0);
+			  found_primary = true;
+			  display_num = 1;
+			  break;
+		  }
+	  }
+	  for (auto &conn : connectors_) {
+		  if (conn->display() == 0)
+			  continue;
 		  conn->set_display(display_num);
 		  ++display_num;
 	  }
