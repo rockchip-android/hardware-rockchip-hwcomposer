@@ -252,6 +252,10 @@ struct DrmHwcLayer {
 #if RK_VIDEO_SKIP_LINE
   bool bSkipLine;
 #endif
+#if RK_MIX
+  bool bMix;
+  hwc_layer_1_t *raw_sf_layer;
+#endif
   int format;
   int width;
   int height;

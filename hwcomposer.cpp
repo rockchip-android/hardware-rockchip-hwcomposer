@@ -635,6 +635,10 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
 #if RK_RGA
     is_rotate_by_rga = false;
 #endif
+#if RK_MIX
+    bMix = false;
+    raw_sf_layer = sf_layer;
+#endif
     bpp = android::bytesPerPixel(format);
     size = (source_crop.right - source_crop.left) * (source_crop.bottom - source_crop.top) * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
@@ -1003,6 +1007,415 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     return false;
 }
 
+#if RK_MIX
+static bool is_rec1_intersect_rec2(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
+{
+    ALOGD_IF(log_level(DBG_DEBUG),"is_not_intersect: rec1[%d,%d,%d,%d],rec2[%d,%d,%d,%d]",rec1->left,rec1->top,
+        rec1->right,rec1->bottom,rec2->left,rec2->top,rec2->right,rec2->bottom);
+    if (rec1->left >= rec2->left && rec1->left <= rec2->right) {
+        if (rec1->top >= rec2->top && rec1->top <= rec2->bottom) {
+            return true;
+        }
+        if (rec1->bottom >= rec2->top && rec1->bottom <= rec2->bottom) {
+            return true;
+        }
+    }
+    if (rec1->right >= rec2->left && rec1->right <= rec2->right) {
+        if (rec1->top >= rec2->top && rec1->top <= rec2->bottom) {
+            return true;
+        }
+        if (rec1->bottom >= rec2->top && rec1->bottom <= rec2->bottom) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
+{
+    //Don't care format.
+    if(/*layer_one->format != layer_two->format
+        ||*/ layer_one->alpha!= layer_two->alpha
+        || layer_one->is_scale || layer_two->is_scale
+        || is_rec1_intersect_rec2(&layer_one->display_frame,&layer_two->display_frame)
+        || is_rec1_intersect_rec2(&layer_two->display_frame,&layer_one->display_frame))
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer one alpha=%d,is_scale=%d",layer_one->alpha,layer_one->is_scale);
+        ALOGD_IF(log_level(DBG_DEBUG),"is_layer_combine layer two alpha=%d,is_scale=%d",layer_two->alpha,layer_two->is_scale);
+        return false;
+    }
+
+    return true;
+}
+
+static bool has_layer(std::vector<DrmHwcLayer*>& layer_vector,DrmHwcLayer &layer)
+{
+        for (std::vector<DrmHwcLayer*>::const_iterator iter = layer_vector.begin();
+               iter != layer_vector.end(); ++iter) {
+            if((*iter)->sf_handle==layer.sf_handle)
+                return true;
+          }
+
+          return false;
+}
+
+#define MOST_WIN_ZONES                  4
+typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
+typedef LayerMap::iterator LayerMapIter;
+int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers)
+{
+    /*Group layer*/
+    int zpos = 0;
+    size_t i,j;
+    uint32_t sort_cnt=0;
+    bool is_combine = false;
+    size_t min_size = (MOST_WIN_ZONES<layers.size())?MOST_WIN_ZONES:layers.size();
+
+    layer_map.clear();
+
+    for (i = 0; i < layers.size(); ) {
+        sort_cnt=0;
+        if(i == 0)
+        {
+            layer_map[zpos].push_back(&layers[0]);
+        }
+
+        if(i == min_size)
+        {
+            //We can use pre-comp to optimise.
+            ALOGD_IF(log_level(DBG_DEBUG),"combine_layer fail: it remain layer i=%zu, min_size=%zu",i,min_size);
+            return -1;
+        }
+
+        for(j = i+1; j < min_size; j++) {
+            DrmHwcLayer &layer_one = layers[j];
+            layer_one.index = j;
+            is_combine = false;
+            for(size_t k = 0; k <= sort_cnt; k++ ) {
+                DrmHwcLayer &layer_two = layers[j-1-k];
+                layer_two.index = j-1-k;
+                //juage the layer is contained in layer_vector
+                bool bHasLayerOne = has_layer(layer_map[zpos],layer_one);
+                bool bHasLayerTwo = has_layer(layer_map[zpos],layer_two);
+
+                //If it contain both of layers,then don't need to go down.
+                if(bHasLayerOne && bHasLayerTwo)
+                    continue;
+
+                if(is_layer_combine(&layer_one,&layer_two)) {
+                    //append layer into layer_vector of layer_map_.
+                    if(!bHasLayerOne && !bHasLayerTwo)
+                    {
+                        layer_map[zpos].emplace_back(&layer_one);
+                        layer_map[zpos].emplace_back(&layer_two);
+                        is_combine = true;
+                    }
+                    else if(!bHasLayerTwo)
+                    {
+                        is_combine = true;
+                        for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map[zpos].begin();
+                            iter != layer_map[zpos].end();++iter)
+                        {
+                            if((*iter)->sf_handle==layer_one.sf_handle)
+                                continue;
+
+                            if(!is_layer_combine(*iter,&layer_two))
+                            {
+                                is_combine = false;
+                                break;
+                            }
+                        }
+
+                        if(is_combine)
+                            layer_map[zpos].emplace_back(&layer_two);
+                    }
+                    else if(!bHasLayerOne)
+                    {
+                        is_combine = true;
+                        for(std::vector<DrmHwcLayer*>::const_iterator iter= layer_map[zpos].begin();
+                            iter != layer_map[zpos].end();++iter)
+                        {
+                            if((*iter)->sf_handle==layer_two.sf_handle)
+                                continue;
+
+                            if(!is_layer_combine(*iter,&layer_one))
+                            {
+                                is_combine = false;
+                                break;
+                            }
+                        }
+
+                        if(is_combine)
+                            layer_map[zpos].emplace_back(&layer_one);
+                    }
+                }
+
+                if(!is_combine)
+                {
+                    //if it cann't combine two layer,it need start a new group.
+                    if(!bHasLayerOne)
+                    {
+                        zpos++;
+                        layer_map[zpos].emplace_back(&layer_one);
+                    }
+                    is_combine = false;
+                    break;
+                }
+             }
+             sort_cnt++; //update sort layer count
+             if(!is_combine)
+             {
+                break;
+             }
+        }
+
+        if(is_combine)  //all remain layer or limit MOST_WIN_ZONES layer is combine well,it need start a new group.
+            zpos++;
+        if(sort_cnt)
+            i+=sort_cnt;    //jump the sort compare layers.
+        else
+            i++;
+    }
+
+  //sort layer by xpos
+  for (LayerMap::iterator iter = layer_map.begin();
+       iter != layer_map.end(); ++iter) {
+        if(iter->second.size() > 1) {
+            for(uint32_t i=0;i < iter->second.size()-1;i++) {
+                for(uint32_t j=i+1;j < iter->second.size();j++) {
+                     if(iter->second[i]->display_frame.left > iter->second[j]->display_frame.left) {
+                        ALOGD_IF(log_level(DBG_DEBUG),"swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
+                        std::swap(iter->second[i],iter->second[j]);
+                     }
+                 }
+            }
+        }
+  }
+
+#if RK_DRM_HWC_DEBUG
+  for (LayerMap::iterator iter = layer_map.begin();
+       iter != layer_map.end(); ++iter) {
+        ALOGD_IF(log_level(DBG_DEBUG),"layer map id=%d,size=%zu",iter->first,iter->second.size());
+        for(std::vector<DrmHwcLayer*>::const_iterator iter_layer = iter->second.begin();
+            iter_layer != iter->second.end();++iter_layer)
+        {
+             ALOGD_IF(log_level(DBG_DEBUG),"\tlayer name=%s",(*iter_layer)->name.c_str());
+        }
+  }
+#endif
+
+    return 0;
+}
+
+
+//According to zpos and combine layer count,find the suitable plane.
+bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
+                               uint64_t* zpos,
+                               DrmCrtc *crtc,
+                               DrmResources *drm)
+{
+    uint32_t combine_layer_count = 0;
+    uint32_t layer_size = layer_vector.size();
+    bool b_yuv,b_scale;
+    std::vector<PlaneGroup *> ::const_iterator iter;
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    uint64_t rotation = 0;
+    uint64_t alpha = 0xFF;
+
+    //loop plane groups.
+    for (iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+       ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%" PRIu64 ",group(%" PRIu64 ") zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
+                    __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
+        //find the match zpos plane group
+        if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%zu",__LINE__,layer_size,(*iter)->planes.size());
+
+            //find the match combine layer count with plane size.
+            if(layer_size <= (*iter)->planes.size())
+            {
+                //loop layer
+                for(std::vector<DrmHwcLayer*>::const_iterator iter_layer= layer_vector.begin();
+                    iter_layer != layer_vector.end();++iter_layer)
+                {
+                    if((*iter_layer)->is_match)
+                        continue;
+
+                    //loop plane
+                    for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
+                        !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
+                    {
+                        ALOGD_IF(1,"line=%d,crtc=0x%x,plane(%d) is_use=%d,possible_crtc_mask=0x%x",__LINE__,(1<<crtc->pipe()),
+                                (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
+                        if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
+                        {
+#if 1
+                            b_yuv  = (*iter_plane)->get_yuv();
+                            if((*iter_layer)->is_yuv && !b_yuv)
+                            {
+                                ALOGD_IF(1,"Plane(%d) cann't support yuv",(*iter_plane)->id());
+                                continue;
+                            }
+#endif
+                            b_scale = (*iter_plane)->get_scale();
+                            if((*iter_layer)->is_scale)
+                            {
+                                if(!b_scale)
+                                {
+                                    ALOGD_IF(1,"Plane(%d) cann't support scale",(*iter_plane)->id());
+                                    continue;
+                                }
+                                else
+                                {
+                                    if((*iter_layer)->h_scale_mul >= 8.0 || (*iter_layer)->v_scale_mul >= 8.0 ||
+                                        (*iter_layer)->h_scale_mul <= 0.125 || (*iter_layer)->v_scale_mul <= 0.125)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale factor(%f,%f)",
+                                                (*iter_plane)->id(), (*iter_layer)->h_scale_mul, (*iter_layer)->v_scale_mul);
+                                        continue;
+                                    }
+                                }
+                            }
+
+                            if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
+                                alpha = (*iter_layer)->alpha;
+                            if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+                            {
+                                ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
+                                ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
+                                continue;
+                            }
+#if RK_RGA
+                            if(!drm->isSupportRkRga()
+#if USE_AFBC_LAYER
+                               || isAfbcInternalFormat((*iter_layer)->internal_format)
+#endif
+                               )
+#endif
+                            {
+                                rotation = 0;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kFlipH)
+                                    rotation |= 1 << DRM_REFLECT_X;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kFlipV)
+                                    rotation |= 1 << DRM_REFLECT_Y;
+                                if ((*iter_layer)->transform & DrmHwcTransform::kRotate90)
+                                    rotation |= 1 << DRM_ROTATE_90;
+                                else if ((*iter_layer)->transform & DrmHwcTransform::kRotate180)
+                                    rotation |= 1 << DRM_ROTATE_180;
+                                else if ((*iter_layer)->transform & DrmHwcTransform::kRotate270)
+                                    rotation |= 1 << DRM_ROTATE_270;
+                                if(rotation && !(rotation & (*iter_plane)->get_rotate()))
+                                    continue;
+                            }
+
+                            ALOGD_IF(1,"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%zu",(*iter_layer)->name.c_str(),
+                                (*iter_plane)->id(),(*iter_layer)->index);
+
+                            (*iter_layer)->is_match = true;
+                            (*iter_plane)->set_use(true);
+
+                            combine_layer_count++;
+                            break;
+
+                        }
+                    }
+                }
+                if(combine_layer_count == layer_size)
+                {
+                    ALOGD_IF(1,"line=%d all match",__LINE__);
+                    //update zpos for the next time.
+                    *zpos=(*iter)->zpos+1;
+                    (*iter)->bUse = true;
+                    return true;
+                }
+            }
+            /*else
+            {
+                //1. cut out combine_layer_count to (*iter)->planes.size().
+                //2. combine_layer_count layer assign planes.
+                //3. extern layers assign planes.
+                return false;
+            }*/
+        }
+
+    }
+
+    return false;
+}
+
+bool MatchPlanes(
+  std::map<int, std::vector<DrmHwcLayer*>> &layer_map,
+  DrmCrtc *crtc,
+  DrmResources *drm)
+{
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    uint64_t last_zpos=0;
+    bool bMatch = false;
+    uint32_t planes_can_use=0;
+
+    //set use flag to false.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+        (*iter)->bUse=false;
+        for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
+            iter_plane != (*iter)->planes.end(); ++iter_plane) {
+            if((*iter_plane)->GetCrtcSupported(*crtc))  //only init the special crtc's plane
+                (*iter_plane)->set_use(false);
+        }
+    }
+
+    for (LayerMap::iterator iter = layer_map.begin();
+        iter != layer_map.end(); ++iter) {
+        bMatch = MatchPlane(iter->second, &last_zpos, crtc, drm);
+        if(!bMatch)
+        {
+            ALOGD("hwc_prepare: Cann't find the match plane for layer group %d",iter->first);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+bool mix_policy(DrmResources* drm, DrmCrtc *crtc, std::vector<DrmHwcLayer>& layers)
+{
+    LayerMap layer_map;
+    bool bMatch = false;
+    int iMatchCnt = 0;
+
+    combine_layer(layer_map,layers);
+    bMatch = MatchPlanes(layer_map,crtc,drm);
+    if(bMatch)
+    {
+        for(std::vector<DrmHwcLayer>::const_iterator iter_layer= layers.begin();
+                    iter_layer != layers.end();++iter_layer)
+        {
+            if((*iter_layer).is_match)
+            {
+                iMatchCnt++;
+            }
+        }
+
+        if(iMatchCnt == layers.size())
+            return false;
+    }
+
+    //Mix
+  if(layers.size() <= 4)
+        return false;
+
+    for (size_t i = 3; i < layers.size(); ++i)
+    {
+        ALOGD("Go into Mix");
+        layers[i].bMix = true;
+        layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+    }
+    return true;
+}
+#endif
 
 bool log_level(LOG_LEVEL log_level)
 {
@@ -1259,12 +1672,18 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
     init_log_level();
     hwc_dump_fps();
-    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
+    ALOGD_IF(1,"----------------------------frame=%d start ----------------------------",g_frame);
 #endif
+
+  std::vector<DrmHwcDisplayContents> layer_contents;
+  layer_contents.reserve(num_displays);
 
   for (int i = 0; i < (int)num_displays; ++i) {
     if (!display_contents[i])
       continue;
+
+    layer_contents.emplace_back();
+    DrmHwcDisplayContents &layer_content = layer_contents.back();
 
 #if SKIP_BOOT
     if(g_boot_cnt < BOOT_COUNT)
@@ -1324,6 +1743,35 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     video_ui_optimize(ctx, display_contents[i], &ctx->displays[i]);
 #endif
 
+#if RK_MIX
+    int ret = -1;
+    for (int j = 0; j < num_layers-1; j++) {
+      hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
+
+      layer_content.layers.emplace_back();
+      DrmHwcLayer &layer = layer_content.layers.back();
+#if RK_DRM_HWC
+      ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer.get(), ctx->gralloc);
+#else
+      ret = layer.InitFromHwcLayer(sf_layer, ctx->importer.get(), ctx->gralloc);
+#endif
+      if (ret) {
+        ALOGE("Failed to init composition from layer %d", ret);
+        return ret;
+      }
+#if RK_DRM_HWC_DEBUG
+      std::ostringstream out;
+      layer.dump_drm_layer(j,&out);
+      ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
+#endif
+
+    }
+    DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
+    mix_policy(&ctx->drm, crtc, layer_content.layers);
+
+#endif
+
+
 #endif
 
 #if RK_DRM_HWC_DEBUG
@@ -1364,7 +1812,17 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
          {
             continue;
          }
-
+#if RK_MIX
+        int layer_size = (int)layer_content.layers.size();
+        if(j < layer_size)
+        {
+            ALOGD("j=%d,layers.size()=%d",j,layer_content.layers.size());
+            if(layer_content.layers[j].bMix)
+            {
+                continue;
+            }
+        }
+#endif
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
       } else {
@@ -1400,7 +1858,20 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
       }
     }
+
+
+    for (int j = 0; j < num_layers; ++j) {
+        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+        if(layer->compositionType==HWC_FRAMEBUFFER)
+        ALOGD("%s: HWC_FRAMEBUFFER",layer->LayerName);
+        else if(layer->compositionType==HWC_OVERLAY)
+        ALOGD("%s: HWC_OVERLAY",layer->LayerName);
+        else
+        ALOGD("%s: HWC_OTHER",layer->LayerName);
+    }
   }
+
 
   return 0;
 }
@@ -1536,7 +2007,12 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     // This is a catch-all in case we get a frame without any overlay layers, or
     // skip layers, but with a value fb_target layer. This _shouldn't_ happen,
     // but it's not ruled out by the hwc specification
+#if RK_MIX
+    if ((indices_to_composite.empty() ||  indices_to_composite.size() < num_dc_layers-1)
+        && framebuffer_target_index >= 0) {
+#else
     if (indices_to_composite.empty() && framebuffer_target_index >= 0) {
+#endif
       hwc_layer_1_t *sf_layer = &dc->hwLayers[framebuffer_target_index];
       if (!sf_layer->handle || (sf_layer->flags & HWC_SKIP_LAYER)) {
         ALOGE(
