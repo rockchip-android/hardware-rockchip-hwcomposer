@@ -3377,12 +3377,18 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
+	    if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+	    {
+		fb_info.win_par[winIndex].area_par[0].xvir *= 2;
+		fb_info.win_par[winIndex].area_par[0].yvir /= 2;
+		fb_info.win_par[winIndex].area_par[0].yact /= 2;
+	    }
             /**/
             fb_info.win_par[winIndex].area_par[0].x_offset -= fb_info.win_par[winIndex].area_par[0].x_offset%2;
             fb_info.win_par[winIndex].area_par[0].y_offset -= fb_info.win_par[winIndex].area_par[0].y_offset%2;            
             fb_info.win_par[winIndex].area_par[0].xact -= fb_info.win_par[winIndex].area_par[0].xact%2;
             fb_info.win_par[winIndex].area_par[0].yact -= fb_info.win_par[winIndex].area_par[0].yact%2;
-			 //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
+	    //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
 /*
             if(handle->usage & GRALLOC_USAGE_PROTECTED)
             {
@@ -3394,14 +3400,20 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x22;
+	    if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+	    {
+		fb_info.win_par[winIndex].area_par[0].xvir *= 2;
+		fb_info.win_par[winIndex].area_par[0].yvir /= 2;
+		fb_info.win_par[winIndex].area_par[0].yact /= 2;
+	    }
             /**/
             fb_info.win_par[winIndex].area_par[0].x_offset -= fb_info.win_par[winIndex].area_par[0].x_offset%2;
             fb_info.win_par[winIndex].area_par[0].y_offset -= fb_info.win_par[winIndex].area_par[0].y_offset%2;
             fb_info.win_par[winIndex].area_par[0].xact -= fb_info.win_par[winIndex].area_par[0].xact%2;
             fb_info.win_par[winIndex].area_par[0].yact -= fb_info.win_par[winIndex].area_par[0].yact%2;
-			 //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
+	    //ALOGD("usage=%x,%x",handle->usage,GRALLOC_USAGE_PROTECTED);
 /*  
-          if(handle->usage & GRALLOC_USAGE_PROTECTED)
+	    if(handle->usage & GRALLOC_USAGE_PROTECTED)
             {
                  fb_info.win_par[winIndex].area_par[0].phy_addr = handle->phy_addr;
                  //ALOGD("video @protect phy=%x",handle->phy_addr);
