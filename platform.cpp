@@ -101,6 +101,9 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
     if (!planes.empty()) {
       squash_plane = planes.back();
 #if RK_DRM_HWC
+#if RK_ZPOS_SUPPORT
+      squash_plane->set_zpos(planes.size()-1);
+#endif
       rkSetPlaneFlag(crtc,squash_plane);
 #endif
       planes.pop_back();
@@ -108,6 +111,8 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
       ALOGI("Not enough planes to reserve for squash fb");
     }
   }
+#else
+UN_USED(use_squash_fb);
 #endif
 
 #if USE_PRE_COMP
@@ -143,11 +148,21 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
                   // Put the rest of the layers in the precomp plane
                   DrmCompositionPlane *precomp = i->GetPrecomp(&composition);
                   if (precomp) {
+#if RK_ZPOS_SUPPORT
+                        int index = 0;
+#endif
                         for (auto j = layers.begin(); j != layers.end(); j++) {
                             if(!j->second->is_take)
                             {
                                 ALOGD_IF(log_level(DBG_DEBUG),"line=%d,using precomp for layer=%s",__LINE__,
                                     j->second->name.c_str());
+#if RK_ZPOS_SUPPORT
+                                if(index == 0)
+                                {
+                                    precomp_plane->set_zpos(j->second->zpos);
+                                }
+                                index++;
+#endif
                                 precomp->source_layers().emplace_back(j->first);
                             }
                         }
@@ -179,6 +194,60 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
 }
 
 
+static std::vector<DrmPlane *> rkGetNoYuvUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->get_yuv(); }
+                       );
+  }
+  return usable_planes;
+}
+
+static std::vector<DrmPlane *> rkGetNoScaleUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->get_scale(); }
+                       );
+  }
+  return usable_planes;
+}
+
+static std::vector<DrmPlane *> rkGetNoAlphaUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->alpha_property().id(); }
+                       );
+  }
+  return usable_planes;
+}
+
 //According to zpos and combine layer count,find the suitable plane.
 bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                uint64_t* zpos,
@@ -188,7 +257,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 {
     uint32_t combine_layer_count = 0;
     uint32_t layer_size = layer_vector.size();
-    bool b_yuv,b_scale;
+    bool b_yuv=false,b_scale=false,b_alpha=false;
     std::vector<PlaneGroup *> ::const_iterator iter;
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
     uint64_t rotation = 0;
@@ -200,7 +269,11 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%" PRIu64 ",group(%" PRIu64 ") zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
                     __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
         //find the match zpos plane group
-        if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
+        if(!(*iter)->bUse
+#if !RK_ZPOS_SUPPORT
+        && (*iter)->zpos >= *zpos
+#endif
+        )
         {
             ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%zu",__LINE__,layer_size,(*iter)->planes.size());
 
@@ -229,6 +302,19 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
                                 continue;
                             }
+
+#if RK_ZPOS_SUPPORT
+                            if(!(*iter_layer)->is_yuv && b_yuv)
+                            {
+                                std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
+                                if(no_yuv_planes.size() > 0)
+                                {
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                    continue;
+                                }
+                            }
+#endif
+
 #endif
                             b_scale = (*iter_plane)->get_scale();
                             if((*iter_layer)->is_scale)
@@ -250,14 +336,41 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 }
                             }
 
+#if RK_ZPOS_SUPPORT
+                            if(!(*iter_layer)->is_scale && b_scale)
+                            {
+                                std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
+                                if(no_scale_planes.size() > 0)
+                                {
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
+                                    continue;
+                                }
+                            }
+#endif
+
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
                                 alpha = (*iter_layer)->alpha;
-                            if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+
+                            b_alpha = (*iter_plane)->alpha_property().id()?true:false;
+                            if(alpha != 0xFF && !b_alpha)
                             {
                                 ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
                                 ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
                                 continue;
                             }
+
+#if RK_ZPOS_SUPPORT
+                            if(alpha == 0xFF && b_alpha)
+                            {
+                                std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
+                                if(no_alpha_planes.size() > 0)
+                                {
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                    continue;
+                                }
+                            }
+#endif
+
 #if RK_RGA
                             if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
@@ -287,7 +400,9 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             composition_plane->emplace_back(DrmCompositionPlane::Type::kLayer, (*iter_plane), crtc, (*iter_layer)->index);
                             (*iter_layer)->is_match = true;
                             (*iter_plane)->set_use(true);
-
+#if RK_ZPOS_SUPPORT
+                            (*iter_plane)->set_zpos((*iter_layer)->zpos);
+#endif
                             combine_layer_count++;
                             break;
 
@@ -298,7 +413,11 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 {
                     ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
-                    *zpos=(*iter)->zpos+1;
+#if RK_ZPOS_SUPPORT
+                     *zpos=(*iter)->zpos+1;
+#else
+                     *zpos += 1;
+#endif
                     (*iter)->bUse = true;
                     return true;
                 }
@@ -420,7 +539,7 @@ int PlanStageProtected::ProvisionPlanes(
                        size_t source_layer,
                        DrmHwcLayer* layer)
     {
-        bool b_yuv,b_scale;
+        bool b_yuv=false,b_scale=false,b_alpha=false;
         DrmResources* drm = crtc->getDrmReoources();
         std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
         uint64_t rotation = 0;
@@ -446,6 +565,18 @@ int PlanStageProtected::ProvisionPlanes(
                                     b_yuv  = (*iter_plane)->get_yuv();
                                     if(layer->is_yuv && !b_yuv)
                                         continue;
+#if RK_ZPOS_SUPPORT
+                                    if(!layer->is_yuv && b_yuv)
+                                    {
+                                        std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
+                                        if(no_yuv_planes.size() > 0)
+                                        {
+                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                            continue;
+                                        }
+                                    }
+#endif
+
 #endif
                                     b_scale = (*iter_plane)->get_scale();
                                     if(layer->is_scale)
@@ -467,15 +598,41 @@ int PlanStageProtected::ProvisionPlanes(
                                         }
                                     }
 
+#if RK_ZPOS_SUPPORT
+                                    if(!layer->is_scale && b_scale)
+                                    {
+                                        std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
+                                        if(no_scale_planes.size() > 0)
+                                        {
+                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
+                                            continue;
+                                        }
+                                    }
+#endif
 
                                    if (layer->blending == DrmHwcBlending::kPreMult)
                                         alpha = layer->alpha;
-                                    if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+
+                                    b_alpha = (*iter_plane)->alpha_property().id()?true:false;
+                                    if(alpha != 0xFF && !b_alpha)
                                     {
                                         ALOGV("layer name=%s,plane id=%d",layer->name.c_str(),(*iter_plane)->id());
                                         ALOGV("layer alpha=0x%x,alpha id=%d",layer->alpha,(*iter_plane)->alpha_property().id());
                                         continue;
                                     }
+
+#if RK_ZPOS_SUPPORT
+                                    if(alpha == 0xFF && b_alpha)
+                                    {
+                                        std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
+                                        if(no_alpha_planes.size() > 0)
+                                        {
+                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                            continue;
+                                        }
+                                    }
+#endif
+
 #if RK_RGA
                                     if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
@@ -505,6 +662,9 @@ int PlanStageProtected::ProvisionPlanes(
                                 }
 
                                 (*iter_plane)->set_use(true);
+#if RK_ZPOS_SUPPORT
+                                (*iter_plane)->set_zpos(layer->zpos);
+#endif
                                 (*iter)->bUse = true;
 #if USE_PRE_COMP
                                 auto precomp = GetPrecompIter(composition);
@@ -581,15 +741,24 @@ int PlanStageGreedy::ProvisionPlanes(
   DrmCompositionPlane *precomp = GetPrecomp(composition);
   if (precomp) {
 #if RK_DRM_HWC
+#if RK_ZPOS_SUPPORT
+    int index=0;
+#endif
     for (auto i = layers.begin(); i != layers.end(); i++) {
 #else
     for (auto i = layers.begin(); i != layers.end(); i = layers.erase(i)) {
-#endif
+#endif //end of RK_DRM_HWC
 
 #if RK_DRM_HWC
         if(!i->second->is_take)
         {
             precomp->source_layers().emplace_back(i->first);
+#if RK_ZPOS_SUPPORT
+            if(index == 0)
+                precomp->plane()->set_zpos(i->second->zpos);
+
+            index++;
+#endif
             ALOGD_IF(log_level(DBG_DEBUG),"line=%d,using precomp for layer=%s",__LINE__,
                 i->second->name.c_str());
         }

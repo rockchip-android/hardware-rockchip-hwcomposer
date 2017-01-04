@@ -1399,7 +1399,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, std::vector<DrmHwcLayer>& laye
             }
         }
 
-        if(iMatchCnt == layers.size())
+        if(iMatchCnt == (int)layers.size())
             return false;
     }
 
@@ -2055,6 +2055,9 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     map.geometry_changed =
         (dc->flags & HWC_GEOMETRY_CHANGED) == HWC_GEOMETRY_CHANGED;
     std::vector<size_t> &indices_to_composite = layers_indices[i];
+#if RK_ZPOS_SUPPORT
+    int zpos = 0;
+#endif
     for (size_t j : indices_to_composite) {
       hwc_layer_1_t *sf_layer = &dc->hwLayers[j];
 
@@ -2068,6 +2071,11 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         ALOGE("Failed to init composition from layer %d", ret);
         return ret;
       }
+#if RK_ZPOS_SUPPORT
+      layer.zpos = zpos;
+      zpos++;
+#endif
+
 #if RK_DRM_HWC_DEBUG
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);

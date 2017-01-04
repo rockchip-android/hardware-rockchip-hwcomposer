@@ -240,6 +240,10 @@ struct DrmHwcLayer {
   bool is_yuv;
   bool is_scale;
   bool is_large;
+#if RK_ZPOS_SUPPORT
+  int zpos;
+#endif
+
 #if USE_AFBC_LAYER
   uint64_t internal_format;
 #endif

@@ -643,6 +643,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       to_composite.emplace(std::make_pair(i, &layers_[i]));
   }
 #else
+    UN_USED(squash);
     for (size_t i = 0; i < layers_.size(); ++i)
       to_composite.emplace(std::make_pair(i, &layers_[i]));
 #endif

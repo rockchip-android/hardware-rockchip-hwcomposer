@@ -1221,6 +1221,10 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->src_h_property().id(),
                src_h << 16) < 0;
+#if RK_ZPOS_SUPPORT
+    ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                   plane->zpos_property().id(), plane->get_zpos()) < 0;
+#endif
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
       break;
@@ -1239,7 +1243,12 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << "," << dst_h << "]"
             << " source_crop[" << src_l << ","
             << src_t << "," << src_w
-            << "," << src_h << "]";
+            << "," << src_h << "]"
+#if RK_ZPOS_SUPPORT
+            << ", zpos=" << plane->get_zpos();
+#else
+            ;
+#endif
     index++;
 #endif
 

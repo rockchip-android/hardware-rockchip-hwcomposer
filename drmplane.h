@@ -85,6 +85,10 @@ class DrmPlane {
   bool get_yuv();
   void set_yuv(bool b_yuv);
   const DrmProperty &zpos_property() const;
+#if RK_ZPOS_SUPPORT
+  int get_zpos() { return zpos_; }
+  void set_zpos( int zpos) { zpos_ =  zpos; }
+#endif
   const DrmProperty &share_id_property() const;
   const DrmProperty &feature_property() const;
   bool is_reserved();
@@ -128,6 +132,9 @@ class DrmPlane {
   bool b_use_;
   bool b_yuv_;
   bool b_scale_;
+#if RK_ZPOS_SUPPORT
+  int zpos_;
+#endif
 #endif
 
   drmModePlanePtr plane_;
