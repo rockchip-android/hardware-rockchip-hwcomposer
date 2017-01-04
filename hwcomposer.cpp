@@ -1247,7 +1247,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                     for(std::vector<DrmPlane*> ::const_iterator iter_plane=(*iter)->planes.begin();
                         !(*iter)->planes.empty() && iter_plane != (*iter)->planes.end(); ++iter_plane)
                     {
-                        ALOGD_IF(1,"line=%d,crtc=0x%x,plane(%d) is_use=%d,possible_crtc_mask=0x%x",__LINE__,(1<<crtc->pipe()),
+                        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,crtc=0x%x,plane(%d) is_use=%d,possible_crtc_mask=0x%x",__LINE__,(1<<crtc->pipe()),
                                 (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
@@ -1255,7 +1255,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             b_yuv  = (*iter_plane)->get_yuv();
                             if((*iter_layer)->is_yuv && !b_yuv)
                             {
-                                ALOGD_IF(1,"Plane(%d) cann't support yuv",(*iter_plane)->id());
+                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
                                 continue;
                             }
 #endif
@@ -1264,7 +1264,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             {
                                 if(!b_scale)
                                 {
-                                    ALOGD_IF(1,"Plane(%d) cann't support scale",(*iter_plane)->id());
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support scale",(*iter_plane)->id());
                                     continue;
                                 }
                                 else
@@ -1310,7 +1310,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                     continue;
                             }
 
-                            ALOGD_IF(1,"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%zu",(*iter_layer)->name.c_str(),
+                            ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%zu",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
 
                             (*iter_layer)->is_match = true;
@@ -1324,7 +1324,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 }
                 if(combine_layer_count == layer_size)
                 {
-                    ALOGD_IF(1,"line=%d all match",__LINE__);
+                    ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
                     *zpos=(*iter)->zpos+1;
                     (*iter)->bUse = true;
@@ -1371,7 +1371,7 @@ bool MatchPlanes(
         bMatch = MatchPlane(iter->second, &last_zpos, crtc, drm);
         if(!bMatch)
         {
-            ALOGD("hwc_prepare: Cann't find the match plane for layer group %d",iter->first);
+            ALOGD_IF(log_level(DBG_DEBUG),"hwc_prepare: Cann't find the match plane for layer group %d",iter->first);
             return false;
         }
     }
@@ -1409,7 +1409,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, std::vector<DrmHwcLayer>& laye
 
     for (size_t i = 3; i < layers.size(); ++i)
     {
-        ALOGD("Go into Mix");
+        ALOGD_IF(log_level(DBG_DEBUG),"Go into Mix");
         layers[i].bMix = true;
         layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
     }
@@ -1672,7 +1672,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_DRM_HWC_DEBUG
     init_log_level();
     hwc_dump_fps();
-    ALOGD_IF(1,"----------------------------frame=%d start ----------------------------",g_frame);
+    ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",g_frame);
 #endif
 
   std::vector<DrmHwcDisplayContents> layer_contents;
@@ -1747,6 +1747,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int ret = -1;
     for (int j = 0; j < num_layers-1; j++) {
       hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
+      if(sf_layer->handle == NULL)
+        continue;
 
       layer_content.layers.emplace_back();
       DrmHwcLayer &layer = layer_content.layers.back();
@@ -1816,7 +1818,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         int layer_size = (int)layer_content.layers.size();
         if(j < layer_size)
         {
-            ALOGD("j=%d,layers.size()=%d",j,layer_content.layers.size());
             if(layer_content.layers[j].bMix)
             {
                 continue;
@@ -1864,11 +1865,11 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
         if(layer->compositionType==HWC_FRAMEBUFFER)
-        ALOGD("%s: HWC_FRAMEBUFFER",layer->LayerName);
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_FRAMEBUFFER",layer->LayerName);
         else if(layer->compositionType==HWC_OVERLAY)
-        ALOGD("%s: HWC_OVERLAY",layer->LayerName);
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OVERLAY",layer->LayerName);
         else
-        ALOGD("%s: HWC_OTHER",layer->LayerName);
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OTHER",layer->LayerName);
     }
   }
 
