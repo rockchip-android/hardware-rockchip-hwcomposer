@@ -199,6 +199,16 @@ int DrmDisplayCompositor::FrameWorker::Init() {
 
 void DrmDisplayCompositor::FrameWorker::QueueFrame(
     std::unique_ptr<DrmDisplayComposition> composition, int status) {
+
+  /* ----------rk modified----------
+   * Block the queue if it gets too large.
+   * If we don't set this limitation,sometimes it will lead many frames' acquirefence don't signal,
+   * finanlly,lead fd leak out.
+   */
+  while (frame_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH) {
+    usleep(DRM_QUEUE_USLEEP);
+  }
+
   Lock();
   FrameState frame;
   frame.composition = std::move(composition);
@@ -1064,6 +1074,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
               if (ret)
                 ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
                       acquire_fence, i, ret, total_fence_timeout);
+              else
+                break;  //rk: wait successfully
             }
             if (ret) {
               ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);

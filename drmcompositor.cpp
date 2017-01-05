@@ -81,7 +81,7 @@ int DrmCompositor::QueueComposition(
     int ret = compositor_map_[display].QueueComposition(
         composition->TakeDisplayComposition(display));
     if (ret) {
-      ALOGE("Failed to queue composition for display %d (%d)", display, ret);
+      ALOGV("Failed to queue composition for display %d (%d)", display, ret);
       return ret;
     }
   }

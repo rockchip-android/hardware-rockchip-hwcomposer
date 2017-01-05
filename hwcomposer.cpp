@@ -1511,6 +1511,15 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       if (sf_layer->compositionType == HWC_OVERLAY)
         indices_to_composite.push_back(j);
 
+        // rk: wait acquireFenceFd at hwc_set.
+#if 0
+        if(sf_layer->acquireFenceFd > 0)
+        {
+            sync_wait(sf_layer->acquireFenceFd, -1);
+            close(sf_layer->acquireFenceFd);
+            sf_layer->acquireFenceFd = -1;
+        }
+#endif
       layer.acquire_fence.Set(sf_layer->acquireFenceFd);
       sf_layer->acquireFenceFd = -1;
 
