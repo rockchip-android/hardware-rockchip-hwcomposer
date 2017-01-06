@@ -598,7 +598,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     }
     mode = c->active_mode();
     format = hwc_get_handle_attibute(ctx,sf_layer->handle,ATT_FORMAT);
-    if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
+    if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         is_yuv = true;
     else
         is_yuv = false;
