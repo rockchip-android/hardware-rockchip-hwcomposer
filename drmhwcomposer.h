@@ -96,6 +96,16 @@ enum LOG_LEVEL
 };
 bool log_level(LOG_LEVEL log_level);
 
+#if RK_MIX
+typedef enum tagMixMode
+{
+    HWC_DEFAULT,
+    HWC_MIX_DOWN,
+    HWC_MIX_UP,
+    HWC_POLICY_NUM
+}MixMode;
+#endif
+
 #if RK_DRM_HWC_DEBUG
 /* interval ms of print fps.*/
 #define HWC_DEBUG_FPS_INTERVAL_MS 1

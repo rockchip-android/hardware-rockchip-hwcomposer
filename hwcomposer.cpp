@@ -282,6 +282,9 @@ typedef struct hwc_drm_display {
 #if RK_10BIT_BYPASS
   bool is10bitVideo;
 #endif
+#if RK_MIX
+  MixMode mixMode;
+#endif
   std::vector<uint32_t> config_ids;
 
   VSyncWorker vsync_worker;
@@ -1380,7 +1383,7 @@ bool MatchPlanes(
 }
 
 
-bool mix_policy(DrmResources* drm, DrmCrtc *crtc, std::vector<DrmHwcLayer>& layers)
+bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
 {
     LayerMap layer_map;
     bool bMatch = false;
@@ -1407,10 +1410,25 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, std::vector<DrmHwcLayer>& laye
   if(layers.size() <= 4)
         return false;
 
+    //mix down
+    if(layers.size() <= 6 )
+    {
+        for (size_t i = 0; i < 2; ++i)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
+            layers[i].bMix = true;
+            hd->mixMode = HWC_MIX_DOWN;
+            layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+        }
+        return true;
+    }
+
+    //mix up
     for (size_t i = 3; i < layers.size(); ++i)
     {
-        ALOGD_IF(log_level(DBG_DEBUG),"Go into Mix");
+        ALOGD_IF(log_level(DBG_DEBUG),"Go into Mix up");
         layers[i].bMix = true;
+        hd->mixMode = HWC_MIX_UP;
         layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
     }
     return true;
@@ -1769,7 +1787,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     }
     DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
-    mix_policy(&ctx->drm, crtc, layer_content.layers);
+    hd->mixMode = HWC_DEFAULT;
+    mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
 
 #endif
 
@@ -2009,7 +2028,8 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     // skip layers, but with a value fb_target layer. This _shouldn't_ happen,
     // but it's not ruled out by the hwc specification
 #if RK_MIX
-    if ((indices_to_composite.empty() ||  indices_to_composite.size() < num_dc_layers-1)
+    hwc_drm_display_t *hd = &ctx->displays[i];
+    if ((indices_to_composite.empty() ||  hd->mixMode != HWC_DEFAULT)
         && framebuffer_target_index >= 0) {
 #else
     if (indices_to_composite.empty() && framebuffer_target_index >= 0) {
@@ -2022,7 +2042,14 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         fail_displays.emplace_back(i);
         ret = -EINVAL;
       }
-      indices_to_composite.push_back(framebuffer_target_index);
+      if(hd->mixMode == HWC_MIX_DOWN)
+      {
+        //In mix mode, fb layer need place at first.
+        std::vector<size_t>::iterator it = indices_to_composite.begin();
+        indices_to_composite.insert(it, framebuffer_target_index);
+      }
+      else
+        indices_to_composite.push_back(framebuffer_target_index);
     }
   }
 
