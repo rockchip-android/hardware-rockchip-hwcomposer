@@ -617,7 +617,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     }
 
 #if RK_DRM_HWC_DEBUG
-    DumpLayer("rga", dst.hnd);
+    //DumpLayer("rga", dst.hnd);
 #endif
 
     //instead of the original DrmHwcLayer
@@ -1046,6 +1046,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_RGA
     bool is_rotate_by_rga = false;
 #endif
+#if RK_ZPOS_SUPPORT
+    int zpos = 0;
+#endif
 
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
@@ -1059,6 +1062,15 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
               source_layers.front(), layers.size(), comp_plane.type());
         break;
       }
+
+#if RK_ZPOS_SUPPORT
+      zpos = comp_plane.get_zpos();
+      if(zpos < 0)
+      {
+        ALOGE("The zpos(%d) is invalid", zpos);
+      }
+#endif
+
       DrmHwcLayer &layer = layers[source_layers.front()];
       if (!test_only && layer.acquire_fence.get() >= 0) {
         int acquire_fence = layer.acquire_fence.get();
@@ -1096,6 +1108,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_VIDEO_SKIP_LINE
       bSkipLine = layer.bSkipLine;
 #endif
+
       fb_id = layer.buffer->fb_id;
       display_frame = layer.display_frame;
       source_crop = layer.source_crop;
@@ -1125,6 +1138,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       else if (layer.transform & DrmHwcTransform::kRotate270)
         rotation |= 1 << DRM_ROTATE_270;
     }
+
     // Disable the plane if there's no framebuffer
     if (fb_id < 0) {
       ret = drmModeAtomicAddProperty(pset, plane->id(),
@@ -1223,7 +1237,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                src_h << 16) < 0;
 #if RK_ZPOS_SUPPORT
     ret = drmModeAtomicAddProperty(pset, plane->id(),
-                                   plane->zpos_property().id(), plane->get_zpos()) < 0;
+                                   plane->zpos_property().id(), zpos) < 0;
 #endif
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
@@ -1245,7 +1259,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << src_t << "," << src_w
             << "," << src_h << "]"
 #if RK_ZPOS_SUPPORT
-            << ", zpos=" << plane->get_zpos();
+            << ", zpos=" << zpos;
 #else
             ;
 #endif
@@ -1637,7 +1651,12 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
     }
 
     if (!squashed_comp.plane())
+    {
       squashed_comp.set_plane(comp_plane.plane());
+#if RK_ZPOS_SUPPORT
+      squashed_comp.set_zpos(0);
+#endif
+    }
     else
       dst->AddPlaneDisable(comp_plane.plane());
   }

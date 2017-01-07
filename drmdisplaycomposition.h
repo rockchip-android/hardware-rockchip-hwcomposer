@@ -100,11 +100,19 @@ class DrmCompositionPlane {
     return source_layers_;
   }
 
+#if RK_ZPOS_SUPPORT
+  int get_zpos() { return zpos_; }
+  void set_zpos( int zpos) { zpos_ =  zpos; }
+#endif
+
 #if RK_DRM_HWC_DEBUG
   void dump_drm_com_plane(int index, std::ostringstream *out) const;
 #endif
 
  private:
+#if RK_ZPOS_SUPPORT
+  int zpos_;
+#endif
   Type type_ = Type::kDisable;
   DrmPlane *plane_ = NULL;
   DrmCrtc *crtc_ = NULL;

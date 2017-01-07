@@ -88,6 +88,7 @@ static int init_log_level()
  * @param layer 		layer data
  * @return 				Errno no
  */
+ #define DUMP_LAYER_CNT (10)
 int DumpLayer(const char* layer_name,buffer_handle_t handle)
 {
     char pro_value[PROPERTY_VALUE_MAX];
@@ -127,7 +128,7 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
         DumpSurfaceCount++;
         sprintf(data_name,"/data/dump/dmlayer%d_%d_%d.bin", DumpSurfaceCount,
                 gr_handle->pixel_stride,gr_handle->height);
-        gralloc->lock(gralloc, handle, gr_handle->usage,
+        gralloc->lock(gralloc, handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK, //gr_handle->usage,
                         0, 0, gr_handle->width, gr_handle->height, (void **)&cpu_addr);
         pfile = fopen(data_name,"wb");
         if(pfile)
@@ -140,7 +141,8 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
         }
         gralloc->unlock(gralloc, handle);
         //only dump once time.
-        property_set("sys.dump","0");
+        if(DumpSurfaceCount == DUMP_LAYER_CNT)
+            property_set("sys.dump","0");
         gralloc_drm_unlock_handle(handle);
     }
 
@@ -957,7 +959,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
         if(layer->handle)
         {
 #if RK_DRM_HWC_DEBUG
-            //DumpLayer(layer->LayerName,layer->handle);
+            DumpLayer(layer->LayerName,layer->handle);
 #endif
             format = hwc_get_handle_attibute(ctx,layer->handle,ATT_FORMAT);
             if(!vop_support_format(format))
@@ -2042,6 +2044,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         fail_displays.emplace_back(i);
         ret = -EINVAL;
       }
+#if RK_MIX
       if(hd->mixMode == HWC_MIX_DOWN)
       {
         //In mix mode, fb layer need place at first.
@@ -2049,6 +2052,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         indices_to_composite.insert(it, framebuffer_target_index);
       }
       else
+#endif
         indices_to_composite.push_back(framebuffer_target_index);
     }
   }

@@ -101,9 +101,6 @@ std::tuple<int, std::vector<DrmCompositionPlane>> Planner::ProvisionPlanes(
     if (!planes.empty()) {
       squash_plane = planes.back();
 #if RK_DRM_HWC
-#if RK_ZPOS_SUPPORT
-      squash_plane->set_zpos(planes.size()-1);
-#endif
       rkSetPlaneFlag(crtc,squash_plane);
 #endif
       planes.pop_back();
@@ -159,7 +156,7 @@ UN_USED(use_squash_fb);
 #if RK_ZPOS_SUPPORT
                                 if(index == 0)
                                 {
-                                    precomp_plane->set_zpos(j->second->zpos);
+                                    precomp->set_zpos(j->second->zpos);
                                 }
                                 index++;
 #endif
@@ -186,8 +183,13 @@ UN_USED(use_squash_fb);
 
 #if USE_SQUASH
   if (squash_plane)
+  {
     composition.emplace_back(DrmCompositionPlane::Type::kSquash, squash_plane,
                              crtc);
+#if RK_ZPOS_SUPPORT
+    composition.back().set_pos(planes.size()-1);
+#endif
+  }
 #endif
 
   return std::make_tuple(0, std::move(composition));
@@ -401,7 +403,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                             (*iter_layer)->is_match = true;
                             (*iter_plane)->set_use(true);
 #if RK_ZPOS_SUPPORT
-                            (*iter_plane)->set_zpos((*iter_layer)->zpos);
+                            composition_plane->back().set_zpos((*iter_layer)->zpos);
 #endif
                             combine_layer_count++;
                             break;
@@ -413,11 +415,7 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 {
                     ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
-#if RK_ZPOS_SUPPORT
-                     *zpos=(*iter)->zpos+1;
-#else
                      *zpos += 1;
-#endif
                     (*iter)->bUse = true;
                     return true;
                 }
@@ -662,15 +660,19 @@ int PlanStageProtected::ProvisionPlanes(
                                 }
 
                                 (*iter_plane)->set_use(true);
-#if RK_ZPOS_SUPPORT
-                                (*iter_plane)->set_zpos(layer->zpos);
-#endif
+
                                 (*iter)->bUse = true;
 #if USE_PRE_COMP
                                 auto precomp = GetPrecompIter(composition);
-                                composition->emplace(precomp, type, (*iter_plane), crtc, source_layer);
+                                std::vector<DrmCompositionPlane>::iterator composition_iter = composition->emplace(precomp, type, (*iter_plane), crtc, source_layer);
+#if RK_ZPOS_SUPPORT
+                                (*composition_iter).set_zpos(layer->zpos);
+#endif
 #else
                                 composition->emplace_back(type, (*iter_plane), crtc, source_layer);
+#if RK_ZPOS_SUPPORT
+                                composition.back().set_pos(layer->zpos);
+#endif
 #endif
                                 return 0;
                             }
@@ -755,7 +757,7 @@ int PlanStageGreedy::ProvisionPlanes(
             precomp->source_layers().emplace_back(i->first);
 #if RK_ZPOS_SUPPORT
             if(index == 0)
-                precomp->plane()->set_zpos(i->second->zpos);
+                precomp->set_zpos(i->second->zpos);
 
             index++;
 #endif
