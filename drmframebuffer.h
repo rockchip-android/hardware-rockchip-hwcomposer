@@ -149,7 +149,7 @@ struct DrmFramebuffer {
                                 GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |
                                     GRALLOC_USAGE_HW_COMPOSER
 //close fbdc for pre-comp and squash layer.
-#if USE_AFBC_LAYER
+#if 0
                                     | MAGIC_USAGE_FOR_AFBC_LAYER
 #endif
                                     );
