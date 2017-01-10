@@ -162,32 +162,45 @@ void VSyncWorker::Routine() {
   if (!enabled)
     return;
 
-  DrmCrtc *crtc = drm_->GetCrtcForDisplay(display);
-  if (!crtc) {
-    ALOGE("Failed to get crtc for display");
-    return;
+    int64_t timestamp;
+    DrmConnector *conn = drm_->GetConnectorForDisplay(display);
+    if (!conn) {
+        ALOGE("Failed to get connector for display");
+         return;
+    }
+
+    if (conn->is_fake()) {
+        ret = SyntheticWaitVBlank(&timestamp);
+        if (ret)
+            return;
+    }
+    else
+    {
+      DrmCrtc *crtc = drm_->GetCrtcForDisplay(display);
+      if (!crtc) {
+        ALOGE("Failed to get crtc for display");
+        return;
+      }
+      uint32_t high_crtc = (crtc->pipe() << DRM_VBLANK_HIGH_CRTC_SHIFT);
+
+      drmVBlank vblank;
+      memset(&vblank, 0, sizeof(vblank));
+      vblank.request.type = (drmVBlankSeqType)(
+          DRM_VBLANK_RELATIVE | (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
+      vblank.request.sequence = 1;
+
+      ret = drmWaitVBlank(drm_->fd(), &vblank);
+      if (ret == -EINTR) {
+        return;
+      } else if (ret) {
+        ret = SyntheticWaitVBlank(&timestamp);
+        if (ret)
+          return;
+      } else {
+        timestamp = (int64_t)vblank.reply.tval_sec * kOneSecondNs +
+                    (int64_t)vblank.reply.tval_usec * 1000;
+      }
   }
-  uint32_t high_crtc = (crtc->pipe() << DRM_VBLANK_HIGH_CRTC_SHIFT);
-
-  drmVBlank vblank;
-  memset(&vblank, 0, sizeof(vblank));
-  vblank.request.type = (drmVBlankSeqType)(
-      DRM_VBLANK_RELATIVE | (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
-  vblank.request.sequence = 1;
-
-  int64_t timestamp;
-  ret = drmWaitVBlank(drm_->fd(), &vblank);
-  if (ret == -EINTR) {
-    return;
-  } else if (ret) {
-    ret = SyntheticWaitVBlank(&timestamp);
-    if (ret)
-      return;
-  } else {
-    timestamp = (int64_t)vblank.reply.tval_sec * kOneSecondNs +
-                (int64_t)vblank.reply.tval_usec * 1000;
-  }
-
   /*
    * There's a race here where a change in procs_ will not take effect until
    * the next subsequent requested vsync. This is unavoidable since we can't

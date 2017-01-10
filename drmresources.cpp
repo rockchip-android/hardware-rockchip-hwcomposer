@@ -254,15 +254,45 @@ int DrmResources::Init() {
   }
 
   if (!found_primary) {
-	  display_num = 0;
-	  for (auto &conn : connectors_) {
-		  conn->UpdateModes();
-		  if (conn->state() == DRM_MODE_CONNECTED) {
-			  conn->set_display(0);
-			  found_primary = true;
-			  display_num = 1;
-			  break;
-		  }
+        display_num = 0;
+        for (auto &conn : connectors_) {
+            conn->UpdateModes();
+            if (conn->state() == DRM_MODE_CONNECTED) {
+                conn->set_display(0);
+                found_primary = true;
+                display_num = 1;
+                break;
+            }
+
+            if(conn->get_type() == DRM_MODE_CONNECTOR_HDMIA ||
+                conn->get_type() == DRM_MODE_CONNECTOR_HDMIB) {
+                conn->set_display(0);
+                found_primary = true;
+                display_num = 1;
+
+                drmModeModeInfo m;
+                memset(&m, 0, sizeof(m));
+                char value[PROPERTY_VALUE_MAX];
+                property_get("hwc.fake_primary.xres", value, "1920");
+                m.hdisplay = atoi(value);
+                property_get("hwc.fake_primary.yres", value, "1080");
+                m.vdisplay = atoi(value);
+                property_get("hwc.fake_primary.vrefresh", value, "60");
+                m.vrefresh = atoi(value);
+
+                DrmMode mode(&m);
+                mode.set_id(next_mode_id());
+
+                drmModeConnectorPtr pConnector = conn->get_connector();
+                pConnector->mmWidth = m.hdisplay;
+                pConnector->mmHeight = m.vdisplay;
+                pConnector->connection = DRM_MODE_CONNECTED;
+                conn->update_size(m.hdisplay, m.vdisplay);
+                conn->update_state(DRM_MODE_CONNECTED);
+                conn->set_active_mode(mode);
+                conn->set_fake_mode(mode);
+                conn->set_fake(true);
+            }
 	  }
 	  for (auto &conn : connectors_) {
 		  if (conn->display() == 0)

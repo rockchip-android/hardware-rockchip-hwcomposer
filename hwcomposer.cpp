@@ -301,6 +301,15 @@ class DrmHotplugHandler : public DrmEventHandler {
 
   void HandleEvent(uint64_t timestamp_us) {
     for (auto &conn : drm_->connectors()) {
+
+        if(conn->is_fake())
+        {
+            drmModeConnectorPtr pConnector = conn->get_connector();
+            pConnector->connection = DRM_MODE_DISCONNECTED;
+            conn->update_state(DRM_MODE_DISCONNECTED);
+            conn->set_fake(false);
+        }
+
       drmModeConnection old_state = conn->state();
 
       conn->UpdateModes();
@@ -1717,6 +1726,18 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     bool use_framebuffer_target = false;
     DrmMode mode;
     drmModeConnection state;
+    int num_layers = display_contents[i]->numHwLayers;
+
+    for (int j = 0; j < num_layers-1; j++) {
+        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+        if(layer->handle)
+        {
+            if(layer->compositionType == HWC_NODRAW)
+                layer->compositionType = HWC_FRAMEBUFFER;
+        }
+    }
+
     if (i == HWC_DISPLAY_VIRTUAL) {
       use_framebuffer_target = true;
     } else {
@@ -1725,6 +1746,12 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         ALOGE("Failed to get DrmConnector for display %d", i);
         return -ENODEV;
       }
+
+      if (c->is_fake()) {
+        hwc_list_nodraw(display_contents[i]);
+        continue;
+      }
+
       mode = c->active_mode();
       state = c->state();
     }
@@ -1733,7 +1760,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     // handle all layers in between the first and last skip layers. So find the
     // outer indices and mark everything in between as HWC_FRAMEBUFFER
     std::pair<int, int> skip_layer_indices(-1, -1);
-    int num_layers = display_contents[i]->numHwLayers;
 
 #if RK_DRM_HWC
 
@@ -1955,6 +1981,13 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 #endif
 
+      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
+
+      if (c && c->is_fake()) {
+        hwc_sync_release(sf_display_contents[i]);
+        continue;
+      }
+
     if (i == HWC_DISPLAY_VIRTUAL) {
       ctx->virtual_compositor_worker.QueueComposite(dc);
       continue;
@@ -2141,6 +2174,11 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     if (!dc)
       continue;
 
+      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
+
+      if (c && c->is_fake())
+        continue;
+
 #if RK_10BIT_BYPASS
     ctx->drm.compositor()->setSkipPreComp(i,hd->is10bitVideo);
 #endif
@@ -2313,7 +2351,6 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
     ALOGE("Failed to find active mode for display %d", display);
     return -ENOENT;
   }
-
   uint32_t mm_width = c->mm_width();
   uint32_t mm_height = c->mm_height();
   for (int i = 0; attributes[i] != HWC_DISPLAY_NO_ATTRIBUTE; ++i) {

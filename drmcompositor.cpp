@@ -78,6 +78,10 @@ int DrmCompositor::QueueComposition(
 
   for (auto &conn : drm_->connectors()) {
     int display = conn->display();
+
+    if (conn->is_fake())
+      continue;
+
     int ret = compositor_map_[display].QueueComposition(
         composition->TakeDisplayComposition(display));
     if (ret) {

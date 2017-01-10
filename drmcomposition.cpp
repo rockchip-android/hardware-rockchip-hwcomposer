@@ -116,6 +116,10 @@ int DrmComposition::Plan(std::map<int, DrmDisplayCompositor> &compositor_map) {
   int ret = 0;
   for (auto &conn : drm_->connectors()) {
     int display = conn->display();
+
+    if (conn->is_fake())
+      continue;
+
     DrmDisplayComposition *comp = GetDisplayComposition(display);
     ret = comp->Plan(compositor_map[display].squash_state(), &primary_planes_,
                      &overlay_planes_);
@@ -135,6 +139,9 @@ std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
   for (auto &conn : drm_->connectors()) {
     int display = conn->display();
     DrmDisplayComposition *comp = GetDisplayComposition(display);
+
+    if (conn->is_fake())
+      continue;
 
     /*
      * Leave empty compositions alone
