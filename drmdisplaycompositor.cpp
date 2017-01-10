@@ -868,6 +868,10 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   bool do_pre_comp = pre_comp_regions.size() > 0;
   int pre_comp_layer_index = -1;
   if (do_pre_comp) {
+#if USE_AFBC_LAYER
+    DrmFramebuffer &fb = framebuffers_[framebuffer_index_];
+    fb.set_afbc(false);
+#endif
     ret = ApplyPreComposite(display_comp);
     if (ret)
       return ret;
@@ -1598,7 +1602,9 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
 
   std::vector<DrmCompositionPlane> &src_planes = src->composition_planes();
   std::vector<DrmHwcLayer> &src_layers = src->layers();
-
+#if USE_AFBC_LAYER
+  DrmFramebuffer &fb = framebuffers_[framebuffer_index_];
+#endif
   // Make sure there is more than one layer to squash.
   size_t src_planes_with_layer = std::count_if(
       src_planes.begin(), src_planes.end(), [](DrmCompositionPlane &p) {
@@ -1679,6 +1685,9 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
     goto move_layers_back;
   }
 
+#if USE_AFBC_LAYER
+  fb.set_afbc(true);
+#endif
   ret = ApplyPreComposite(dst);
   if (ret) {
     ALOGE("Failed to pre-composite for squash all composition %d", ret);

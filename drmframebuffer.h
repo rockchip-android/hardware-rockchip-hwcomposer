@@ -106,12 +106,16 @@ struct DrmRgaBuffer {
 #endif
 
 struct DrmFramebuffer {
-  DrmFramebuffer() : release_fence_fd_(-1) {
+  DrmFramebuffer() : release_fence_fd_(-1), bAfbc_(false) {
   }
 
   ~DrmFramebuffer() {
     if (release_fence_fd() >= 0)
       close(release_fence_fd());
+  }
+
+  void set_afbc(bool afbc) {
+	bAfbc_ = afbc;
   }
 
   bool is_valid() {
@@ -133,9 +137,15 @@ struct DrmFramebuffer {
   }
 
   bool Allocate(uint32_t w, uint32_t h) {
+    uint32_t iUsageMask = 0;
     if (is_valid()) {
-      if (buffer_->getWidth() == w && buffer_->getHeight() == h)
-        return true;
+      iUsageMask = buffer_->getUsage() & MAGIC_USAGE_FOR_AFBC_LAYER;
+      if((bAfbc_ && (MAGIC_USAGE_FOR_AFBC_LAYER != iUsageMask))
+         || (!bAfbc_ && (MAGIC_USAGE_FOR_AFBC_LAYER == iUsageMask)))
+      {
+	      if (buffer_->getWidth() == w && buffer_->getHeight() == h)
+	        return true;
+      }
 
       if (release_fence_fd_ >= 0) {
         if (sync_wait(release_fence_fd_, kReleaseWaitTimeoutMs) != 0) {
@@ -145,14 +155,23 @@ struct DrmFramebuffer {
       }
       Clear();
     }
-    buffer_ = new GraphicBuffer(w, h, PIXEL_FORMAT_RGBA_8888,
-                                GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |
-                                    GRALLOC_USAGE_HW_COMPOSER
-//close fbdc for pre-comp and squash layer.
-#if 0
-                                    | MAGIC_USAGE_FOR_AFBC_LAYER
+
+    if(bAfbc_)
+    {
+	iUsageMask = GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |\
+		GRALLOC_USAGE_HW_COMPOSER;
+    }
+    else
+    {
+#if USE_AFBC_LAYER
+	iUsageMask = GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |\
+		GRALLOC_USAGE_HW_COMPOSER | MAGIC_USAGE_FOR_AFBC_LAYER;
+#else
+	iUsageMask = GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER |\
+		GRALLOC_USAGE_HW_COMPOSER;
 #endif
-                                    );
+    }
+    buffer_ = new GraphicBuffer(w, h, PIXEL_FORMAT_RGBA_8888, iUsageMask);
     release_fence_fd_ = -1;
     return is_valid();
   }
@@ -186,6 +205,7 @@ struct DrmFramebuffer {
  private:
   sp<GraphicBuffer> buffer_;
   int release_fence_fd_;
+  bool bAfbc_;
 };
 }
 
