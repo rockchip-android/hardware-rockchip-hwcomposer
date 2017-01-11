@@ -35,6 +35,7 @@ DrmCrtc::DrmCrtc(DrmResources *drm, drmModeCrtcPtr c, unsigned pipe)
       y_(c->y),
       width_(c->width),
       height_(c->height),
+      b_afbc_(false),
       mode_(&c->mode),
       mode_valid_(c->mode_valid),
       crtc_(c) {
@@ -53,7 +54,20 @@ int DrmCrtc::Init() {
     return ret;
   }
 
+  ret = drm_->GetCrtcProperty(*this, "FEATURE", &feature_property_);
+  if (ret)
+    ALOGE("Could not get FEATURE property");
+
+    uint64_t feature=0;
+    feature_property_.set_feature("afbdc");
+    feature_property_.value(&feature);
+    b_afbc_ = (feature ==1)?true:false;
+
   return 0;
+}
+
+bool DrmCrtc::get_afbc() const {
+    return b_afbc_;
 }
 
 uint32_t DrmCrtc::id() const {

@@ -128,6 +128,7 @@ class DrmPlane {
   bool b_use_;
   bool b_yuv_;
   bool b_scale_;
+  bool b_rotate_;
 #endif
 
   drmModePlanePtr plane_;

@@ -139,10 +139,22 @@ int DrmPlane::Init() {
   if (ret)
     ALOGE("Could not get FEATURE property");
 
-  b_reserved_= false;
-  b_use_ = false;
-  b_yuv_ = false;
-  b_scale_ = false;
+    b_reserved_= false;
+    b_use_ = false;
+    b_yuv_ = false;
+
+
+    uint64_t feature=0, rotate=0;
+
+    feature_property_.set_feature("scale");
+    feature_property_.value(&feature);
+    b_scale_ = (feature ==1)?true:false;
+
+
+    rotation_property().set_feature("rotate");
+    rotation_property().value(&rotate);
+    b_rotate_ = rotate;
+
 #endif
 
   return 0;
@@ -210,21 +222,11 @@ const DrmProperty &DrmPlane::alpha_property() const {
 
 #if RK_DRM_HWC
 bool DrmPlane::get_scale(){
-    uint64_t feature=0;
-
-    feature_property().set_feature("scale");
-    feature_property().value(&feature);
-    b_scale_ = (feature ==1)?true:false;
     return b_scale_;
 }
 
 uint64_t DrmPlane::get_rotate(){
-    uint64_t rotate=0;
-
-    rotation_property().set_feature("rotate");
-    rotation_property().value(&rotate);
-
-    return rotate;
+    return b_rotate_;
 }
 
 bool DrmPlane::get_yuv(){
@@ -233,7 +235,7 @@ bool DrmPlane::get_yuv(){
 
 void DrmPlane::set_yuv(bool b_yuv)
 {
-    b_yuv_=b_yuv;
+    b_yuv_ = b_yuv;
 }
 
 bool DrmPlane::is_use(){

@@ -45,6 +45,7 @@ class DrmCrtc {
 
   const DrmProperty &active_property() const;
   const DrmProperty &mode_property() const;
+  bool get_afbc() const;
 
 #if RK_DRM_HWC_DEBUG
   void dump_crtc(std::ostringstream *out) const;
@@ -66,12 +67,14 @@ class DrmCrtc {
   uint32_t y_;
   uint32_t width_;
   uint32_t height_;
+  bool b_afbc_;
 
   DrmMode mode_;
   bool mode_valid_;
 
   DrmProperty active_property_;
   DrmProperty mode_property_;
+  DrmProperty feature_property_;
   drmModeCrtcPtr crtc_;
 };
 }

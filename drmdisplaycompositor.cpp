@@ -1686,7 +1686,8 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
   }
 
 #if USE_AFBC_LAYER
-  fb.set_afbc(true);
+  if(src->crtc()->get_afbc())
+      fb.set_afbc(true);
 #endif
   ret = ApplyPreComposite(dst);
   if (ret) {
