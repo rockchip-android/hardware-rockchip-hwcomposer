@@ -1033,6 +1033,29 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     }
   }
 
+  if (crtc->can_overscan()) {
+    char overscan[PROPERTY_VALUE_MAX];
+    int left_margin, right_margin, top_margin, bottom_margin;
+
+    if (display_ == 0)
+      property_get("persist.sys.overscan.main", overscan, "overscan 100,100,100,100");
+    else
+      property_get("persist.sys.overscan.aux", overscan, "overscan 100,100,100,100");
+
+    sscanf(overscan, "overscan %d,%d,%d,%d", &left_margin, &top_margin,
+           &right_margin, &bottom_margin);
+
+    ret = drmModeAtomicAddProperty(pset, crtc->id(), crtc->left_margin_property().id(), left_margin) < 0 ||
+          drmModeAtomicAddProperty(pset, crtc->id(), crtc->right_margin_property().id(), right_margin) < 0 ||
+          drmModeAtomicAddProperty(pset, crtc->id(), crtc->top_margin_property().id(), top_margin) < 0 ||
+          drmModeAtomicAddProperty(pset, crtc->id(), crtc->bottom_margin_property().id(), bottom_margin) < 0;
+    if (ret) {
+      ALOGE("Failed to add overscan to pset");
+      drmModeAtomicFree(pset);
+      return ret;
+    }
+  }
+
 #if RK_VR
   float w_scale=1.0,h_scale=1.0;
   int xxx_w =  hwc_get_int_property("sys.xxx.x_w","720");

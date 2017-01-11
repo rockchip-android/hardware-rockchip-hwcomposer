@@ -42,10 +42,15 @@ class DrmCrtc {
   void set_display(int display);
 
   bool can_bind(int display) const;
+  bool can_overscan() const;
 
   const DrmProperty &active_property() const;
   const DrmProperty &mode_property() const;
   bool get_afbc() const;
+  const DrmProperty &left_margin_property() const;
+  const DrmProperty &right_margin_property() const;
+  const DrmProperty &top_margin_property() const;
+  const DrmProperty &bottom_margin_property() const;
 
 #if RK_DRM_HWC_DEBUG
   void dump_crtc(std::ostringstream *out) const;
@@ -71,10 +76,15 @@ class DrmCrtc {
 
   DrmMode mode_;
   bool mode_valid_;
+  bool can_overscan_;
 
   DrmProperty active_property_;
   DrmProperty mode_property_;
   DrmProperty feature_property_;
+  DrmProperty left_margin_property_;
+  DrmProperty top_margin_property_;
+  DrmProperty right_margin_property_;
+  DrmProperty bottom_margin_property_;
   drmModeCrtcPtr crtc_;
 };
 }

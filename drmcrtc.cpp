@@ -63,6 +63,28 @@ int DrmCrtc::Init() {
     feature_property_.value(&feature);
     b_afbc_ = (feature ==1)?true:false;
 
+  can_overscan_ = true;
+  ret = drm_->GetCrtcProperty(*this, "left margin", &left_margin_property_);
+  if (ret) {
+    ALOGE("Failed to get left margin property");
+    can_overscan_ = false;
+  }
+  ret = drm_->GetCrtcProperty(*this, "right margin", &right_margin_property_);
+  if (ret) {
+    ALOGE("Failed to get right margin property");
+    can_overscan_ = false;
+  }
+  ret = drm_->GetCrtcProperty(*this, "top margin", &top_margin_property_);
+  if (ret) {
+    ALOGE("Failed to get top margin property");
+    can_overscan_ = false;
+  }
+  ret = drm_->GetCrtcProperty(*this, "bottom margin", &bottom_margin_property_);
+  if (ret) {
+    ALOGE("Failed to get bottom margin property");
+    can_overscan_ = false;
+  }
+
   return 0;
 }
 
@@ -90,12 +112,32 @@ bool DrmCrtc::can_bind(int display) const {
   return display_ == -1 || display_ == display;
 }
 
+bool DrmCrtc::can_overscan() const {
+  return can_overscan_;
+}
+
 const DrmProperty &DrmCrtc::active_property() const {
   return active_property_;
 }
 
 const DrmProperty &DrmCrtc::mode_property() const {
   return mode_property_;
+}
+
+const DrmProperty &DrmCrtc::left_margin_property() const {
+  return left_margin_property_;
+}
+
+const DrmProperty &DrmCrtc::right_margin_property() const {
+  return right_margin_property_;
+}
+
+const DrmProperty &DrmCrtc::top_margin_property() const {
+  return top_margin_property_;
+}
+
+const DrmProperty &DrmCrtc::bottom_margin_property() const {
+  return bottom_margin_property_;
 }
 
 #if RK_DRM_HWC_DEBUG
