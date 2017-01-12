@@ -136,8 +136,16 @@ void DrmConnector::set_fake_mode(DrmMode fake_active_mode) {
     fake_active_mode_ = fake_active_mode;
 }
 
+const DrmMode &DrmConnector::current_mode() const {
+  return current_mode_;
+}
+
 void DrmConnector::set_active_mode(const DrmMode &mode) {
   active_mode_ = mode;
+}
+
+void DrmConnector::set_current_mode(const DrmMode &mode) {
+  current_mode_ = mode;
 }
 
 const DrmProperty &DrmConnector::dpms_property() const {

@@ -61,6 +61,8 @@
 
 namespace android {
 
+static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
+                                 int index);
 #if USE_AFBC_LAYER
 bool isAfbcInternalFormat(uint64_t internal_format)
 {
@@ -2220,6 +2222,14 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       continue;
     }
 
+    int mode_id;
+    if (i == HWC_DISPLAY_PRIMARY)
+      mode_id = hwc_get_int_property("persist.sys.resolution.main", "0");
+    else
+      mode_id = hwc_get_int_property("persist.sys.resolution.aux", "0");
+    if (mode_id > 0)
+      hwc_set_active_config(dev, i, mode_id - 1);
+
     std::ostringstream display_index_formatter;
     display_index_formatter << "retire fence for display " << i;
     std::string display_fence_description(display_index_formatter.str());
@@ -2666,6 +2676,9 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
   if (c->state() != DRM_MODE_CONNECTED)
     return -ENODEV;
 
+  if (c->current_mode().id() == hd->config_ids[index])
+	return 0;
+
   DrmMode mode;
   for (const DrmMode &conn_mode : c->modes()) {
     if (conn_mode.id() == hd->config_ids[index]) {
@@ -2687,6 +2700,8 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
     ALOGE("Failed to set dpms mode on %d", ret);
     return ret;
   }
+  c->set_current_mode(mode);
+
   return ret;
 }
 
