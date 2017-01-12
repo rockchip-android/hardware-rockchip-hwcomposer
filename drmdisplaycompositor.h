@@ -142,7 +142,6 @@ class DrmDisplayCompositor {
     bool needs_modeset = false;
     DrmMode mode;
     uint32_t blob_id = 0;
-    uint32_t old_blob_id = 0;
   };
 
   DrmDisplayCompositor(const DrmDisplayCompositor &) = delete;
@@ -192,6 +191,7 @@ class DrmDisplayCompositor {
   bool active_;
   bool use_hw_overlays_;
 
+  mutable pthread_mutex_t mode_lock_;
   ModeState mode_;
 
   int framebuffer_index_;

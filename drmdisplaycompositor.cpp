@@ -310,8 +310,6 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 
   if (mode_.blob_id)
     drm_->DestroyPropertyBlob(mode_.blob_id);
-  if (mode_.old_blob_id)
-    drm_->DestroyPropertyBlob(mode_.old_blob_id);
 
   while (!composite_queue_.empty()) {
     composite_queue_.front().reset();
@@ -325,6 +323,7 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 
   pthread_mutex_destroy(&lock_);
   pthread_cond_destroy(&composite_queue_cond_);
+  pthread_mutex_destroy(&mode_lock_);
 }
 
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
@@ -334,6 +333,11 @@ int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
   int ret = pthread_mutex_init(&lock_, NULL);
   if (ret) {
     ALOGE("Failed to initialize drm compositor lock %d\n", ret);
+    return ret;
+  }
+  ret = pthread_mutex_init(&mode_lock_, NULL);
+  if (ret) {
+    ALOGE("Failed to initialize drm mode lock %d\n", ret);
     return ret;
   }
 
@@ -1020,7 +1024,21 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     return -ENOMEM;
   }
 
-  if (mode_.needs_modeset) {
+  ret = pthread_mutex_lock(&mode_lock_);
+  if (ret) {
+    ALOGE("Failed to acquire mode lock %d", ret);
+    return ret;
+  }
+
+  if (!test_only && mode_.needs_modeset) {
+    if (mode_.blob_id)
+      drm_->DestroyPropertyBlob(mode_.blob_id);
+    std::tie(ret, mode_.blob_id) = CreateModeBlob(mode_.mode);
+    if (ret) {
+      ALOGE("Failed to create mode blob for display %d", display_);
+      return ret;
+    }
+
     ret = drmModeAtomicAddProperty(pset, crtc->id(), crtc->mode_property().id(),
                                    mode_.blob_id) < 0 ||
           drmModeAtomicAddProperty(pset, connector->id(),
@@ -1031,6 +1049,13 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       drmModeAtomicFree(pset);
       return ret;
     }
+    mode_.needs_modeset = false;
+  }
+  ret = pthread_mutex_unlock(&mode_lock_);
+  if (ret) {
+    ALOGE("Failed to acquire mode lock %d", ret);
+    drmModeAtomicFree(pset);
+    return ret;
   }
 
   if (crtc->can_overscan()) {
@@ -1387,11 +1412,11 @@ PRINT_TIME_END("commit");
   if (pset)
     drmModeAtomicFree(pset);
 
-  if (!test_only && mode_.needs_modeset) {
-    ret = drm_->DestroyPropertyBlob(mode_.old_blob_id);
+  if (!test_only && mode_.blob_id) {
+    ret = drm_->DestroyPropertyBlob(mode_.blob_id);
     if (ret) {
-      ALOGE("Failed to destroy old mode property blob %" PRIu32 "/%d",
-            mode_.old_blob_id, ret);
+      ALOGE("Failed to destroy mode property blob %" PRIu32 "/%d",
+            mode_.blob_id, ret);
       return ret;
     }
 
@@ -1403,9 +1428,7 @@ PRINT_TIME_END("commit");
     }
 
     connector->set_active_mode(mode_.mode);
-    mode_.old_blob_id = mode_.blob_id;
     mode_.blob_id = 0;
-    mode_.needs_modeset = false;
   }
 
   return ret;
@@ -1582,15 +1605,20 @@ int DrmDisplayCompositor::Composite() {
 #endif
       return ret;
     case DRM_COMPOSITION_TYPE_MODESET:
-      mode_.mode = composition->display_mode();
-      if (mode_.blob_id)
-        drm_->DestroyPropertyBlob(mode_.blob_id);
-      std::tie(ret, mode_.blob_id) = CreateModeBlob(mode_.mode);
+      ret = pthread_mutex_lock(&mode_lock_);
       if (ret) {
-        ALOGE("Failed to create mode blob for display %d", display_);
+        ALOGE("Failed to acquire mode lock %d", ret);
         return ret;
       }
+
+      mode_.mode = composition->display_mode();
       mode_.needs_modeset = true;
+
+      ret = pthread_mutex_unlock(&mode_lock_);
+      if (ret) {
+        ALOGE("Failed to acquire mode lock %d", ret);
+        return ret;
+      }
       return 0;
     default:
       ALOGE("Unknown composition type %d", composition->type());
