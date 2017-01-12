@@ -580,16 +580,22 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     else if(layer.transform & DrmHwcTransform::kRotate0) {
         rga_transform = DRM_RGA_TRANSFORM_ROT_0;
     }
+    else if(layer.transform & DrmHwcTransform::kFlipH) {
+        rga_transform = DRM_RGA_TRANSFORM_FLIP_H;
+    }
+    else if(layer.transform & DrmHwcTransform::kFlipV) {
+        rga_transform = DRM_RGA_TRANSFORM_FLIP_V;
+    }
     else {
         ALOGE("%s: line=%d, wrong transform=0x%x", __FUNCTION__, __LINE__, layer.transform);
         ret = -1;
         return ret;
     }
 
-    if(layer.transform & DrmHwcTransform::kFlipH)
+    if(rga_transform != DRM_RGA_TRANSFORM_FLIP_H && layer.transform & DrmHwcTransform::kFlipH)
         rga_transform |= DRM_RGA_TRANSFORM_FLIP_H;
 
-    if (layer.transform & DrmHwcTransform::kFlipV)
+    if (rga_transform != DRM_RGA_TRANSFORM_FLIP_V && layer.transform & DrmHwcTransform::kFlipV)
         rga_transform |= DRM_RGA_TRANSFORM_FLIP_V;
 
     rga_set_rect(&src.rect,
