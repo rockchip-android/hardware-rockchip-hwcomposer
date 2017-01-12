@@ -1393,6 +1393,72 @@ bool MatchPlanes(
     return true;
 }
 
+static float getPixelWidthByAndroidFormat(int format)
+{
+       float pixelWidth = 0.0;
+       switch (format) {
+               case HAL_PIXEL_FORMAT_RGBA_8888:
+               case HAL_PIXEL_FORMAT_RGBX_8888:
+               case HAL_PIXEL_FORMAT_BGRA_8888:
+                       pixelWidth = 4.0;
+                       break;
+
+               case HAL_PIXEL_FORMAT_RGB_888:
+                       pixelWidth = 3.0;
+                       break;
+
+               case HAL_PIXEL_FORMAT_RGB_565:
+                       pixelWidth = 2.0;
+                       break;
+
+               case HAL_PIXEL_FORMAT_sRGB_A_8888:
+               case HAL_PIXEL_FORMAT_sRGB_X_8888:
+                       ALOGE("format 0x%x not support",format);
+                       break;
+
+               case HAL_PIXEL_FORMAT_YCbCr_422_SP:
+               case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+               case HAL_PIXEL_FORMAT_YCbCr_422_I:
+               case HAL_PIXEL_FORMAT_YCrCb_NV12:
+               case HAL_PIXEL_FORMAT_YCrCb_NV12_VIDEO:
+                       pixelWidth = 1.0;
+                       break;
+
+               case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
+                       pixelWidth = 2;
+                       break;
+               case HAL_PIXEL_FORMAT_YCbCr_422_SP_10:
+               case HAL_PIXEL_FORMAT_YCrCb_420_SP_10:
+                       pixelWidth = 1.0;
+                       break;
+
+               default:
+                       pixelWidth = 0.0;
+                       ALOGE("format 0x%x not support",format);
+                       break;
+       }
+       return pixelWidth;
+}
+
+int vop_band_width(DrmMode &mode, hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
+{
+    int iTotalSize = 0;
+    int src_w=0, src_h=0;
+    if(hd->mixMode == HWC_MIX_DOWN || hd->mixMode == HWC_MIX_UP)
+    {
+        iTotalSize += (int)mode.h_display() * (int)mode.v_display();
+    }
+    for(size_t i = 0; i < layers.size(); ++i)
+    {
+        if(layers[i].bMix)
+            continue;
+        src_w = (int)(layers[i].source_crop.right - layers[i].source_crop.left);
+        src_h = (int)(layers[i].source_crop.bottom - layers[i].source_crop.top);
+        iTotalSize += src_w * src_h;
+    }
+
+    return iTotalSize;
+}
 
 bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
 {
@@ -1422,19 +1488,67 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::ve
         return false;
 
     //mix down
+/*
+-----------+----------+------+------+----+------+-------------+--------------------------------+------------------------+------
+      GLES | 711aa61e80 | 0000 | 0000 | 00 | 0100 | RGBx_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.systemui.ImageWallpaper
+      GLES | 711ab1ef00 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.launcher3/com.android.launcher3.Launcher
+       HWC | 711aa61e00 | 0000 | 0000 | 00 | 0100 | ? 00000017  |    0.0,    0.0, 3840.0, 2160.0 |  600,  562, 1160,  982 | SurfaceView - MediaView
+       HWC | 711aa61100 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,    2.0 |    0,    0, 2400,    2 | StatusBar
+       HWC | 711ec5ad80 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,   84.0 |    0, 1516, 2400, 1600 | taskbar
+       HWC | 711ec5a900 | 0000 | 0002 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,   39.0,   49.0 |  941,  810,  980,  859 | Sprite
+*/
+
     if(layers.size() <= 6 )
     {
+        bool has_10_bit_layer = false;
+        int format = -1;
         for (size_t i = 0; i < 2; ++i)
         {
-            ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
-            layers[i].bMix = true;
-            hd->mixMode = HWC_MIX_DOWN;
-            layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+           if(layers[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+           {
+               has_10_bit_layer = true;
+               break;
+           }
         }
-        return true;
+
+        if(!has_10_bit_layer)
+        {
+            for (size_t i = 0; i < 2; ++i)
+            {
+                ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
+                layers[i].bMix = true;
+                hd->mixMode = HWC_MIX_DOWN;
+                layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+            }
+            return true;
+        }
     }
 
+/*
+need use cross policy
+-----------+----------+------+------+----+------+-------------+--------------------------------+------------------------+------
+       HWC | 7fb605a580 | 0000 | 0000 | 00 | 0100 | RGBx_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.systemui.ImageWallpaper
+       HWC | 7fb2829880 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.launcher3/com.android.launcher3.Launcher
+       HWC | 7fb2829c80 | 0000 | 0000 | 00 | 0100 | RGBA_8888   |    0.0,   88.0, 2400.0, 1499.0 |    0,  105, 2400, 1516 | android.rk.RockVideoPlayer/android.rk.RockVideoPlayer.RockVideoPlayer
+      GLES | 7fa4effb80 | 0000 | 0000 | 00 | 0100 | ? 00000017  |    0.0,    0.0, 3840.0, 2160.0 |  920,  548, 1480,  968 | SurfaceView - MediaView
+      GLES | 7fa4eff800 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,  560.0,  420.0 |  920,  548, 1480,  968 | MediaView
+      GLES | 7fb5dda280 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,    2.0 |    0,    0, 2400,    2 | StatusBar
+      GLES | 7fb605a880 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,   84.0 |    0, 1516, 2400, 1600 | taskbar
+      GLES | 7fb5dda380 | 0000 | 0002 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,   39.0,   35.0 |  468, 1565,  507, 1600 | Sprite
+ FB TARGET | 7fb605a100 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | HWC_FRAMEBUFFER_TARGET
+*/
+
     //mix up
+/*
+-----------+----------+------+------+----+------+-------------+--------------------------------+------------------------+------
+       HWC | 711aa61e80 | 0000 | 0000 | 00 | 0100 | RGBx_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.systemui.ImageWallpaper
+       HWC | 711ab1ef00 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0, 1600.0 |    0,    0, 2400, 1600 | com.android.launcher3/com.android.launcher3.Launcher
+       HWC | 711aa61700 | 0000 | 0000 | 00 | 0100 | ? 00000017  |    0.0,    0.0, 3840.0, 2160.0 |  600,  562, 1160,  982 | SurfaceView - MediaView
+      GLES | 711ab1e580 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,  560.0,  420.0 |  600,  562, 1160,  982 | MediaView
+      GLES | 70b34c9c80 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,    2.0 |    0,    0, 2400,    2 | StatusBar
+      GLES | 70b34c9080 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,   84.0 |    0, 1516, 2400, 1600 | taskbar
+      GLES | 711ec5a900 | 0000 | 0002 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,   39.0,   49.0 | 1136, 1194, 1175, 1243 | Sprite
+*/
     for (size_t i = 3; i < layers.size(); ++i)
     {
         ALOGD_IF(log_level(DBG_DEBUG),"Go into Mix up");
@@ -1789,37 +1903,74 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     video_ui_optimize(ctx, display_contents[i], &ctx->displays[i]);
 #endif
 
+    if(!use_framebuffer_target)
+    {
 #if RK_MIX
-    int ret = -1;
-    for (int j = 0; j < num_layers-1; j++) {
-      hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
-      if(sf_layer->handle == NULL)
-        continue;
+        int ret = -1;
+        for (int j = 0; j < num_layers-1; j++) {
+          hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
+          if(sf_layer->handle == NULL)
+            continue;
 
-      layer_content.layers.emplace_back();
-      DrmHwcLayer &layer = layer_content.layers.back();
+          layer_content.layers.emplace_back();
+          DrmHwcLayer &layer = layer_content.layers.back();
 #if RK_DRM_HWC
-      ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer.get(), ctx->gralloc);
+          ret = layer.InitFromHwcLayer(ctx, sf_layer, ctx->importer.get(), ctx->gralloc);
 #else
-      ret = layer.InitFromHwcLayer(sf_layer, ctx->importer.get(), ctx->gralloc);
+          ret = layer.InitFromHwcLayer(sf_layer, ctx->importer.get(), ctx->gralloc);
 #endif
-      if (ret) {
-        ALOGE("Failed to init composition from layer %d", ret);
-        return ret;
-      }
+          if (ret) {
+            ALOGE("Failed to init composition from layer %d", ret);
+            return ret;
+          }
 #if RK_DRM_HWC_DEBUG
-      std::ostringstream out;
-      layer.dump_drm_layer(j,&out);
-      ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
+          std::ostringstream out;
+          layer.dump_drm_layer(j,&out);
+          ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
 #endif
 
+        }
+        DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
+        hd->mixMode = HWC_DEFAULT;
+        mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
+
+        int iTotalSize = vop_band_width(mode, &ctx->displays[i], layer_content.layers);
+        int iThreshold = 3.3 * (int)mode.h_display() * (int)mode.v_display();
+        if(iTotalSize > iThreshold)
+        {
+            //try mix down
+            if(layer_content.layers.size() > 6 && !ctx->displays[i].is10bitVideo)
+            {
+                bool has_10_bit_layer = false;
+                int format = -1;
+
+
+                for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                {
+                    layer_content.layers[i].bMix = false;
+                }
+
+                for (size_t i = 0; i < 2; ++i)
+                {
+                    ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
+                    layer_content.layers[i].bMix = true;
+                    hd->mixMode = HWC_MIX_DOWN;
+                    layer_content.layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+                }
+
+                iTotalSize = vop_band_width(mode, &ctx->displays[i], layer_content.layers);
+                if(iTotalSize > iThreshold)
+                {
+                    ALOGV("iTotalSize=%d is bigger than iThreshold=%d,go to GPU GLES at line=%d", iTotalSize, iThreshold, __LINE__);
+                    use_framebuffer_target = true;
+                }
+
+            }
+            else
+                use_framebuffer_target = true;
+        }
+#endif
     }
-    DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
-    hd->mixMode = HWC_DEFAULT;
-    mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
-
-#endif
-
 
 #endif
 
