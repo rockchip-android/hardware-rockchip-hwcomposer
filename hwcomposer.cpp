@@ -1897,7 +1897,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
     }
 #endif
-    use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
+    if(!use_framebuffer_target)
+        use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
 
 #if RK_VIDEO_UI_OPT
     video_ui_optimize(ctx, display_contents[i], &ctx->displays[i]);
@@ -1932,7 +1933,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
         DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
         hd->mixMode = HWC_DEFAULT;
-        mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
+        if(crtc)
+            mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
 
         int iTotalSize = vop_band_width(mode, &ctx->displays[i], layer_content.layers);
         int iThreshold = 3.3 * (int)mode.h_display() * (int)mode.v_display();
