@@ -6125,7 +6125,7 @@ int hotpulg_did_hdr_video(hwcContext *ctx,struct rk_fb_win_par *win_par, struct 
         return -1;
    //rk_nv12_10_color_space_t hdrFormat = hwc_get_int_property("sys.hwc.test", "0");  //test
    rk_nv12_10_color_space_t hdrFormat = get_rk_color_space_from_usage(src_handle->usage);  //realy
-   ALOGD("did_hdr_video: hdrFormat=0x%x, usage=0x%x", hdrFormat, src_handle->usage);
+   ALOGD_IF(is_out_log(), "did_hdr_video: hdrFormat=0x%x, usage=0x%x", hdrFormat, src_handle->usage);
    if (hdrFormat > 0 ) {	
 		win_par->area_par[0].data_format =0x22  | 0x80;	  
  
