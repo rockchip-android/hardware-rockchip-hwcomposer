@@ -913,6 +913,33 @@ hwcDumpArea(
     }
 }
 
+uint32_t hwc_get_vsync_period_from_fb_fps(int fbindex)
+{
+    const char node[] = "/sys/class/graphics/fb%u/fps";
+    char nodeName[100] = {0};
+    char value[100] = {0};
+    int fps = 0;
+    int fbFd = -1;
+    int ret = 0;
+
+    snprintf(nodeName, 64, node, fbindex);
+
+    ALOGD("nodeName=%s", nodeName);
+    fbFd = open(nodeName, O_RDONLY);
+    if(fbFd > -1) {
+        ret = read(fbFd, value, 80);
+        if(ret <= 0) {
+            ALOGE("fb%d/fps read fail %s", fbindex, strerror(errno));
+        } else {
+            sscanf(value, "fps:%d", &fps);
+            ALOGI("fb%d/fps fps is:%d", fbindex, fps);
+        }
+        close(fbFd);
+    }
+
+    return (uint32_t)(1000000000 / fps);
+}
+
 int hwc_get_layer_area_info(hwc_layer_1_t * layer,hwcRECT *srcrect,hwcRECT *dstrect)
 {
 
@@ -2735,7 +2762,9 @@ int hwc_query(struct hwc_composer_device_1* dev, int what, int* value)
             break;
         case HWC_VSYNC_PERIOD:
             // vsync period in nanosecond
-            value[0] = 1e9 / context->fb_fps;
+            //value[0] = 1e9 / context->fb_fps;
+            value[0] = context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period;
+            if (is_out_log()) ALOGD("get primary period=%d", *value);
             break;
         default:
             // unsupported query
@@ -4846,6 +4875,10 @@ hwc_device_open(
                    * (info.left_margin  + info.right_margin + info.xres)
                    * info.pixclock;
 
+    ALOGD("[%d,%d,%d],[%d,%d,%d][%d]", info.upper_margin, info.lower_margin,
+	        info.yres, info.left_margin, info.right_margin,info.xres, info.pixclock);
+
+
     if (inverseRefreshRate)
 	    refreshRate = 1000000000000LLU / inverseRefreshRate;
     else
@@ -4859,6 +4892,8 @@ hwc_device_open(
 
 
     vsync_period  = 1000000000 / refreshRate;
+
+    vsync_period = hwc_get_vsync_period_from_fb_fps(0);
 
     context->dpyAttr[HWC_DISPLAY_PRIMARY].fd = context->fbFd;
     //xres, yres may not be 32 aligned
@@ -6017,9 +6052,8 @@ void hotplug_change_screen_config(int dpy, int fb, int state) {
     hwcContext * context = gcontextAnchor[0];
     if (context) {
         char buf[100];
-        int width = 0;
-        int height = 0;
-        int fd = -1;
+        int width = 0, height = 0, fd = -1;
+        uint32_t vsync_period = 60;
 
         if (state)
             init_tv_hdr_info(context);
@@ -6038,9 +6072,13 @@ void hotplug_change_screen_config(int dpy, int fb, int state) {
         close(fd);
         sscanf(buf,"xres:%d yres:%d",&width,&height);
         ALOGD("hwc_change_config:width=%d,height=%d",width,height);
+        vsync_period = hwc_get_vsync_period_from_fb_fps(fb);
         context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres = width;
         context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres = height;
+        context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period = vsync_period;
         context->deviceConected = state;
+        if (context->procs && context->procs->hotplug)
+            context->procs->hotplug(context->procs, HWC_DISPLAY_PRIMARY, 1);
 #if FORCE_REFRESH
         pthread_mutex_lock(&context->mRefresh.mlk);
         context->mRefresh.count = 0;
