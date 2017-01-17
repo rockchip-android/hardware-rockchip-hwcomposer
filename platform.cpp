@@ -297,27 +297,20 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
-#if 1
-                            b_yuv  = (*iter_plane)->get_yuv();
-                            if((*iter_layer)->is_yuv && !b_yuv)
-                            {
-                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
-                                continue;
-                            }
 
-#if RK_ZPOS_SUPPORT
-                            if(!(*iter_layer)->is_yuv && b_yuv)
+                            bool bNeed = false;
+                            b_yuv  = (*iter_plane)->get_yuv();
+                            if((*iter_layer)->is_yuv)
                             {
-                                std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
-                                if(no_yuv_planes.size() > 0)
+                                if(!b_yuv)
                                 {
-                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
                                     continue;
                                 }
+                                else
+                                    bNeed = true;
                             }
-#endif
 
-#endif
                             b_scale = (*iter_plane)->get_scale();
                             if((*iter_layer)->is_scale)
                             {
@@ -335,42 +328,64 @@ bool Planner::MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                                 (*iter_plane)->id(), (*iter_layer)->h_scale_mul, (*iter_layer)->v_scale_mul);
                                         continue;
                                     }
+                                    else
+                                        bNeed = true;
                                 }
                             }
-
-#if RK_ZPOS_SUPPORT
-                            if(!(*iter_layer)->is_scale && b_scale)
-                            {
-                                std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
-                                if(no_scale_planes.size() > 0)
-                                {
-                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
-                                    continue;
-                                }
-                            }
-#endif
 
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
                                 alpha = (*iter_layer)->alpha;
 
                             b_alpha = (*iter_plane)->alpha_property().id()?true:false;
-                            if(alpha != 0xFF && !b_alpha)
+                            if(alpha != 0xFF)
                             {
-                                ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
-                                ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
-                                continue;
+                                if(!b_alpha)
+                                {
+                                    ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
+                                    ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
+                                    continue;
+                                }
+                                else
+                                    bNeed = true;
                             }
 
 #if RK_ZPOS_SUPPORT
-                            if(alpha == 0xFF && b_alpha)
+                            if(!bNeed)
                             {
-                                std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
-                                if(no_alpha_planes.size() > 0)
+                                if(!(*iter_layer)->is_yuv && b_yuv)
                                 {
-                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
-                                    continue;
+                                    std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
+                                    if(no_yuv_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+
+
+                                if(!(*iter_layer)->is_scale && b_scale)
+                                {
+                                    std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
+                                    if(no_scale_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+
+
+
+                                if(alpha == 0xFF && b_alpha)
+                                {
+                                    std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
+                                    if(no_alpha_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                        continue;
+                                    }
                                 }
                             }
+
 #endif
 
 #if RK_RGA
@@ -559,23 +574,18 @@ int PlanStageProtected::ProvisionPlanes(
                                 //otherwise,only get a plane from the plane group.
                                 if(layer)
                                 {
-#if 1
-                                    b_yuv  = (*iter_plane)->get_yuv();
-                                    if(layer->is_yuv && !b_yuv)
-                                        continue;
-#if RK_ZPOS_SUPPORT
-                                    if(!layer->is_yuv && b_yuv)
-                                    {
-                                        std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
-                                        if(no_yuv_planes.size() > 0)
-                                        {
-                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
-                                            continue;
-                                        }
-                                    }
-#endif
 
-#endif
+                                    bool bNeed = false;
+                                    b_yuv  = (*iter_plane)->get_yuv();
+                                    if(layer->is_yuv)
+                                    {
+                                        if(!b_yuv)
+                                            continue;
+                                        else
+                                            bNeed = true;
+                                    }
+
+
                                     b_scale = (*iter_plane)->get_scale();
                                     if(layer->is_scale)
                                     {
@@ -593,40 +603,62 @@ int PlanStageProtected::ProvisionPlanes(
                                                         (*iter_plane)->id(), layer->h_scale_mul, layer->v_scale_mul);
                                                 continue;
                                             }
+                                            else
+                                                bNeed = true;
                                         }
                                     }
 
-#if RK_ZPOS_SUPPORT
-                                    if(!layer->is_scale && b_scale)
-                                    {
-                                        std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
-                                        if(no_scale_planes.size() > 0)
-                                        {
-                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
-                                            continue;
-                                        }
-                                    }
-#endif
+
 
                                    if (layer->blending == DrmHwcBlending::kPreMult)
                                         alpha = layer->alpha;
 
                                     b_alpha = (*iter_plane)->alpha_property().id()?true:false;
-                                    if(alpha != 0xFF && !b_alpha)
+                                    if(alpha != 0xFF)
                                     {
-                                        ALOGV("layer name=%s,plane id=%d",layer->name.c_str(),(*iter_plane)->id());
-                                        ALOGV("layer alpha=0x%x,alpha id=%d",layer->alpha,(*iter_plane)->alpha_property().id());
-                                        continue;
+                                        if(!b_alpha)
+                                        {
+                                            ALOGV("layer name=%s,plane id=%d",layer->name.c_str(),(*iter_plane)->id());
+                                            ALOGV("layer alpha=0x%x,alpha id=%d",layer->alpha,(*iter_plane)->alpha_property().id());
+                                            continue;
+                                        }
+                                        else
+                                        {
+                                            bNeed = true;
+                                        }
                                     }
 
 #if RK_ZPOS_SUPPORT
-                                    if(alpha == 0xFF && b_alpha)
+                                    if(!bNeed)
                                     {
-                                        std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
-                                        if(no_alpha_planes.size() > 0)
+                                        if(!layer->is_yuv && b_yuv)
                                         {
-                                            ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
-                                            continue;
+                                            std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
+                                            if(no_yuv_planes.size() > 0)
+                                            {
+                                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                                continue;
+                                            }
+                                        }
+
+                                        if(!layer->is_scale && b_scale)
+                                        {
+                                            std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
+                                            if(no_scale_planes.size() > 0)
+                                            {
+                                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
+                                                continue;
+                                            }
+                                        }
+
+                                        if(alpha == 0xFF && b_alpha)
+                                        {
+                                            std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
+                                            if(no_alpha_planes.size() > 0)
+                                            {
+                                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                                continue;
+                                            }
                                         }
                                     }
 #endif
