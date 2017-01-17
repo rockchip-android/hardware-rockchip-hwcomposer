@@ -368,6 +368,16 @@ class DrmHotplugHandler : public DrmEventHandler {
   const struct hwc_procs *procs_ = NULL;
 };
 
+#if RK_INVALID_REFRESH
+typedef struct _threadPamaters
+{
+    int count;
+    pthread_mutex_t mlk;
+    pthread_mutex_t mtx;
+    pthread_cond_t cond;
+}threadPamaters;
+#endif
+
 struct hwc_context_t {
   // map of display:hwc_drm_display_t
   typedef std::map<int, hwc_drm_display_t> DisplayMap;
@@ -390,7 +400,16 @@ struct hwc_context_t {
   int fb_fd;
   int fb_blanked;
 #endif
+#if RK_INVALID_REFRESH
+    bool                isGLESComp;
+    bool                mOneWinOpt;
+    threadPamaters      mRefresh;
+#endif
+
 };
+#if RK_INVALID_REFRESH
+hwc_context_t* g_ctx = NULL;
+#endif
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
   native_handle_t *new_handle =
@@ -926,6 +945,14 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     int iMode = hwc_get_int_property("sys.hwc.compose_policy","0");
     if( iMode <= 0 || (iMode == 1 && display_id == 1) || (iMode == 2 && display_id == 0) )
         return true;
+
+#if RK_INVALID_REFRESH
+    if(ctx->mOneWinOpt)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"Enter static screen opt,go to GPU GLES at line=%d", __LINE__);
+        return true;
+    }
+#endif
 
     //If the transform nv12 layers is bigger than one,then go into GPU GLES.
     //If the transform normal layers is bigger than zero,then go into GPU GLES.
@@ -1965,11 +1992,23 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                 {
                     ALOGV("iTotalSize=%d is bigger than iThreshold=%d,go to GPU GLES at line=%d", iTotalSize, iThreshold, __LINE__);
                     use_framebuffer_target = true;
+                    hd->mixMode = HWC_DEFAULT;
+                    for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                    {
+                        layer_content.layers[i].bMix = false;
+                    }
                 }
 
             }
             else
+            {
                 use_framebuffer_target = true;
+                hd->mixMode = HWC_DEFAULT;
+                for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                {
+                    layer_content.layers[i].bMix = false;
+                }
+            }
         }
 #endif
     }
@@ -2024,9 +2063,16 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             }
         }
 #endif
+
+        if(ctx->isGLESComp)
+            ctx->isGLESComp = false;
+
         if (layer->compositionType == HWC_FRAMEBUFFER)
           layer->compositionType = HWC_OVERLAY;
       } else {
+        if(!ctx->isGLESComp)
+            ctx->isGLESComp = true;
+
 #if RK_10BIT_BYPASS
         if(hd->is10bitVideo)
         {
@@ -2073,6 +2119,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
   }
 
+#if RK_INVALID_REFRESH
+  if(ctx->mOneWinOpt)
+    ctx->mOneWinOpt = false;
+#endif
 
   return 0;
 }
@@ -2091,6 +2141,30 @@ static void hwc_add_layer_to_retire_fence(
     display_contents->retireFenceFd = dup(layer->releaseFenceFd);
   }
 }
+
+#if RK_INVALID_REFRESH
+void TimeInt2Obj(int imSecond, timeval *ptVal)
+{
+    ptVal->tv_sec=imSecond/1000;
+    ptVal->tv_usec=(imSecond%1000)*1000;
+}
+static int hwc_static_screen_opt_set(struct hwc_context_t *ctx)
+{
+    struct itimerval tv = {{0,0},{0,0}};
+    if (!ctx->isGLESComp) {
+        int interval_value = hwc_get_int_property("sys.vwb.time", "2500");
+        interval_value = interval_value > 5000? 5000:interval_value;
+        interval_value = interval_value < 250? 250:interval_value;
+        TimeInt2Obj(interval_value,&tv.it_value);
+        ALOGD_IF(log_level(DBG_VERBOSE),"reset timer!");
+    } else {
+        tv.it_value.tv_usec = 0;
+        ALOGD_IF(log_level(DBG_VERBOSE),"close timer!");
+    }
+    setitimer(ITIMER_REAL, &tv, NULL);
+    return 0;
+}
+#endif
 
 static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
                    hwc_display_contents_1_t **sf_display_contents) {
@@ -2359,6 +2433,10 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   }
 
   composition.reset(NULL);
+
+#if RK_INVALID_REFRESH
+  hwc_static_screen_opt_set(ctx);
+#endif
 
   return ret;
 }
@@ -2680,6 +2758,49 @@ static int hwc_enumerate_displays(struct hwc_context_t *ctx) {
   return 0;
 }
 
+#if RK_INVALID_REFRESH
+static void hwc_static_screen_opt_handler(int sig)
+{
+    hwc_context_t* ctx = g_ctx;
+    if (sig == SIGALRM) {
+        ctx->mOneWinOpt = true;
+        pthread_mutex_lock(&ctx->mRefresh.mlk);
+        ctx->mRefresh.count = 100;
+        ALOGD_IF(log_level(DBG_VERBOSE),"hwc_static_screen_opt_handler:mRefresh.count=%d",ctx->mRefresh.count);
+        pthread_mutex_unlock(&ctx->mRefresh.mlk);
+        pthread_cond_signal(&ctx->mRefresh.cond);
+    }
+
+    return;
+}
+
+void  *invalidate_refresh(void *arg)
+{
+    hwc_context_t* ctx = (hwc_context_t*)arg;
+    int count = 0;
+    int nMaxCnt = 25;
+    unsigned int nSleepTime = 200;
+
+    pthread_cond_wait(&ctx->mRefresh.cond,&ctx->mRefresh.mtx);
+    while(true) {
+        for(count = 0; count < nMaxCnt; count++) {
+            usleep(nSleepTime*1000);
+            pthread_mutex_lock(&ctx->mRefresh.mlk);
+            count = ctx->mRefresh.count;
+            ctx->mRefresh.count ++;
+            ALOGD_IF(log_level(DBG_VERBOSE),"invalidate_refresh mRefresh.count=%d",ctx->mRefresh.count);
+            pthread_mutex_unlock(&ctx->mRefresh.mlk);
+            ctx->procs->invalidate(ctx->procs);
+        }
+        pthread_cond_wait(&ctx->mRefresh.cond,&ctx->mRefresh.mtx);
+        count = 0;
+    }
+
+    pthread_exit(NULL);
+    return NULL;
+}
+#endif
+
 static int hwc_device_open(const struct hw_module_t *module, const char *name,
                            struct hw_device_t **dev) {
   if (strcmp(name, HWC_HARDWARE_COMPOSER)) {
@@ -2760,6 +2881,30 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     }
 
   hwc_init_version();
+#endif
+
+#if RK_INVALID_REFRESH
+    ctx->mOneWinOpt = false;
+    ctx->isGLESComp = false;
+    ctx->mRefresh.count = 0;
+    g_ctx = ctx.get();
+    pthread_t invalidate_refresh_th;
+    if (pthread_create(&invalidate_refresh_th, NULL, invalidate_refresh, ctx.get()))
+    {
+        ALOGE("Create invalidate_refresh_th thread error .");
+    }
+
+    signal(SIGALRM, hwc_static_screen_opt_handler);
+#if 0
+    int interval_value = hwc_get_int_property("sys.vwb.time", "2500");
+    interval_value = interval_value > 5000? 5000:interval_value;
+    interval_value = interval_value < 250? 250:interval_value;
+
+    struct itimerval tv = {{0,0},{0,0}};
+    TimeInt2Obj(1,&tv.it_value);
+    TimeInt2Obj(interval_value,&tv.it_interval);
+    setitimer(ITIMER_REAL,&tv,NULL);
+#endif
 #endif
 
   *dev = &ctx->device.common;

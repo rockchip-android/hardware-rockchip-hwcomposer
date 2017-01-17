@@ -76,14 +76,15 @@ void DrmCompositorWorker::Routine() {
         break;
       case -EINTR:
         return;
-#if USE_PRE_COMP
+//close pre-comp for static screen.
       case -ETIMEDOUT:
+#if 0
         ret = compositor_->SquashAll();
         if (ret)
           ALOGD_IF(log_level(DBG_DEBUG),"Failed to squash all %d", ret);
         did_squash_all_ = true;
-        return;
 #endif
+        return;
       default:
         ALOGE("Failed to wait for signal, %d", wait_ret);
         return;
