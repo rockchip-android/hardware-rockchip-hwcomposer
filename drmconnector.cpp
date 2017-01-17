@@ -74,6 +74,10 @@ bool DrmConnector::built_in() const {
          type_ == DRM_MODE_CONNECTOR_DSI || type_ == DRM_MODE_CONNECTOR_VIRTUAL;
 }
 
+const DrmMode &DrmConnector::best_mode() const {
+  return best_mode_;
+}
+
 int DrmConnector::UpdateModes() {
   int fd = drm_->fd();
 
@@ -138,6 +142,10 @@ void DrmConnector::set_fake_mode(DrmMode fake_active_mode) {
 
 const DrmMode &DrmConnector::current_mode() const {
   return current_mode_;
+}
+
+void DrmConnector::set_best_mode(const DrmMode &mode) {
+  best_mode_ = mode;
 }
 
 void DrmConnector::set_active_mode(const DrmMode &mode) {

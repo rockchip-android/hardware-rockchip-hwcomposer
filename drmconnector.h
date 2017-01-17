@@ -51,8 +51,10 @@ class DrmConnector {
   const std::vector<DrmMode> &modes() const {
     return modes_;
   }
+  const DrmMode &best_mode() const;
   const DrmMode &active_mode() const;
   const DrmMode &current_mode() const;
+  void set_best_mode(const DrmMode &mode);
   void set_active_mode(const DrmMode &mode);
   void set_current_mode(const DrmMode &mode);
 
@@ -99,6 +101,7 @@ class DrmConnector {
   DrmMode active_mode_;
   DrmMode fake_active_mode_;
   DrmMode current_mode_;
+  DrmMode best_mode_;
   std::vector<DrmMode> modes_;
 
   DrmProperty dpms_property_;
