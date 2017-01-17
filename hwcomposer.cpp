@@ -1917,8 +1917,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
            {
                 hd->is10bitVideo = true;
-                if(layer->compositionType == HWC_NODRAW)
-                    layer->compositionType = HWC_FRAMEBUFFER;
+               // if(layer->compositionType == HWC_NODRAW)
+                 //   layer->compositionType = HWC_FRAMEBUFFER;
                 break;
            }
         }
@@ -2073,7 +2073,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         if(!ctx->isGLESComp)
             ctx->isGLESComp = true;
 
-#if RK_10BIT_BYPASS
+#if 0 //RK_10BIT_BYPASS 10bit nodraw
         if(hd->is10bitVideo)
         {
             if(layer->handle)
