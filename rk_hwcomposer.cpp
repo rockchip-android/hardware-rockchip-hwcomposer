@@ -3538,6 +3538,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(context->IsRk322x && context->IsRkBox)
             sync_fbinfo_fence(&fb_info);
 
+	if (context->IsRk3328 && context->IsRkBox)
+	    sync_fbinfo_fence(&fb_info);
 
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
         {
