@@ -51,6 +51,26 @@ bool DrmMode::operator==(const drmModeModeInfo &m) const {
          v_scan_ == m.vscan && flags_ == m.flags && type_ == m.type;
 }
 
+bool DrmMode::operator==(const DrmMode &m) const {
+  return clock_ == m.clock() && h_display_ == m.h_display()&&
+         h_sync_start_ == m.h_sync_start() && h_sync_end_ == m.h_sync_end() &&
+         h_total_ == m.h_total() && h_skew_ == m.h_skew() &&
+         v_display_ == m.v_display() && v_sync_start_ == m.v_sync_start() &&
+         v_sync_end_ == m.v_sync_end() && v_total_ == m.v_total() &&
+         v_scan_ == m.v_scan() && flags_ == m.flags() && type_ == m.type();
+}
+
+bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
+                    bool interlaced) const
+{
+  int interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
+
+  if (h_display_ == width && v_display_ == height &&
+      interlaced_ == interlaced && v_refresh_ == vrefresh)
+    return true;
+  return false;
+}
+
 void DrmMode::ToDrmModeModeInfo(drm_mode_modeinfo *m) const {
   m->clock = clock_;
   m->hdisplay = h_display_;
