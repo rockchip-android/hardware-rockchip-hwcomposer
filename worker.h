@@ -25,6 +25,7 @@ namespace android {
 
 class Worker {
  public:
+  pthread_mutex_t* getLock();
   int Lock();
   int Unlock();
 

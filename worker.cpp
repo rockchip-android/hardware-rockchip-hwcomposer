@@ -76,6 +76,11 @@ bool Worker::initialized() const {
   return initialized_;
 }
 
+
+pthread_mutex_t* Worker::getLock() {
+  return &lock_;
+}
+
 int Worker::Lock() {
   return pthread_mutex_lock(&lock_);
 }

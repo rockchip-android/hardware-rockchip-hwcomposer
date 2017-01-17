@@ -191,9 +191,11 @@ DrmDisplayCompositor::FrameWorker::FrameWorker(DrmDisplayCompositor *compositor)
 }
 
 DrmDisplayCompositor::FrameWorker::~FrameWorker() {
+  pthread_cond_destroy(&frame_queue_cond_);
 }
 
 int DrmDisplayCompositor::FrameWorker::Init() {
+  pthread_cond_init(&frame_queue_cond_, NULL);
   return InitWorker();
 }
 
@@ -205,11 +207,16 @@ void DrmDisplayCompositor::FrameWorker::QueueFrame(
    * If we don't set this limitation,sometimes it will lead many frames' acquirefence don't signal,
    * finanlly,lead fd leak out.
    */
-  while (frame_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH) {
-    usleep(DRM_QUEUE_USLEEP);
-  }
+  //while (frame_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH) {
+ //   usleep(DRM_QUEUE_USLEEP);
+  //}
 
   Lock();
+  while(frame_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH)
+  {
+    pthread_cond_wait(&frame_queue_cond_,getLock());
+  }
+
   FrameState frame;
   frame.composition = std::move(composition);
   frame.status = status;
@@ -236,6 +243,7 @@ void DrmDisplayCompositor::FrameWorker::Routine() {
   if (!frame_queue_.empty()) {
     frame = std::move(frame_queue_.front());
     frame_queue_.pop();
+    pthread_cond_signal(&frame_queue_cond_);
   }
 
   ret = Unlock();
@@ -316,6 +324,7 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
     ALOGE("Failed to acquire compositor lock %d", ret);
 
   pthread_mutex_destroy(&lock_);
+  pthread_cond_destroy(&composite_queue_cond_);
 }
 
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
@@ -327,6 +336,7 @@ int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
     ALOGE("Failed to initialize drm compositor lock %d\n", ret);
     return ret;
   }
+
   ret = worker_.Init();
   if (ret) {
     pthread_mutex_destroy(&lock_);
@@ -339,6 +349,8 @@ int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
     ALOGE("Failed to initialize frame worker %d\n", ret);
     return ret;
   }
+
+  pthread_cond_init(&composite_queue_cond_, NULL);
 
   initialized_ = true;
   return 0;
@@ -378,9 +390,17 @@ int DrmDisplayCompositor::QueueComposition(
     return ret;
   }
 
+  while(composite_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH)
+  {
+    pthread_cond_wait(&composite_queue_cond_,&lock_);
+  }
+
+#if 0
   // Block the queue if it gets too large. Otherwise, SurfaceFlinger will start
   // to eat our buffer handles when we get about 1 second behind.
   while (composite_queue_.size() >= DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH) {
+
+#if 0
     pthread_mutex_unlock(&lock_);
 #if RK_DRM_HWC
     //sched_yield will lead cpu schedule abnormal.
@@ -389,7 +409,9 @@ int DrmDisplayCompositor::QueueComposition(
     sched_yield();
 #endif
     pthread_mutex_lock(&lock_);
+#endif
   }
+#endif
 
   composite_queue_.push(std::move(composition));
 
@@ -1475,6 +1497,7 @@ int DrmDisplayCompositor::Composite() {
       std::move(composite_queue_.front()));
 
   composite_queue_.pop();
+  pthread_cond_signal(&composite_queue_cond_);
 
   ret = pthread_mutex_unlock(&lock_);
   if (ret) {

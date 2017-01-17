@@ -120,7 +120,7 @@ typedef enum tagMixMode
     gettimeofday(&tpend2,NULL);\
     usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;\
     if (property_get_bool("sys.hwc.time", 0)) \
-    ALOGD_IF(log_level(DBG_DEBUG),"%s use time=%ld ms",tag,usec1);\
+    ALOGD_IF(1,"%s use time=%ld ms",tag,usec1);\
 
 
 struct DrmHwcLayer;

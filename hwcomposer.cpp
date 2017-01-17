@@ -1529,7 +1529,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::ve
     {
         bool has_10_bit_layer = false;
         int format = -1;
-        for (size_t i = 0; i < 2; ++i)
+        for (size_t i = 0; i < layers.size()-3; ++i)
         {
            if(layers[i].format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
            {
@@ -1540,7 +1540,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::ve
 
         if(!has_10_bit_layer)
         {
-            for (size_t i = 0; i < 2; ++i)
+            for (size_t i = 0; i < layers.size()-3; ++i)
             {
                 ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
                 layers[i].bMix = true;
@@ -2273,6 +2273,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
             sf_layer->acquireFenceFd = -1;
         }
 #endif
+
       layer.acquire_fence.Set(sf_layer->acquireFenceFd);
       sf_layer->acquireFenceFd = -1;
 

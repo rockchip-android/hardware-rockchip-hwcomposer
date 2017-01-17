@@ -133,6 +133,7 @@ class DrmDisplayCompositor {
     void Routine() override;
 
    private:
+    pthread_cond_t frame_queue_cond_;  //rk: limit frame queue size;
     DrmDisplayCompositor *compositor_;
     std::queue<FrameState> frame_queue_;
   };
@@ -184,6 +185,8 @@ class DrmDisplayCompositor {
 
   std::queue<std::unique_ptr<DrmDisplayComposition>> composite_queue_;
   std::unique_ptr<DrmDisplayComposition> active_composition_;
+
+  pthread_cond_t composite_queue_cond_;  //rk: limit composite queue size;
 
   bool initialized_;
   bool active_;
