@@ -379,26 +379,25 @@ class DrmHotplugHandler : public DrmEventHandler {
             conn->id());
 
       if (cur_state == DRM_MODE_CONNECTED) {
-    hwc_drm_display_t *hd = &(*displays_)[conn->display()];
-    update_display_bestmode(hd, conn.get());
-    DrmMode mode = conn->best_mode();
-
-    if(mode.h_display() > mode.v_display() && mode.v_display() > 1080 )
-    {
-        hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
-        hd->default_h = 1080;
-    } else {
-        hd->default_w = mode.h_display();
-        hd->default_h = mode.v_display();
-    }
-
 	if (conn->display() == 0) {
-		ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_ON);
-		if (ret) {
-			ALOGE("Failed to set dpms mode off %d", ret);
-			return;
-		}
-	}
+          ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_ON);
+            if (ret) {
+              ALOGE("Failed to set dpms mode off %d", ret);
+              return;
+            }
+        } else {
+          hwc_drm_display_t *hd = &(*displays_)[conn->display()];
+          update_display_bestmode(hd, conn.get());
+          DrmMode mode = conn->best_mode();
+
+          if (mode.h_display() > mode.v_display() && mode.v_display() > 1080) {
+            hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
+            hd->default_h = 1080;
+          } else {
+            hd->default_w = mode.h_display();
+            hd->default_h = mode.v_display();
+          }
+        }
       } else {
         if (conn->display() != 0) {
           ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_OFF);
