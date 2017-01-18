@@ -264,6 +264,36 @@ void DrmDisplayCompositor::FrameWorker::Routine() {
   ALOGD_IF(log_level(DBG_INFO),"----------------------------FrameWorker Routine end----------------------------");
 }
 
+#if RK_DEBUG_CHECK_CRC
+static int crcTable[256];
+static void initCrcTable(void)
+{
+	unsigned int c;
+	unsigned int i, j;
+
+	for (i = 0; i < 256; i++) {
+		c = (unsigned int)i;
+		for (j = 0; j < 8; j++) {
+			if (c & 1) {
+				c = 0xedb88320L ^ (c >> 1);
+			} else {
+			    c = c >> 1;
+			}
+		}
+		crcTable[i] = c;
+	}
+}
+
+static unsigned int createCrc32(unsigned int crc,unsigned const char *buffer, unsigned int size)
+{
+	unsigned int i;
+	for (i = 0; i < size; i++) {
+		crc = crcTable[(crc ^ buffer[i]) & 0xff] ^ (crc >> 8);
+	}
+	return crc ;
+}
+#endif
+
 DrmDisplayCompositor::DrmDisplayCompositor()
     : drm_(NULL),
       display_(-1),
@@ -294,6 +324,10 @@ DrmDisplayCompositor::DrmDisplayCompositor()
   if (ret) {
     ALOGE("Failed to open gralloc module %d", ret);
   }
+
+#if RK_DEBUG_CHECK_CRC
+    initCrcTable();
+#endif
 
 }
 
@@ -1125,7 +1159,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_ZPOS_SUPPORT
     int zpos = 0;
 #endif
-
+#if RK_DEBUG_CHECK_CRC
+    unsigned int crc32 = 0;
+#endif
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
         ALOGE("Can't handle more than one source layer sz=%zu type=%d",
@@ -1190,6 +1226,16 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       source_crop = layer.source_crop;
       if (layer.blending == DrmHwcBlending::kPreMult)
         alpha = layer.alpha;
+
+
+#if RK_DEBUG_CHECK_CRC
+    void* cpu_addr;
+    gralloc_->lock(gralloc_, layer.sf_handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK, //gr_handle->usage,
+                    0, 0, layer.width, layer.height, (void **)&cpu_addr);
+    crc32 = createCrc32(0xFFFFFFFF,(unsigned const char *)cpu_addr,sizeof(layer.width*layer.height));
+    ALOGD("layer=%s, w=%d, h=%d, crc32=0x%x",layer.name.c_str(),layer.width,layer.height,crc32);
+    gralloc_->unlock(gralloc_, layer.sf_handle);
+#endif
 
 #if USE_AFBC_LAYER
     if((afbc_plane_id== 0) && isAfbcInternalFormat(layer.internal_format))
