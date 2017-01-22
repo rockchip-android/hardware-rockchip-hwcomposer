@@ -756,6 +756,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
     is_scale = (h_scale_mul != 1.0) || (v_scale_mul != 1.0);
     is_match = false;
     is_take = false;
+#if USE_AFBC_LAYER
+    is_afbc = false;
+#endif
 #if RK_RGA
     is_rotate_by_rga = false;
 #endif
@@ -845,6 +848,9 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
         ALOGE("Failed to get internal_format for buffer %p (%d)", handle.get(), ret);
         return ret;
     }
+
+    if(isAfbcInternalFormat(internal_format))
+        is_afbc = true;
 #endif
 
   return 0;
@@ -1422,7 +1428,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 #if RK_RGA
                             if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
-                               || isAfbcInternalFormat((*iter_layer)->internal_format)
+                               || (*iter_layer)->is_afbc
 #endif
                                )
 #endif

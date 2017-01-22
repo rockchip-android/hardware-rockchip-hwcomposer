@@ -256,6 +256,7 @@ struct DrmHwcLayer {
 
 #if USE_AFBC_LAYER
   uint64_t internal_format;
+  bool is_afbc;
 #endif
 
 #if RK_RGA

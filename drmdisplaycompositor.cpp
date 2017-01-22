@@ -1162,6 +1162,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_DEBUG_CHECK_CRC
     unsigned int crc32 = 0;
 #endif
+#if USE_AFBC_LAYER
+    bool is_afbc = false;
+#endif
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
         ALOGE("Can't handle more than one source layer sz=%zu type=%d",
@@ -1238,7 +1241,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #endif
 
 #if USE_AFBC_LAYER
-    if((afbc_plane_id== 0) && isAfbcInternalFormat(layer.internal_format))
+    is_afbc = layer.is_afbc;
+    if((afbc_plane_id== 0) && is_afbc)
     {
         afbc_plane_id = plane->id();
         ALOGD_IF(log_level(DBG_VERBOSE),"fbdc layer %s,plane id=%d",layer.name.c_str(),afbc_plane_id);
@@ -1381,10 +1385,12 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << src_t << "," << src_w
             << "," << src_h << "]"
 #if RK_ZPOS_SUPPORT
-            << ", zpos=" << zpos;
-#else
-            ;
+            << ", zpos=" << zpos
 #endif
+#if USE_AFBC_LAYER
+            << ", is_afbc=" << is_afbc
+#endif
+            ;
     index++;
 #endif
 
