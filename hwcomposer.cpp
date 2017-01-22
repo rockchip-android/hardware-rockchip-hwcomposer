@@ -57,6 +57,7 @@
 #include "hwcutil.h"
 #endif
 
+
 #define UM_PER_INCH 25400
 
 namespace android {
@@ -458,6 +459,12 @@ struct hwc_context_t {
     bool                isGLESComp;
     bool                mOneWinOpt;
     threadPamaters      mRefresh;
+#endif
+
+#if RK_STEREO
+    int is_3d;
+    int fd_3d;
+    threadPamaters mControlStereo;
 #endif
 
 };
@@ -1047,6 +1054,14 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     if(ctx->mOneWinOpt)
     {
         ALOGD_IF(log_level(DBG_DEBUG),"Enter static screen opt,go to GPU GLES at line=%d", __LINE__);
+        return true;
+    }
+#endif
+
+#if RK_STEREO
+    if(ctx->is_3d)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"Is 3d mode,go to GPU GLES at line=%d", __LINE__);
         return true;
     }
 #endif
@@ -1930,6 +1945,65 @@ static void video_ui_optimize(struct hwc_context_t *ctx, hwc_display_contents_1_
 }
 #endif
 
+#if RK_STEREO
+static void detect_3d_mode(struct hwc_context_t *ctx, hwc_display_contents_1_t *display_content, int display)
+{
+    int forceStereop = 0;
+    int forceStereoe = 0;
+    int force3d = 0;
+    int force3dp = hwc_get_int_property("sys.hwc.force3d.primary","0");
+    int force3de = hwc_get_int_property("sys.hwc.force3d.external","0");
+
+    if(1==force3dp || 2==force3dp){
+        forceStereoe = forceStereop = force3dp;
+    }else{
+        forceStereoe = forceStereop = 0;
+    }
+
+    unsigned int numlayer = display_content->numHwLayers;
+    int needStereo = 0;
+    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+        if(display_content->hwLayers[j].alreadyStereo) {
+            needStereo = display_content->hwLayers[j].alreadyStereo;
+            break;
+        }
+    }
+
+    if(0==display && forceStereop){
+        needStereo = forceStereop;
+    }else if(1==display && forceStereoe){
+        needStereo = forceStereoe;
+    }
+
+    if(needStereo) {
+        ctx->is_3d = true;
+
+        for (unsigned int j = 0; j <(numlayer - 1); j++) {
+            display_content->hwLayers[j].displayStereo = needStereo;
+        }
+    } else {
+        for (unsigned int j = 0; j <(numlayer - 1); j++) {
+            display_content->hwLayers[j].displayStereo = needStereo;
+        }
+    }
+
+    if (needStereo & 0x8000) {
+        for (unsigned int j = 0; j <(numlayer - 1); j++) {
+            display_content->hwLayers[j].alreadyStereo = 0;
+            display_content->hwLayers[j].displayStereo = (needStereo & (~0x8000));
+        }
+    }
+
+    if(1==display && numlayer > 1) {
+        ALOGD_IF(log_level(DBG_VERBOSE),"Wake up hwc control stereo");
+        pthread_mutex_lock(&ctx->mControlStereo.mlk);
+        ctx->mControlStereo.count = needStereo;
+        pthread_mutex_unlock(&ctx->mControlStereo.mlk);
+        pthread_cond_signal(&ctx->mControlStereo.cond);
+    }
+}
+#endif
+
 #endif
 
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
@@ -1944,6 +2018,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
   std::vector<DrmHwcDisplayContents> layer_contents;
   layer_contents.reserve(num_displays);
+
+#if RK_STEREO
+    ctx->is_3d = false;
+#endif
 
   for (int i = 0; i < (int)num_displays; ++i) {
     if (!display_contents[i])
@@ -2031,6 +2109,11 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
     }
 #endif
+
+#if RK_STEREO
+    detect_3d_mode(ctx, display_contents[i], i);
+#endif
+
     if(!use_framebuffer_target)
         use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
 
@@ -2759,6 +2842,8 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
 
 static int hwc_get_active_config(struct hwc_composer_device_1 *dev,
                                  int display) {
+  UN_USED(dev);
+  UN_USED(display);
   return 0;
 }
 
@@ -2772,6 +2857,8 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
     ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
+
+  UN_USED(index);
 
   if (c->state() != DRM_MODE_CONNECTED)
     return -ENODEV;
@@ -2789,8 +2876,45 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
   return ret;
 }
 
+int init_thread_pamaters(threadPamaters* mThreadPamaters)
+{
+    if(mThreadPamaters) {
+        mThreadPamaters->count = 0;
+        pthread_mutex_init(&mThreadPamaters->mtx, NULL);
+        pthread_mutex_init(&mThreadPamaters->mlk, NULL);
+        pthread_cond_init(&mThreadPamaters->cond, NULL);
+    } else {
+        ALOGE("{%s}%d,mThreadPamaters is NULL",__FUNCTION__,__LINE__);
+    }
+    return 0;
+}
+
+int free_thread_pamaters(threadPamaters* mThreadPamaters)
+{
+    if(mThreadPamaters) {
+        pthread_mutex_destroy(&mThreadPamaters->mtx);
+        pthread_mutex_destroy(&mThreadPamaters->mlk);
+        pthread_cond_destroy(&mThreadPamaters->cond);
+    } else {
+        ALOGE("{%s}%d,mThreadPamaters is NULL",__FUNCTION__,__LINE__);
+    }
+    return 0;
+}
+
 static int hwc_device_close(struct hw_device_t *dev) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)dev;
+
+#if RK_INVALID_REFRESH
+    free_thread_pamaters(&ctx->mRefresh);
+#endif
+#if RK_STEREO
+    if(ctx->fd_3d >= 0)
+    {
+        close(ctx->fd_3d);
+        ctx->fd_3d = -1;
+    }
+    free_thread_pamaters(&ctx->mControlStereo);
+#endif
   delete ctx;
   return 0;
 }
@@ -2862,6 +2986,8 @@ static int hwc_enumerate_displays(struct hwc_context_t *ctx) {
   return 0;
 }
 
+
+
 #if RK_INVALID_REFRESH
 static void hwc_static_screen_opt_handler(int sig)
 {
@@ -2903,6 +3029,131 @@ void  *invalidate_refresh(void *arg)
     pthread_exit(NULL);
     return NULL;
 }
+#endif
+
+#if RK_STEREO
+#define READ_3D_MODE  (0)
+#define WRITE_3D_MODE (1)
+
+int map_3d_mode(int value, int flag)
+{
+    if(flag == READ_3D_MODE)
+    {
+        switch (value)
+        {
+            case 0:
+                return 8;
+            case 6:
+                return 2;
+            case 8:
+                return 1;
+            default:
+                return 0;
+        }
+    }
+    else if(flag == WRITE_3D_MODE)
+    {
+        switch (value)
+        {
+            case 1:
+                return 8;
+            case 2:
+                return 6;
+            case 8:
+                return 0;
+            default:
+                return -1;
+        }
+    }
+    else
+    {
+        ALOGE("%s:line=%d invalid flag =%d", __FUNCTION__, __LINE__, flag);
+        return -1;
+    }
+
+}
+
+/*
+ * get or set 3d mode.
+ * flag : 0--read 1--write
+ */
+int hwc_control_3dmode(hwc_context_t* ctx, int value, int flag)
+{
+    int ret = 0;
+    int iMode;
+    ssize_t err;
+    char buf[200];
+    int fd = ctx->fd_3d;
+
+    if(ctx->fd_3d < 0 || !ctx)
+        return -1;
+
+    switch(flag){
+    case READ_3D_MODE: //read
+        memset(buf,0,sizeof(buf));
+        lseek(fd,0,SEEK_SET);
+        err = read(fd, buf, sizeof(buf));
+        if(err <= 0)
+            ALOGW("read hdmi 3dmode err=%zd",err);
+
+        int mode,hdmi3dmode;
+        sscanf(buf,"3dmodes=%d cur3dmode=%d",&mode,&hdmi3dmode);
+        ALOGI_IF(log_level(DBG_VERBOSE),"hdmi3dmode=%d,mode=%d",hdmi3dmode,mode);
+
+        ret = map_3d_mode(value, READ_3D_MODE);
+        break;
+
+    case WRITE_3D_MODE: //write
+        lseek(fd,0,SEEK_SET);
+        iMode = map_3d_mode(value, WRITE_3D_MODE);
+        char acMode[25];
+        if(iMode != -1)
+        {
+            sprintf(acMode,"%d",iMode);
+            ret = write(fd, acMode, 2);
+            if(ret < 0)
+            {
+                ALOGE("change 3dmode to %d err is %s",value,strerror(errno));
+            }
+        }
+        else
+        {
+            ALOGE("%s:line=%d invalid write mode", __FUNCTION__, __LINE__);
+        }
+        break;
+
+    default:
+        break;
+    }
+    return ret;
+}
+
+
+void* hwc_control_3dmode_thread(void *arg)
+{
+    hwc_context_t* ctx = (hwc_context_t*)arg;
+    int ret = -1;
+    int needStereo = 0;
+
+    ALOGD("hwc_control_3dmode_thread creat");
+    pthread_cond_wait(&ctx->mControlStereo.cond,&ctx->mControlStereo.mtx);
+    while(true) {
+        pthread_mutex_lock(&ctx->mControlStereo.mlk);
+        needStereo = ctx->mControlStereo.count;
+        pthread_mutex_unlock(&ctx->mControlStereo.mlk);
+        ret = hwc_control_3dmode(ctx, 2, READ_3D_MODE);
+        if(needStereo != ret) {
+            hwc_control_3dmode(ctx, needStereo,WRITE_3D_MODE);
+            ALOGI_IF(log_level(DBG_VERBOSE),"change stereo mode %d to %d",ret,needStereo);
+        }
+        ALOGD_IF(log_level(DBG_VERBOSE),"mControlStereo.count=%d",needStereo);
+        pthread_cond_wait(&ctx->mControlStereo.cond,&ctx->mControlStereo.mtx);
+    }
+    ALOGD("hwc_control_3dmode_thread exit");
+    pthread_exit(NULL);
+    return NULL;
+}
+
 #endif
 
 static int hwc_device_open(const struct hw_module_t *module, const char *name,
@@ -2990,7 +3241,7 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
 #if RK_INVALID_REFRESH
     ctx->mOneWinOpt = false;
     ctx->isGLESComp = false;
-    ctx->mRefresh.count = 0;
+    init_thread_pamaters(&ctx->mRefresh);
     g_ctx = ctx.get();
     pthread_t invalidate_refresh_th;
     if (pthread_create(&invalidate_refresh_th, NULL, invalidate_refresh, ctx.get()))
@@ -3009,6 +3260,21 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     TimeInt2Obj(interval_value,&tv.it_interval);
     setitimer(ITIMER_REAL,&tv,NULL);
 #endif
+#endif
+
+#if RK_STEREO
+    init_thread_pamaters(&ctx->mControlStereo);
+    ctx->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
+    if(ctx->fd_3d < 0){
+        ALOGE("open /sys/class/display/HDMI/3dmode fail");
+    }
+
+    pthread_t thread_3d;
+    if (pthread_create(&thread_3d, NULL, hwc_control_3dmode_thread, ctx.get()))
+    {
+        ALOGE("Create hwc_control_3dmode_thread thread error .");
+    }
+
 #endif
 
   *dev = &ctx->device.common;
