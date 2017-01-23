@@ -391,7 +391,7 @@ class DrmHotplugHandler : public DrmEventHandler {
           update_display_bestmode(hd, conn.get());
           DrmMode mode = conn->best_mode();
 
-          if (mode.h_display() > mode.v_display() && mode.v_display() > 1080) {
+          if (mode.h_display() > mode.v_display() && mode.v_display() >= 2160) {
             hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
             hd->default_h = 1080;
           } else {
@@ -1361,6 +1361,59 @@ int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers)
     return 0;
 }
 
+static std::vector<DrmPlane *> rkGetNoYuvUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->get_yuv(); }
+                       );
+  }
+  return usable_planes;
+}
+
+static std::vector<DrmPlane *> rkGetNoScaleUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->get_scale(); }
+                       );
+  }
+  return usable_planes;
+}
+
+static std::vector<DrmPlane *> rkGetNoAlphaUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->alpha_property().id(); }
+                       );
+  }
+  return usable_planes;
+}
 
 //According to zpos and combine layer count,find the suitable plane.
 bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
@@ -1370,7 +1423,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 {
     uint32_t combine_layer_count = 0;
     uint32_t layer_size = layer_vector.size();
-    bool b_yuv,b_scale;
+    bool b_yuv=false,b_scale=false,b_alpha=false;
     std::vector<PlaneGroup *> ::const_iterator iter;
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
     uint64_t rotation = 0;
@@ -1382,7 +1435,11 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%" PRIu64 ",group(%" PRIu64 ") zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
                     __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
         //find the match zpos plane group
-        if(!(*iter)->bUse && (*iter)->zpos >= *zpos)
+        if(!(*iter)->bUse
+#if !RK_ZPOS_SUPPORT
+        && (*iter)->zpos >= *zpos
+#endif
+        )
         {
             ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%zu",__LINE__,layer_size,(*iter)->planes.size());
 
@@ -1404,14 +1461,20 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 (*iter_plane)->id(),(*iter_plane)->is_use(),(*iter_plane)->get_possible_crtc_mask());
                         if(!(*iter_plane)->is_use() && (*iter_plane)->GetCrtcSupported(*crtc))
                         {
-#if 1
+
+                            bool bNeed = false;
                             b_yuv  = (*iter_plane)->get_yuv();
-                            if((*iter_layer)->is_yuv && !b_yuv)
+                            if((*iter_layer)->is_yuv)
                             {
-                                ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
-                                continue;
+                                if(!b_yuv)
+                                {
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support yuv",(*iter_plane)->id());
+                                    continue;
+                                }
+                                else
+                                    bNeed = true;
                             }
-#endif
+
                             b_scale = (*iter_plane)->get_scale();
                             if((*iter_layer)->is_scale)
                             {
@@ -1429,21 +1492,70 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                                 (*iter_plane)->id(), (*iter_layer)->h_scale_mul, (*iter_layer)->v_scale_mul);
                                         continue;
                                     }
+                                    else
+                                        bNeed = true;
                                 }
                             }
 
                             if ((*iter_layer)->blending == DrmHwcBlending::kPreMult)
                                 alpha = (*iter_layer)->alpha;
-                            if(alpha != 0xFF && (*iter_plane)->alpha_property().id() == 0)
+
+                            b_alpha = (*iter_plane)->alpha_property().id()?true:false;
+                            if(alpha != 0xFF)
                             {
-                                ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
-                                ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
-                                continue;
+                                if(!b_alpha)
+                                {
+                                    ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
+                                    ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
+                                    continue;
+                                }
+                                else
+                                    bNeed = true;
                             }
+
+#if RK_ZPOS_SUPPORT
+                            if(!bNeed)
+                            {
+                                if(!(*iter_layer)->is_yuv && b_yuv)
+                                {
+                                    std::vector<DrmPlane *> no_yuv_planes = rkGetNoYuvUsablePlanes(crtc);
+                                    if(no_yuv_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use yuv feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+
+
+                                if(!(*iter_layer)->is_scale && b_scale)
+                                {
+                                    std::vector<DrmPlane *> no_scale_planes = rkGetNoScaleUsablePlanes(crtc);
+                                    if(no_scale_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use scale feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+
+
+
+                                if(alpha == 0xFF && b_alpha)
+                                {
+                                    std::vector<DrmPlane *> no_alpha_planes = rkGetNoAlphaUsablePlanes(crtc);
+                                    if(no_alpha_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+                            }
+
+#endif
+
 #if RK_RGA
                             if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
-                               || (*iter_layer)->is_afbc
+                               || isAfbcInternalFormat((*iter_layer)->internal_format)
 #endif
                                )
 #endif
@@ -1465,10 +1577,13 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 
                             ALOGD_IF(log_level(DBG_DEBUG),"MatchPlane: match layer=%s,plane=%d,(*iter_layer)->index=%zu",(*iter_layer)->name.c_str(),
                                 (*iter_plane)->id(),(*iter_layer)->index);
-
+                            //Find the match plane for layer,it will be commit.
+                            //composition_plane->emplace_back(DrmCompositionPlane::Type::kLayer, (*iter_plane), crtc, (*iter_layer)->index);
                             (*iter_layer)->is_match = true;
                             (*iter_plane)->set_use(true);
-
+#if RK_ZPOS_SUPPORT
+                            //composition_plane->back().set_zpos((*iter_layer)->zpos);
+#endif
                             combine_layer_count++;
                             break;
 
@@ -1479,7 +1594,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                 {
                     ALOGD_IF(log_level(DBG_DEBUG),"line=%d all match",__LINE__);
                     //update zpos for the next time.
-                    *zpos=(*iter)->zpos+1;
+                     *zpos += 1;
                     (*iter)->bUse = true;
                     return true;
                 }
@@ -1497,6 +1612,7 @@ bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 
     return false;
 }
+
 
 bool MatchPlanes(
   std::map<int, std::vector<DrmHwcLayer*>> &layer_map,
@@ -1579,24 +1695,25 @@ static float getPixelWidthByAndroidFormat(int format)
        return pixelWidth;
 }
 
-int vop_band_width(DrmMode &mode, hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
+float vop_band_width(hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
 {
-    int iTotalSize = 0;
-    int src_w=0, src_h=0;
+    float scale_factor = 0;
     if(hd->mixMode == HWC_MIX_DOWN || hd->mixMode == HWC_MIX_UP)
     {
-        iTotalSize += (int)mode.h_display() * (int)mode.v_display();
+        scale_factor += 1.0;
     }
     for(size_t i = 0; i < layers.size(); ++i)
     {
         if(layers[i].bMix)
             continue;
-        src_w = (int)(layers[i].source_crop.right - layers[i].source_crop.left);
-        src_h = (int)(layers[i].source_crop.bottom - layers[i].source_crop.top);
-        iTotalSize += src_w * src_h;
+        scale_factor += layers[i].h_scale_mul * layers[i].v_scale_mul;
     }
 
-    return iTotalSize;
+    return scale_factor;
+}
+
+bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask) {
+  return !!((1 << crtc.pipe()) & possible_crtc_mask);
 }
 
 bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::vector<DrmHwcLayer>& layers)
@@ -1607,6 +1724,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd, std::ve
 
     combine_layer(layer_map,layers);
     bMatch = MatchPlanes(layer_map,crtc,drm);
+
     if(bMatch)
     {
         for(std::vector<DrmHwcLayer>::const_iterator iter_layer= layers.begin();
@@ -2121,13 +2239,15 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     video_ui_optimize(ctx, display_contents[i], &ctx->displays[i]);
 #endif
 
+#if RK_MIX
     if(!use_framebuffer_target)
     {
-#if RK_MIX
         int ret = -1;
         for (int j = 0; j < num_layers-1; j++) {
           hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
           if(sf_layer->handle == NULL)
+            continue;
+          if(sf_layer->compositionType == HWC_NODRAW)
             continue;
 
           layer_content.layers.emplace_back();
@@ -2149,38 +2269,68 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
         }
         DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
+        bool bUseMatch = false;
+        int iUsePlane = 0;
+        int iPlaneSize = 0;
+
         hd->mixMode = HWC_DEFAULT;
         if(crtc)
-            mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
+            bUseMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
 
-        int iTotalSize = vop_band_width(mode, &ctx->displays[i], layer_content.layers);
-        int iThreshold = 3.3 * (int)mode.h_display() * (int)mode.v_display();
-        if(iTotalSize > iThreshold)
+        std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
+        //set use flag to false.
+        for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+           iter != plane_groups.end(); ++iter) {
+            if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs) && (*iter)->bUse)
+                iUsePlane++;
+            if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
+                iPlaneSize++;
+        }
+
+        if(bUseMatch)
+            iUsePlane++;
+
+        if(iUsePlane >= iPlaneSize)
         {
-            //try mix down
-            if(layer_content.layers.size() > 6 && !ctx->displays[i].is10bitVideo)
+            float scale_factor = vop_band_width(&ctx->displays[i], layer_content.layers);
+            if(scale_factor > 3.3)
             {
-                bool has_10_bit_layer = false;
-                int format = -1;
-
-
-                for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                //try mix down
+                if(layer_content.layers.size() > 6 && !ctx->displays[i].is10bitVideo)
                 {
-                    layer_content.layers[i].bMix = false;
+                    bool has_10_bit_layer = false;
+                    int format = -1;
+
+
+                    for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                    {
+                        layer_content.layers[i].bMix = false;
+                    }
+
+                    for (size_t i = 0; i < 2; ++i)
+                    {
+                        ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
+                        layer_content.layers[i].bMix = true;
+                        hd->mixMode = HWC_MIX_DOWN;
+                        layer_content.layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+                    }
+
+                    scale_factor = vop_band_width(&ctx->displays[i], layer_content.layers);
+                    if(scale_factor > 3.3)
+                    {
+                        ALOGD_IF(log_level(DBG_DEBUG),"scale_factor=%f is bigger than scale Threshold=%f,go to GPU GLES at line=%d", scale_factor, 3.3, __LINE__);
+                        use_framebuffer_target = true;
+                        hd->mixMode = HWC_DEFAULT;
+                        for (size_t i = 0; i < layer_content.layers.size(); ++i)
+                        {
+                            layer_content.layers[i].bMix = false;
+                        }
+                    }
+
                 }
-
-                for (size_t i = 0; i < 2; ++i)
+                else
                 {
-                    ALOGD_IF(log_level(DBG_DEBUG), "Go into Mix down");
-                    layer_content.layers[i].bMix = true;
-                    hd->mixMode = HWC_MIX_DOWN;
-                    layer_content.layers[i].raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
-                }
-
-                iTotalSize = vop_band_width(mode, &ctx->displays[i], layer_content.layers);
-                if(iTotalSize > iThreshold)
-                {
-                    ALOGV("iTotalSize=%d is bigger than iThreshold=%d,go to GPU GLES at line=%d", iTotalSize, iThreshold, __LINE__);
+                    ALOGD_IF(log_level(DBG_DEBUG),"scale_factor=%f is bigger than scale Threshold=%f,go to GPU GLES at line=%d", scale_factor, 3.3, __LINE__);
                     use_framebuffer_target = true;
                     hd->mixMode = HWC_DEFAULT;
                     for (size_t i = 0; i < layer_content.layers.size(); ++i)
@@ -2188,20 +2338,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                         layer_content.layers[i].bMix = false;
                     }
                 }
-
-            }
-            else
-            {
-                use_framebuffer_target = true;
-                hd->mixMode = HWC_DEFAULT;
-                for (size_t i = 0; i < layer_content.layers.size(); ++i)
-                {
-                    layer_content.layers[i].bMix = false;
-                }
             }
         }
-#endif
     }
+#endif  //end of RK_MIX
 
 #endif
 
@@ -2757,7 +2897,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
   if (width && height) {
     hd->default_w = width;
     hd->default_h = height;
-  } else if( (mode.h_display() > mode.v_display()) && mode.v_display() > 1080) {
+  } else if( (mode.h_display() > mode.v_display()) && mode.v_display() >= 2160) {
     hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
     hd->default_h = 1080;
   } else {
