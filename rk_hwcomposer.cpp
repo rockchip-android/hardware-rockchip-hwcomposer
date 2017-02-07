@@ -3504,7 +3504,8 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
 
    // if(!context->fb_blanked)
     {
-        hotplug_reset_dstpos(&fb_info, 5);
+	if (context->IsRk3328)
+	    hotplug_reset_dstpos(&fb_info, 5);
 
         if(context->IsRk322x && context->IsRkBox)
             hotplug_reset_dstpos(&fb_info,2);
