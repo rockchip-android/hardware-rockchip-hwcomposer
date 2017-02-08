@@ -125,7 +125,7 @@
     ((n) + ((align) - 1)) & ~((align) - 1) \
 )
 
-#define GHWC_VERSION  "2.78"
+#define GHWC_VERSION  "2.79"
 
 //HWC version Tag
 //Get commit info:  git log --format="Author: %an%nTime:%cd%nCommit:%h%n%n%s%n%n"

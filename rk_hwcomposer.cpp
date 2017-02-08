@@ -1180,7 +1180,7 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
         vfactor = (float)(layer->sourceCrop.bottom - layer->sourceCrop.top)
             / (layer->displayFrame.bottom - layer->displayFrame.top);
-        if((hfactor != 1.0 || vfactor != 1.0) && !context->IsRk322x)
+        if((hfactor != 1.0 || vfactor != 1.0) && !(context->IsRk322x || context->IsRk3328))
         {
             scale_cnt ++;
             if(i>0)
@@ -1199,7 +1199,8 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
         forceUiDetect = (getHdmiMode() == 1 && (context->IsRk3126 || context->IsRk3128));
         // vop has only one win support scale,or vop sacle donwe need more BW lead to vop shake
-        if((scale_cnt > 1 || (context->vop_mbshake && vfactor > 1.0)) && !context->IsRk322x)
+        if((scale_cnt > 1 || (context->vop_mbshake && vfactor > 1.0)) &&
+							!(context->IsRk322x || context->IsRk3328))
         {
             context->win_swap = 0;
             if(is_out_log())
@@ -1241,9 +1242,6 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int  i ;
     hwcContext * context = (hwcContext *)ctx;
 
-    if (context->IsRk3328)
-	return -1;
-
     if(context->engine_fd <= 0)
     {
         if(is_out_log())
@@ -1257,7 +1255,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
             ALOGW("err !!!! RGA err_cnt =%d,return to other policy",context->engine_err_cnt);
         return -1;
     }
-    if(context->IsRk322x || context->IsRk3126)
+    if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
@@ -1342,8 +1340,6 @@ int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     }
 #endif
 
-    if (context->IsRk3328)
-	return -1;
     if(context->engine_fd <= 0)
     {
         if(is_out_log())
@@ -1357,7 +1353,7 @@ int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             ALOGD("line=%d,num=%d,err_cnt=%d",__LINE__,list->numHwLayers - 1,context->engine_err_cnt);
         return -1;
     }
-    if(context->IsRk322x || context->IsRk3126)
+    if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
@@ -1469,15 +1465,13 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
-    if (context->IsRk3328)
-	return -1;
     if(context->engine_fd <= 0)
     {
         if(is_out_log())
             ALOGW("err !!!! RGA not exit");
         return -1;
     }
-    if(context->IsRk322x || context->IsRk3126)
+    if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
@@ -1605,8 +1599,6 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
-    if (context->IsRk3328)
-	return -1;
 
     if(context->engine_fd <= 0)
     {
@@ -1632,7 +1624,7 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
            ALOGD("exit line=%d,err_cnt=%d",__LINE__,context->engine_err_cnt);
         return -1;
     }
-    if(context->IsRk322x || context->IsRk3126)
+    if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
@@ -1754,7 +1746,7 @@ int try_hwc_vop_rga_policy(void * ctx,hwc_display_contents_1_t *list)
             return -1;
         }    
     }
-    if(context->IsRk322x || context->IsRk3126)
+    if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
@@ -1869,7 +1861,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
         struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
-        if (layer->flags & HWC_SKIP_LAYER && !(context->IsRk322x && i > 0))
+        if (layer->flags & HWC_SKIP_LAYER && !((context->IsRk322x || context->IsRk3328) && i > 0))
         {
             if(is_out_log())
                 ALOGD("vop_gpu skip,flag=%x,hanlde=%x",layer->flags);
