@@ -48,6 +48,8 @@
 #define EN_VIDEO_UI_MIX         0
 #define FENCE_TIME_USE          (1)
 #define ONLY_USE_FB_BUFFERS     (0)  //zxl:If close this macro,you need remove hasBlitComposition condition in DisplayDevice::swapBuffers
+#define MaxIForVop              (3840)
+
 #ifdef TARGET_BOARD_PLATFORM_RK30XXB
 #define GPU_BASE           handle->iBase
 #define GPU_WIDTH          handle->iWidth

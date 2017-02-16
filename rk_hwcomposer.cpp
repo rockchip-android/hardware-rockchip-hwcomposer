@@ -310,6 +310,21 @@ bool is_displayframe_intersect(hwc_layer_1_t * rs,hwc_layer_1_t * ls)
     return xret && yret;
 }
 
+int is_vop_yuv(int format)
+{
+    int ret = 0;
+    switch(format){
+        case 0x20:
+        case 0x22:
+            ret = 1;
+            break;
+
+        default:
+            break;
+    }
+    return ret;
+}
+
 int type_of_android_format(int fmt)
 {
     //1:yuv,2:rgb
@@ -787,6 +802,67 @@ void sync_fbinfo_fence(struct rk_fb_win_cfg_data* fb_info)
         }
     }
     return;
+}
+
+int hwc_reset_fb_info(struct rk_fb_win_cfg_data *fb_info, hwcContext * context)
+{
+    bool interleaveForVop = false;
+    float hfactor;
+    int scale = 1;
+    int ionFd, phy_addr;
+    int xact, yact, xsize, ysize, yvir, format;
+    int relxres, relyres, vsync_priod;
+
+    if (!context)
+        return -EINVAL;
+
+#if 1
+    for (int i = 0; i < 4; i++) {
+        for (int j= 0; j < 4; j++) {
+            xact = fb_info->win_par[i].area_par[j].xact;
+            yact = fb_info->win_par[i].area_par[j].yact;
+            yvir = fb_info->win_par[i].area_par[j].yvir;
+            xsize = fb_info->win_par[i].area_par[j].xsize;
+            ysize = fb_info->win_par[i].area_par[j].ysize;
+            format = fb_info->win_par[i].area_par[j].data_format;
+            ionFd = fb_info->win_par[i].area_par[j].ion_fd;
+            phy_addr = fb_info->win_par[i].area_par[j].phy_addr;
+            hfactor = (float)ysize / (float)yact;
+            vsync_priod = context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period;
+            relxres = context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
+            relyres = context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
+
+            interleaveForVop = ionFd || phy_addr;
+            interleaveForVop = interleaveForVop && is_vop_yuv(format);
+            interleaveForVop = interleaveForVop && (xact > MaxIForVop || yact > MaxIForVop);
+            interleaveForVop = interleaveForVop && (hfactor <= 0.95);
+            interleaveForVop = interleaveForVop &&  vsync_priod >= 50 && relxres >= 4096;
+
+            if (is_out_log() && (yvir % 2) && interleaveForVop)
+                ALOGW("We need interleave for vop but yvir is not align to 2");
+            interleaveForVop = interleaveForVop && (yvir % 2 == 0);
+            if (interleaveForVop) {
+                    fb_info->win_par[i].area_par[j].xvir *= 2;
+                    fb_info->win_par[i].area_par[j].yvir /= 2;
+                    fb_info->win_par[i].area_par[j].yact /= 2;
+            }
+        }
+    }
+#else
+    scale = hwc_get_int_property("sys.wzq.test", "1");
+    for (int i = 0; i < 4; i++) {
+        for (int j= 0; j < 4; j++) {
+            if(fb_info->win_par[i].area_par[j].ion_fd ||
+                                        fb_info->win_par[i].area_par[j].phy_addr) {
+                    fb_info->win_par[i].area_par[j].xact /= scale;
+                    fb_info->win_par[i].area_par[j].yact /= scale;
+                    fb_info->win_par[i].area_par[j].xsize /= scale;
+                    fb_info->win_par[i].area_par[j].ysize /= scale;
+            }
+        }
+    }
+#endif
+    return 0;
 }
 
 #if hwcDumpSurface
@@ -3000,7 +3076,7 @@ int Get_layer_disp_area( hwc_layer_1_t * layer, hwcRECT* dstRects)
     return 0;
 }
 
-int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
+int hwc_vop_config(hwcContext * context, hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
     int start = 0,end = 0;
@@ -3398,12 +3474,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
-	    if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
-	    {
-		fb_info.win_par[winIndex].area_par[0].xvir *= 2;
-		fb_info.win_par[winIndex].area_par[0].yvir /= 2;
-		fb_info.win_par[winIndex].area_par[0].yact /= 2;
-	    }
+            if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+            {
+                fb_info.win_par[winIndex].area_par[0].xvir *= 2;
+                fb_info.win_par[winIndex].area_par[0].yvir /= 2;
+                fb_info.win_par[winIndex].area_par[0].yact /= 2;
+            }
             /**/
             fb_info.win_par[winIndex].area_par[0].x_offset -= fb_info.win_par[winIndex].area_par[0].x_offset%2;
             fb_info.win_par[winIndex].area_par[0].y_offset -= fb_info.win_par[winIndex].area_par[0].y_offset%2;            
@@ -3421,12 +3497,12 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x22;
-	    if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
-	    {
-		fb_info.win_par[winIndex].area_par[0].xvir *= 2;
-		fb_info.win_par[winIndex].area_par[0].yvir /= 2;
-		fb_info.win_par[winIndex].area_par[0].yact /= 2;
-	    }
+            if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+            {
+                fb_info.win_par[winIndex].area_par[0].xvir *= 2;
+                fb_info.win_par[winIndex].area_par[0].yvir /= 2;
+                fb_info.win_par[winIndex].area_par[0].yact /= 2;
+            }
             /**/
             fb_info.win_par[winIndex].area_par[0].x_offset -= fb_info.win_par[winIndex].area_par[0].x_offset%2;
             fb_info.win_par[winIndex].area_par[0].y_offset -= fb_info.win_par[winIndex].area_par[0].y_offset%2;
@@ -3527,8 +3603,11 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(context->mIsVirUiResolution)
             hotplug_reset_dstpos(&fb_info,3);
 
-	if ((context->IsRk3328 || context->IsRk322x) && context->IsRkBox)
-	    sync_fbinfo_fence(&fb_info);
+        if ((context->IsRk3328 || context->IsRk322x) && context->IsRkBox)
+            sync_fbinfo_fence(&fb_info);
+
+        if (context->IsRk3328)
+            hwc_reset_fb_info(&fb_info, context);
 
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
         {
