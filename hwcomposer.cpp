@@ -2572,6 +2572,15 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
       // This means we should insert the FB_TARGET layer in the composition
       // stack at the location of the first skip layer, and ignore the rest.
       if (sf_layer->flags & HWC_SKIP_LAYER) {
+          //rk: SurfaceFlinger will create acquireFenceFd for nodraw skip layer.
+          //    Close it here to avoid anon_inode:sync_fence fd leak.
+          if(sf_layer->compositionType == HWC_NODRAW)
+          {
+                if(sf_layer->acquireFenceFd >= 0)
+                    close(sf_layer->acquireFenceFd);
+                sf_layer->acquireFenceFd = -1;
+          }
+
         if (framebuffer_target_index < 0)
           continue;
         int idx = framebuffer_target_index;
