@@ -651,7 +651,7 @@ bool is_boot_skip_platform(hwcContext * context)
 
     skipPlatform = skipPlatform || context->IsRk3126;
     skipPlatform = skipPlatform || context->IsRk3128;
-    skipPlatform = skipPlatform || context->IsRk322x;
+    skipPlatform = skipPlatform || (context->IsRk322x && !context->IsRk3328);
     skipPlatform = skipPlatform || context->IsRk3036;
 
     return skipPlatform;
@@ -3498,8 +3498,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
     {
 	if (context->IsRk3328)
 	    hotplug_reset_dstpos(&fb_info, 5);
-
-        if(context->IsRk322x && context->IsRkBox)
+        else if(context->IsRk322x && context->IsRkBox)
             hotplug_reset_dstpos(&fb_info,2);
 
 #if (defined(HOTPLUG_MODE) && !defined(TARGET_BOARD_PLATFORM_RK3188))
@@ -3528,10 +3527,7 @@ int hwc_vop_config(hwcContext * context,hwc_display_contents_1_t *list)
         if(context->mIsVirUiResolution)
             hotplug_reset_dstpos(&fb_info,3);
 
-        if(context->IsRk322x && context->IsRkBox)
-            sync_fbinfo_fence(&fb_info);
-
-	if (context->IsRk3328 && context->IsRkBox)
+	if ((context->IsRk3328 || context->IsRk322x) && context->IsRkBox)
 	    sync_fbinfo_fence(&fb_info);
 
         if(ioctl(context->fbFd, RK_FBIOSET_CONFIG_DONE, &fb_info))
