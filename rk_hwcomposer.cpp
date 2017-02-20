@@ -836,8 +836,10 @@ int hwc_reset_fb_info(struct rk_fb_win_cfg_data *fb_info, hwcContext * context)
             interleaveForVop = interleaveForVop && is_vop_yuv(format);
             interleaveForVop = interleaveForVop && (xact > MaxIForVop || yact > MaxIForVop);
             interleaveForVop = interleaveForVop && (hfactor <= 0.95);
-            interleaveForVop = interleaveForVop &&  vsync_priod >= 50 && relxres >= 4096;
+            interleaveForVop = interleaveForVop &&  vsync_priod >= 50 && relxres >= 3840;
 
+            if (is_out_log())
+                ALOGD("[%d,%d]=>[%d,%d][%d,%d,%d]", xact,yact,xsize,ysize,relxres,relyres,vsync_priod);
             if (is_out_log() && (yvir % 2) && interleaveForVop)
                 ALOGW("We need interleave for vop but yvir is not align to 2");
             interleaveForVop = interleaveForVop && (yvir % 2 == 0);
