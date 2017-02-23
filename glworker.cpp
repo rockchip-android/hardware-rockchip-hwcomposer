@@ -720,7 +720,7 @@ void GLWorkerCompositor::Finish() {
 
   char use_framebuffer_cache_opt[PROPERTY_VALUE_MAX];
   //disable use_framebuffer_cache,otherwise it will lead mem leak when re-allocate DrmFramebuffer
-  property_get("hwc.drm.use_framebuffer_cache", use_framebuffer_cache_opt, "1");
+  property_get("hwc.drm.use_framebuffer_cache", use_framebuffer_cache_opt, "0");
   bool use_framebuffer_cache = atoi(use_framebuffer_cache_opt);
 
   if (use_framebuffer_cache) {

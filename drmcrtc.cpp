@@ -100,18 +100,6 @@ unsigned DrmCrtc::pipe() const {
   return pipe_;
 }
 
-int DrmCrtc::display() const {
-  return display_;
-}
-
-void DrmCrtc::set_display(int display) {
-  display_ = display;
-}
-
-bool DrmCrtc::can_bind(int display) const {
-  return display_ == -1 || display_ == display;
-}
-
 bool DrmCrtc::can_overscan() const {
   return can_overscan_;
 }

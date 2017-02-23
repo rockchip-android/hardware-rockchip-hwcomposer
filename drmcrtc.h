@@ -38,9 +38,6 @@ class DrmCrtc {
   uint32_t id() const;
   unsigned pipe() const;
 
-  int display() const;
-  void set_display(int display);
-
   bool can_bind(int display) const;
   bool can_overscan() const;
 

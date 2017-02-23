@@ -35,11 +35,11 @@ DrmCompositor::~DrmCompositor() {
 }
 
 int DrmCompositor::Init() {
-  for (auto &conn : drm_->connectors()) {
-    int display = conn->display();
-    int ret = compositor_map_[display].Init(drm_, display);
+  int i;
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    int ret = compositor_map_[i].Init(drm_, i);
     if (ret) {
-      ALOGE("Failed to initialize display compositor for %d", display);
+      ALOGE("Failed to initialize display compositor for %d", i);
       return ret;
     }
   }
@@ -66,7 +66,7 @@ std::unique_ptr<DrmComposition> DrmCompositor::CreateComposition(
 
 int DrmCompositor::QueueComposition(
     std::unique_ptr<DrmComposition> composition) {
-  int ret;
+  int i, ret;
 
   ret = composition->Plan(compositor_map_);
   if (ret)
@@ -76,16 +76,11 @@ int DrmCompositor::QueueComposition(
   if (ret)
     return ret;
 
-  for (auto &conn : drm_->connectors()) {
-    int display = conn->display();
-
-    if (conn->is_fake())
-      continue;
-
-    int ret = compositor_map_[display].QueueComposition(
-        composition->TakeDisplayComposition(display));
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    int ret = compositor_map_[i].QueueComposition(
+        composition->TakeDisplayComposition(i));
     if (ret) {
-      ALOGV("Failed to queue composition for display %d (%d)", display, ret);
+      ALOGV("Failed to queue composition for display %d (%d)", i, ret);
       return ret;
     }
   }
@@ -102,9 +97,15 @@ int DrmCompositor::Composite() {
   return -EINVAL;
 }
 
+void DrmCompositor::ClearDisplay(int display) {
+  compositor_map_[display].ClearDisplay();
+}
+
 void DrmCompositor::Dump(std::ostringstream *out) const {
   *out << "DrmCompositor stats:\n";
-  for (auto &conn : drm_->connectors())
-    compositor_map_[conn->display()].Dump(out);
+  int i;
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    compositor_map_[i].Dump(out);
+  }
 }
 }

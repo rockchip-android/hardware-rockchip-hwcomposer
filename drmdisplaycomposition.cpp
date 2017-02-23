@@ -551,6 +551,10 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   // squashed layers).
   std::map<size_t, DrmHwcLayer *> to_composite;
   bool use_squash_framebuffer = false;
+  if (!crtc_) {
+    ALOGE("can't not plan when crtc is NULL\n");
+    return -EINVAL;
+  }
 #if RK_DRM_HWC
   std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
 
@@ -560,7 +564,7 @@ int DrmDisplayComposition::Plan(SquashState *squash,
         (*iter)->bUse=false;
         for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
             iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            if((*iter_plane)->GetCrtcSupported(*crtc_))  //only init the special crtc's plane
+            if(crtc_ && (*iter_plane)->GetCrtcSupported(*crtc_))  //only init the special crtc's plane
                 (*iter_plane)->set_use(false);
         }
     }

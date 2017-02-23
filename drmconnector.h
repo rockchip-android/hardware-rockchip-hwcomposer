@@ -57,6 +57,7 @@ class DrmConnector {
   void set_best_mode(const DrmMode &mode);
   void set_active_mode(const DrmMode &mode);
   void set_current_mode(const DrmMode &mode);
+  void SetDpmsMode(uint32_t dpms_mode);
 
   const DrmProperty &dpms_property() const;
   const DrmProperty &crtc_id_property() const;
@@ -68,6 +69,7 @@ class DrmConnector {
   void set_encoder(DrmEncoder *encoder);
 
   drmModeConnection state() const;
+  void force_disconnect(bool force);
 
   uint32_t get_type() { return type_; }
 
@@ -76,9 +78,6 @@ class DrmConnector {
   drmModeConnectorPtr get_connector() { return connector_; }
   void update_state(drmModeConnection state);
   void update_size(int w, int h);
-  void set_fake(bool bFake) { bFake_ = bFake; }
-  bool is_fake() const { return bFake_; }
-  void set_fake_mode(DrmMode fake_active_mode);
 
 #if RK_DRM_HWC_DEBUG
   void dump_connector(std::ostringstream *out) const;
@@ -93,13 +92,12 @@ class DrmConnector {
 
   uint32_t type_;
   drmModeConnection state_;
-  bool bFake_;
+  bool force_disconnect_;
 
   uint32_t mm_width_;
   uint32_t mm_height_;
 
   DrmMode active_mode_;
-  DrmMode fake_active_mode_;
   DrmMode current_mode_;
   DrmMode best_mode_;
   std::vector<DrmMode> modes_;

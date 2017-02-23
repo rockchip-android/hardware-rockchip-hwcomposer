@@ -36,7 +36,6 @@ DrmConnector::DrmConnector(DrmResources *drm, drmModeConnectorPtr c,
       display_(-1),
       type_(c->connector_type),
       state_(c->connection),
-      bFake_(false),
       mm_width_(c->mmWidth),
       mm_height_(c->mmHeight),
       possible_encoders_(possible_encoders),
@@ -81,16 +80,6 @@ const DrmMode &DrmConnector::best_mode() const {
 int DrmConnector::UpdateModes() {
   int fd = drm_->fd();
 
-  if (bFake_ && (type_ == DRM_MODE_CONNECTOR_HDMIA ||
-        type_ == DRM_MODE_CONNECTOR_HDMIB) ) {
-    if (modes_.empty()) {
-      std::vector<DrmMode> new_modes;
-      new_modes.push_back(active_mode_);
-      modes_.swap(new_modes);
-    }
-    return 0;
-  }
-
   drmModeConnectorPtr c = drmModeGetConnector(fd, id_);
   if (!c) {
     ALOGE("Failed to get connector %d", id_);
@@ -98,6 +87,8 @@ int DrmConnector::UpdateModes() {
   }
 
   state_ = c->connection;
+  if (!c->count_modes)
+    state_ = DRM_MODE_DISCONNECTED;
 
   std::vector<DrmMode> new_modes;
   for (int i = 0; i < c->count_modes; ++i) {
@@ -130,18 +121,19 @@ void DrmConnector::update_state(drmModeConnection state) {
 }
 
 const DrmMode &DrmConnector::active_mode() const {
-  if(fake_active_mode_.id() != 0)
-    return fake_active_mode_;
-  else
     return active_mode_;
-}
-
-void DrmConnector::set_fake_mode(DrmMode fake_active_mode) {
-    fake_active_mode_ = fake_active_mode;
 }
 
 const DrmMode &DrmConnector::current_mode() const {
   return current_mode_;
+}
+
+void DrmConnector::SetDpmsMode(uint32_t dpms_mode) {
+  int ret = drmModeConnectorSetProperty(drm_->fd(), id_, dpms_property_.id(), dpms_mode);
+  if (ret) {
+    ALOGE("Failed to set dpms mode %d %d", ret, dpms_mode);
+    return;
+  }
 }
 
 void DrmConnector::set_best_mode(const DrmMode &mode) {
@@ -170,6 +162,10 @@ DrmEncoder *DrmConnector::encoder() const {
 
 void DrmConnector::set_encoder(DrmEncoder *encoder) {
   encoder_ = encoder;
+}
+
+void DrmConnector::force_disconnect(bool force) {
+    force_disconnect_ = force;
 }
 
 drmModeConnection DrmConnector::state() const {
