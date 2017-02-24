@@ -420,6 +420,7 @@ FenceMangrRga;
         bool     Is_Lvideo;        
         bool     Is_bypp;
         bool     Is_Secure;
+        bool     Is_noi;
         bool    special_app;
         int      isStereo;
         int      Is_debug;

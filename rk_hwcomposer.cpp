@@ -198,7 +198,8 @@ void is_debug_log(void)
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
 
     context->Is_debug = hwc_get_int_property("sys.hwc.log","0");
-    
+    context->Is_noi = hwc_get_int_property("sys.hwc.noi","0");
+
 }
 int is_out_log( void )
 {
@@ -813,7 +814,7 @@ int hwc_reset_fb_info(struct rk_fb_win_cfg_data *fb_info, hwcContext * context)
     int xact, yact, xsize, ysize, yvir, format;
     int relxres, relyres, vsync_priod;
 
-    if (!context)
+    if (!context && context->Is_noi)
         return -EINVAL;
 
 #if 1
@@ -3476,7 +3477,7 @@ int hwc_vop_config(hwcContext * context, hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x20;
-            if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+            if ((handle->usage & GRALLOC_USAGE_PRIVATE_2) && !context->Is_noi)
             {
                 fb_info.win_par[winIndex].area_par[0].xvir *= 2;
                 fb_info.win_par[winIndex].area_par[0].yvir /= 2;
@@ -3499,7 +3500,7 @@ int hwc_vop_config(hwcContext * context, hwc_display_contents_1_t *list)
         if(fb_info.win_par[winIndex].area_par[0].data_format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         {
             fb_info.win_par[winIndex].area_par[0].data_format = 0x22;
-            if (handle->usage & GRALLOC_USAGE_PRIVATE_2)
+            if ((handle->usage & GRALLOC_USAGE_PRIVATE_2) && !context->Is_noi)
             {
                 fb_info.win_par[winIndex].area_par[0].xvir *= 2;
                 fb_info.win_par[winIndex].area_par[0].yvir /= 2;
