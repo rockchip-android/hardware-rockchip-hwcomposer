@@ -4820,10 +4820,10 @@ static int hwc_getDisplayAttributes(struct hwc_composer_device_1* dev, int disp,
                       pdev->dpyAttr[disp].yres);
                 break;
             case HWC_DISPLAY_DPI_X:
-                values[i] = (int32_t)(pdev->dpyAttr[disp].xdpi * 1000.0);
+                values[i] = (int32_t)(pdev->dpyAttr[disp].xdpi);
                 break;
             case HWC_DISPLAY_DPI_Y:
-                values[i] = (int32_t)(pdev->dpyAttr[disp].ydpi * 1000.0);
+                values[i] = (int32_t)(pdev->dpyAttr[disp].ydpi);
                 break;
             default:
                 ALOGE("Unknown display attribute %d",
@@ -4948,8 +4948,9 @@ hwc_device_open(
                    * (info.left_margin  + info.right_margin + info.xres)
                    * info.pixclock;
 
-    ALOGD("[%d,%d,%d],[%d,%d,%d][%d]", info.upper_margin, info.lower_margin,
-	        info.yres, info.left_margin, info.right_margin,info.xres, info.pixclock);
+    ALOGD("v[%d,%d,%d],h[%d,%d,%d],c[%d][%d,%dmm]", info.upper_margin, info.lower_margin,
+			info.yres, info.left_margin, info.right_margin,info.xres,
+			info.pixclock, info.width, info.height);
 
 
     if (inverseRefreshRate)
