@@ -283,6 +283,7 @@ typedef struct hwc_drm_display {
   int display;
 #if RK_VIDEO_UI_OPT
   int iUiFd;
+  bool bHideUi;
 #endif
 #if RK_10BIT_BYPASS
   bool is10bitVideo;
@@ -1998,7 +1999,6 @@ static void video_ui_optimize(struct hwc_context_t *ctx, hwc_display_contents_1_
 {
     int ret = 0;
     int format = 0;
-    bool bHideUi = false;
     int num_layers = display_content->numHwLayers;
     if(num_layers == 3)
     {
@@ -2023,11 +2023,11 @@ static void video_ui_optimize(struct hwc_context_t *ctx, hwc_display_contents_1_
 
                     if(bDiff)
                     {
-                        bHideUi = false;
+                        hd->bHideUi = false;
                         /* Update the backup ui fd */
                         hd->iUiFd = iUiFd;
                     }
-                    else
+                    else if(!hd->bHideUi)
                     {
                         int iWidth = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_WIDTH);
                         int iHeight = hwc_get_handle_attibute(ctx,second_layer->handle,ATT_HEIGHT);
@@ -2036,13 +2036,13 @@ static void video_ui_optimize(struct hwc_context_t *ctx, hwc_display_contents_1_
                                 0, 0, iWidth, iHeight, (void **)&cpu_addr);
                         ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
                         if(!ret){
-                            bHideUi = true;
+                            hd->bHideUi = true;
                             ALOGD_IF(log_level(DBG_VERBOSE), "@video UI close,iWidth=%d,iHeight=%d",iWidth,iHeight);
                         }
                         ctx->gralloc->unlock(ctx->gralloc, second_layer->handle);
                     }
 
-                    if(bHideUi)
+                    if(hd->bHideUi)
                     {
                         second_layer->compositionType = HWC_NODRAW;
                     }
@@ -3090,6 +3090,7 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
   hd->display = display;
 #if RK_VIDEO_UI_OPT
   hd->iUiFd = -1;
+  hd->bHideUi = false;
 #endif
   hd->default_w = 0;
   hd->default_h = 0;
