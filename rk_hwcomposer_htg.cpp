@@ -81,10 +81,12 @@ void rk_check_hdmi_uevents(const char *buf,int len)
     if(ret != 1) return;
     g_hdmi_mode = rk_check_hdmi_state();
 
-    if (fbIndex == 0)
+    if (screenType == -1 && statusFlag == -1)
+	handle_hotplug_event(-1, -1);
+    else if (fbIndex == 0)
         hotplug_change_screen_config(0, fbIndex, statusFlag);
     else
-        handle_hotplug_event(statusFlag, screenType == 6 ? 6 : 1);
+        handle_hotplug_event(statusFlag, 0);
 
     ALOGI("uevent receive!type=%d,status=%d,hdmi=%d,vop=%d,fb=%d,line=%d",
                 screenType, statusFlag, g_hdmi_mode, vopId, fbIndex, __LINE__);

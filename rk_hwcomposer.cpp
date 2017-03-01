@@ -233,14 +233,14 @@ bool is_not_suit_mix_policy(hwc_display_contents_1_t *list)
         return true;
 
     layer = &list->hwLayers[list->numHwLayers - 1];
-    handle = (struct private_handle_t *)layer->handle;
+    if (layer)
+        handle = (struct private_handle_t *)layer->handle;
 
-    switch (handle->format) {
+    switch (handle && handle->format) {
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_BGRA_8888:
             return false;
         default:
-            ALOGD("%d", handle->format);
             break;
     }
 
@@ -4455,11 +4455,16 @@ void handle_hotplug_event(int mode ,int flag )
 {
     hwcContext * context = gcontextAnchor[HWC_DISPLAY_PRIMARY];
     bool isNeedRemove = true;
+
 #if defined(RK322X_BOX) || defined(RK_DONGLE)
     context->procs->invalidate(context->procs);
 #endif
-    if(flag == 1)
+
+    if (mode == -1 && flag == -1) {
+	LOGI("handle_hotplug_event invalidate");
+        context->procs->invalidate(context->procs);
         return;
+    }
 
 #if defined(RK322X_BOX) || defined(RK_DONGLE)
     if(!context->mIsBootanimExit)
@@ -4547,6 +4552,13 @@ void handle_hotplug_event(int mode ,int flag )
                 property_get("sys.hwc.htg",value,"hotplug");
                 ALOGI("Trying to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
             }
+#if FORCE_REFRESH
+	    pthread_mutex_lock(&context->mRefresh.mlk);
+	    context->mRefresh.count = 0;
+	    ALOGD_IF(is_out_log(),"Htg:mRefresh.count=%d",context->mRefresh.count);
+	    pthread_mutex_unlock(&context->mRefresh.mlk);
+	    pthread_cond_signal(&context->mRefresh.cond);
+#endif
             ALOGI("connet to hotplug device[%d,%d,%d]",__LINE__,mode,flag);
 #else
             ALOGI("connet to hdmi [%d,%d,%d]",__LINE__,mode,flag);
