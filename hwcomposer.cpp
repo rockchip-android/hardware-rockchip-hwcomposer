@@ -866,6 +866,8 @@ static void dump_layer(struct hwc_context_t *ctx, bool bDump, hwc_layer_1_t *lay
     size_t i;
   std::ostringstream out;
 
+  if (!log_level(DBG_VERBOSE))
+    return;
 
     if(layer->flags & HWC_SKIP_LAYER)
     {
