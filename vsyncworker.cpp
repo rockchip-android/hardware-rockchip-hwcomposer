@@ -27,6 +27,7 @@
 #include <xf86drmMode.h>
 
 #include <cutils/log.h>
+#include <cutils/properties.h>
 #include <hardware/hardware.h>
 
 namespace android {
@@ -114,12 +115,14 @@ int VSyncWorker::SyntheticWaitVBlank(int64_t *timestamp) {
   int ret = clock_gettime(CLOCK_MONOTONIC, &vsync);
 
   float refresh = 60.0f;  // Default to 60Hz refresh rate
-  DrmConnector *conn = drm_->GetConnectorForDisplay(display_);
-  if (conn && conn->active_mode().v_refresh() > 0.0f)
-    refresh = conn->active_mode().v_refresh();
-  else
-    ALOGW("Vsync worker active with conn=%p refresh=%f\n", conn,
-          conn ? conn->active_mode().v_refresh() : 0.0f);
+  DrmConnector *conn = drm_->GetConnectorFromType(display_);
+  if (conn && conn->state() == DRM_MODE_CONNECTED) {
+    if (conn->active_mode().v_refresh() > 0.0f)
+      refresh = conn->active_mode().v_refresh();
+    else
+      ALOGW("Vsync worker active with conn=%p refresh=%f\n", conn,
+            conn->active_mode().v_refresh());
+  }
 
   int64_t phased_timestamp = GetPhasedVSync(
       kOneSecondNs / refresh, vsync.tv_sec * kOneSecondNs + vsync.tv_nsec);
@@ -162,44 +165,46 @@ void VSyncWorker::Routine() {
   if (!enabled)
     return;
 
-    int64_t timestamp;
-    DrmConnector *conn = drm_->GetConnectorForDisplay(display);
-    if (!conn) {
-        ALOGE("Failed to get connector for display");
-         return;
+  PRINT_TIME_START;
+  int64_t timestamp;
+  DrmConnector *conn = drm_->GetConnectorFromType(display);
+  if (!conn) {
+    ALOGE("Failed to get connector for display");
+    return;
+  }
+  DrmCrtc *crtc = NULL;
+  if (conn && conn->state() == DRM_MODE_CONNECTED) {
+    crtc = drm_->GetCrtcFromConnector(conn);
+    if (!crtc) {
+      ALOGE("Failed to get crtc for display");
+      return;
     }
+  }
 
-    if (conn->is_fake()) {
-        ret = SyntheticWaitVBlank(&timestamp);
-        if (ret)
-            return;
+  if (!crtc) {
+    ret = SyntheticWaitVBlank(&timestamp);
+    if (ret)
+      return;
+  } else {
+    uint32_t high_crtc = (crtc->pipe() << DRM_VBLANK_HIGH_CRTC_SHIFT);
+
+    drmVBlank vblank;
+    memset(&vblank, 0, sizeof(vblank));
+    vblank.request.type = (drmVBlankSeqType)(
+        DRM_VBLANK_RELATIVE | (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
+    vblank.request.sequence = 1;
+
+    ret = drmWaitVBlank(drm_->fd(), &vblank);
+    if (ret == -EINTR) {
+      return;
+    } else if (ret) {
+      ret = SyntheticWaitVBlank(&timestamp);
+      if (ret)
+        return;
+    } else {
+      timestamp = (int64_t)vblank.reply.tval_sec * kOneSecondNs +
+                  (int64_t)vblank.reply.tval_usec * 1000;
     }
-    else
-    {
-      DrmCrtc *crtc = drm_->GetCrtcForDisplay(display);
-      if (!crtc) {
-        ALOGE("Failed to get crtc for display");
-        return;
-      }
-      uint32_t high_crtc = (crtc->pipe() << DRM_VBLANK_HIGH_CRTC_SHIFT);
-
-      drmVBlank vblank;
-      memset(&vblank, 0, sizeof(vblank));
-      vblank.request.type = (drmVBlankSeqType)(
-          DRM_VBLANK_RELATIVE | (high_crtc & DRM_VBLANK_HIGH_CRTC_MASK));
-      vblank.request.sequence = 1;
-
-      ret = drmWaitVBlank(drm_->fd(), &vblank);
-      if (ret == -EINTR) {
-        return;
-      } else if (ret) {
-        ret = SyntheticWaitVBlank(&timestamp);
-        if (ret)
-          return;
-      } else {
-        timestamp = (int64_t)vblank.reply.tval_sec * kOneSecondNs +
-                    (int64_t)vblank.reply.tval_usec * 1000;
-      }
   }
   /*
    * There's a race here where a change in procs_ will not take effect until
@@ -213,6 +218,7 @@ void VSyncWorker::Routine() {
   if (procs && procs->vsync)
     procs->vsync(procs, display, timestamp);
   last_timestamp_ = timestamp;
+  PRINT_TIME_END("vsync");
 
   ALOGD_IF(log_level(DBG_INFO),"----------------------------VSyncWorker Routine end----------------------------");
 }

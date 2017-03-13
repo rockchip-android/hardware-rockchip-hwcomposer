@@ -27,6 +27,7 @@ class DrmMode {
  public:
   DrmMode() = default;
   DrmMode(drmModeModeInfoPtr m);
+  ~DrmMode();
 
   bool operator==(const drmModeModeInfo &m) const;
   bool operator==(const DrmMode &m) const;
@@ -57,7 +58,9 @@ class DrmMode {
   std::string name() const;
 
  private:
+  int fd_ = 0;
   uint32_t id_ = 0;
+  uint32_t blob_id_ = 0;
 
   uint32_t clock_ = 0;
 

@@ -38,6 +38,7 @@ class DrmCompositor {
 
   int QueueComposition(std::unique_ptr<DrmComposition> composition);
   int Composite();
+  void ClearDisplay(int display);
   void Dump(std::ostringstream *out) const;
 
 #if RK_10BIT_BYPASS

@@ -241,10 +241,12 @@ int DrmResources::Init() {
       ALOGE("Init connector %d failed", res->connectors[i]);
       break;
     }
+    conn->UpdateModes();
 
     if (conn->built_in() && !found_primary) {
       conn->set_display(0);
       found_primary = true;
+      SetPrimaryDisplay(conn.get());
     } else {
       conn->set_display(display_num);
       ++display_num;
@@ -254,52 +256,17 @@ int DrmResources::Init() {
   }
 
   if (!found_primary) {
-        display_num = 0;
-        for (auto &conn : connectors_) {
-            conn->UpdateModes();
-            if (conn->state() == DRM_MODE_CONNECTED) {
-                conn->set_display(0);
-                found_primary = true;
-                display_num = 1;
-                break;
-            }
-
-            if(conn->get_type() == DRM_MODE_CONNECTOR_HDMIA ||
-                conn->get_type() == DRM_MODE_CONNECTOR_HDMIB) {
-                conn->set_display(0);
-                found_primary = true;
-                display_num = 1;
-
-                drmModeModeInfo m;
-                memset(&m, 0, sizeof(m));
-                char value[PROPERTY_VALUE_MAX];
-                property_get("hwc.fake_primary.xres", value, "1920");
-                m.hdisplay = atoi(value);
-                property_get("hwc.fake_primary.yres", value, "1080");
-                m.vdisplay = atoi(value);
-                property_get("hwc.fake_primary.vrefresh", value, "60");
-                m.vrefresh = atoi(value);
-
-                DrmMode mode(&m);
-                mode.set_id(next_mode_id());
-
-                drmModeConnectorPtr pConnector = conn->get_connector();
-                pConnector->mmWidth = m.hdisplay;
-                pConnector->mmHeight = m.vdisplay;
-                pConnector->connection = DRM_MODE_CONNECTED;
-                conn->update_size(m.hdisplay, m.vdisplay);
-                conn->update_state(DRM_MODE_CONNECTED);
-                conn->set_active_mode(mode);
-                conn->set_fake_mode(mode);
-                conn->set_fake(true);
-            }
-	  }
-	  for (auto &conn : connectors_) {
-		  if (conn->display() == 0)
-			  continue;
-		  conn->set_display(display_num);
-		  ++display_num;
-	  }
+     display_num = 0;
+     for (auto &conn : connectors_) {
+       conn->set_display(display_num);
+       display_num++;
+     }
+  }
+  for (auto &conn : connectors_) {
+    if (conn->display() == 0)
+      SetPrimaryDisplay(conn.get());
+    else if (conn->state() == DRM_MODE_CONNECTED)
+      SetExtendDisplay(conn.get());
   }
 
 #if RK_DRM_HWC_DEBUG
@@ -443,31 +410,39 @@ int DrmResources::Init() {
     return ret;
   }
 
-  for (auto &conn : connectors_) {
-    ret = CreateDisplayPipe(conn.get());
-    if (ret) {
-      ALOGE("Failed CreateDisplayPipe %d with %d", conn->id(), ret);
-      return ret;
-    }
-  }
-
   return 0;
 }
 
-DrmConnector *DrmResources::GetConnectorForDisplay(int display) const {
-  for (auto &conn : connectors_) {
-    if (conn->display() == display)
-      return conn.get();
+void DrmResources::DisplayChanged(void) {
+    enable_changed_ = true;
+};
+
+void DrmResources::SetPrimaryDisplay(DrmConnector *c) {
+  if (primary_ != c) {
+    primary_ = c;
   }
+    enable_changed_ = true;
+};
+
+void DrmResources::SetExtendDisplay(DrmConnector *c) {
+  if (extend_ != c) {
+    extend_ = c;
+    enable_changed_ = true;
+  }
+};
+
+DrmConnector *DrmResources::GetConnectorFromType(int display_type) const {
+  if (display_type == HWC_DISPLAY_PRIMARY)
+    return primary_;
+  else if (display_type == HWC_DISPLAY_EXTERNAL)
+    return extend_;
   return NULL;
 }
 
-DrmCrtc *DrmResources::GetCrtcForDisplay(int display) const {
-  for (auto &crtc : crtcs_) {
-    if (crtc->display() == display)
-      return crtc.get();
-  }
-  return NULL;
+DrmCrtc *DrmResources::GetCrtcFromConnector(DrmConnector *conn) const {
+   if (conn->encoder())
+     return conn->encoder()->crtc();
+   return NULL;
 }
 
 DrmPlane *DrmResources::GetPlane(uint32_t id) const {
@@ -482,57 +457,244 @@ uint32_t DrmResources::next_mode_id() {
   return ++mode_id_;
 }
 
-int DrmResources::TryEncoderForDisplay(int display, DrmEncoder *enc) {
-  /* First try to use the currently-bound crtc */
-  DrmCrtc *crtc = enc->crtc();
-  if (crtc && crtc->can_bind(display)) {
-    crtc->set_display(display);
-    return 0;
-  }
-
-  /* Try to find a possible crtc which will work */
-  for (DrmCrtc *crtc : enc->possible_crtcs()) {
-    /* We've already tried this earlier */
-    if (crtc == enc->crtc())
-      continue;
-
-    if (crtc->can_bind(display)) {
-      enc->set_crtc(crtc);
-      crtc->set_display(display);
-      return 0;
+void DrmResources::ClearDisplay(void)
+{
+    for (int i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+      DrmConnector *conn = GetConnectorFromType(i);
+      if (conn && conn->state() == DRM_MODE_CONNECTED &&
+          conn->current_mode().id() && conn->encoder() &&
+          conn->encoder()->crtc())
+        continue;
+      compositor_.ClearDisplay(i);
     }
-  }
-
-  /* We can't use the encoder, but nothing went wrong, try another one */
-  return -EAGAIN;
 }
 
-int DrmResources::CreateDisplayPipe(DrmConnector *connector) {
-  int display = connector->display();
-  /* Try to use current setup first */
-  if (connector->encoder()) {
-    int ret = TryEncoderForDisplay(display, connector->encoder());
-    if (!ret) {
-      return 0;
-    } else if (ret != -EAGAIN) {
-      ALOGE("Could not set mode %d/%d", display, ret);
-      return ret;
+int DrmResources::UpdateDisplayRoute(void)
+{
+  bool mode_changed = false;
+  int i;
+
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    DrmConnector *conn = GetConnectorFromType(i);
+
+    if (!conn || conn->state() != DRM_MODE_CONNECTED || !conn->current_mode().id())
+      continue;
+    if (conn->current_mode() == conn->active_mode())
+      continue;
+    mode_changed = true;
+  }
+
+  if (!enable_changed_ && !mode_changed)
+    return 0;
+
+  DrmConnector *primary = GetConnectorFromType(HWC_DISPLAY_PRIMARY);
+  if (!primary) {
+    ALOGE("Failed to find primary display\n");
+    return -EINVAL;
+  }
+  DrmConnector *extend = GetConnectorFromType(HWC_DISPLAY_EXTERNAL);
+  if (enable_changed_) {
+    primary->set_encoder(NULL);
+    if (extend)
+      extend->set_encoder(NULL);
+    if (primary->state() == DRM_MODE_CONNECTED) {
+      for (DrmEncoder *enc : primary->possible_encoders()) {
+        for (DrmCrtc *crtc : enc->possible_crtcs()) {
+          if (crtc->get_afbc()) {
+            enc->set_crtc(crtc);
+            primary->set_encoder(enc);
+            ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
+          }
+        }
+      }
+      /*
+       * not limit
+       */
+      if (!primary->encoder() || !primary->encoder()->crtc()) {
+        for (DrmEncoder *enc : primary->possible_encoders()) {
+          for (DrmCrtc *crtc : enc->possible_crtcs()) {
+              enc->set_crtc(crtc);
+              primary->set_encoder(enc);
+              ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
+          }
+        }
+      }
+    }
+    if (extend && extend->state() == DRM_MODE_CONNECTED) {
+      for (DrmEncoder *enc : extend->possible_encoders()) {
+        for (DrmCrtc *crtc : enc->possible_crtcs()) {
+          if (primary && primary->encoder() && primary->encoder()->crtc()) {
+            if (crtc == primary->encoder()->crtc())
+              continue;
+          }
+          ALOGE("set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
+          enc->set_crtc(crtc);
+          extend->set_encoder(enc);
+        }
+      }
+      if (!extend->encoder() || !extend->encoder()->crtc()) {
+        for (DrmEncoder *enc : extend->possible_encoders()) {
+          for (DrmCrtc *crtc : enc->possible_crtcs()) {
+            enc->set_crtc(crtc);
+            extend->set_encoder(enc);
+            ALOGE("set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
+            if (primary && primary->encoder() && primary->encoder()->crtc()) {
+              if (crtc == primary->encoder()->crtc()) {
+                for (DrmEncoder *primary_enc : primary->possible_encoders()) {
+                  for (DrmCrtc *primary_crtc : primary_enc->possible_crtcs()) {
+                    if (extend && extend->encoder() && extend->encoder()->crtc()) {
+                      if (primary_crtc == extend->encoder()->crtc())
+                        continue;
+                    }
+
+                    primary_enc->set_crtc(primary_crtc);
+                    primary->set_encoder(primary_enc);
+                    ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), primary_crtc->id());
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 
-  for (DrmEncoder *enc : connector->possible_encoders()) {
-    int ret = TryEncoderForDisplay(display, enc);
-    if (!ret) {
-      connector->set_encoder(enc);
-      return 0;
-    } else if (ret != -EAGAIN) {
-      ALOGE("Could not set mode %d/%d", display, ret);
-      return ret;
+  drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
+  if (!pset) {
+    ALOGE("Failed to allocate property set");
+    return -ENOMEM;
+  }
+
+#define DRM_ATOMIC_ADD_PROP(object_id, prop_id, value) \
+  ret = drmModeAtomicAddProperty(pset, object_id, prop_id, value); \
+  if (ret < 0) { \
+    ALOGE("Failed to add prop[%d] to [%d]", prop_id, object_id); \
+  }
+
+  int ret;
+  uint32_t blob_id[HWC_NUM_PHYSICAL_DISPLAY_TYPES] = {0};
+
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    DrmConnector *conn = GetConnectorFromType(i);
+
+    if (!conn)
+      continue;
+    if (conn->state() != DRM_MODE_CONNECTED ||
+        !conn->current_mode().id() || !conn->encoder() ||
+        !conn->encoder()->crtc()) {
+        DRM_ATOMIC_ADD_PROP(conn->id(), conn->crtc_id_property().id(), 0);
+      continue;
+    }
+
+    struct drm_mode_modeinfo drm_mode;
+    memset(&drm_mode, 0, sizeof(drm_mode));
+    conn->current_mode().ToDrmModeModeInfo(&drm_mode);
+
+    ret = CreatePropertyBlob(&drm_mode, sizeof(drm_mode), &blob_id[i]);
+    if (ret)
+      continue;
+
+    DrmCrtc *crtc = conn->encoder()->crtc();
+
+//    connector->SetDpmsMode(DRM_MODE_DPMS_ON);
+//    DRM_ATOMIC_ADD_PROP(conn->id(), conn->dpms_property().id(), DRM_MODE_DPMS_ON);
+    DRM_ATOMIC_ADD_PROP(conn->id(), conn->crtc_id_property().id(), crtc->id());
+    DRM_ATOMIC_ADD_PROP(crtc->id(), crtc->mode_property().id(), blob_id[i]);
+    DRM_ATOMIC_ADD_PROP(crtc->id(), crtc->active_property().id(), 1);
+  }
+  /*
+   * Disable unused connector
+   */
+  for (auto &connector : connectors_) {
+    bool in_use = false;
+    for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+      DrmConnector *conn = GetConnectorFromType(i);
+      if (!conn || conn->state() != DRM_MODE_CONNECTED ||
+          !conn->current_mode().id() || !conn->encoder() ||
+          !conn->encoder()->crtc())
+          continue;
+      if (conn->id() == connector->id()) {
+          in_use = true;
+          break;
+      }
+    }
+    if (!in_use) {
+      DrmCrtc *mirror = NULL;
+      if (connector->state() == DRM_MODE_CONNECTED) {
+        for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+          DrmConnector *conn = GetConnectorFromType(i);
+          if (!conn || conn->state() != DRM_MODE_CONNECTED ||
+              !conn->current_mode().id() || !conn->encoder() ||
+              !conn->encoder()->crtc())
+            continue;
+          for (const DrmMode &conn_mode : connector->modes()) {
+            if (conn_mode == conn->current_mode()) {
+              mirror = conn->encoder()->crtc();
+              break;
+            }
+          }
+          if (mirror)
+            break;
+        }
+      }
+      if (mirror) {
+        connector->SetDpmsMode(DRM_MODE_DPMS_ON);
+        DRM_ATOMIC_ADD_PROP(connector->id(), connector->crtc_id_property().id(),
+                            mirror->id());
+      } else {
+        connector->SetDpmsMode(DRM_MODE_DPMS_OFF);
+        DRM_ATOMIC_ADD_PROP(connector->id(), connector->crtc_id_property().id(), 0);
+      }
     }
   }
-  ALOGE("Could not find a suitable encoder/crtc for display %d",
-        connector->display());
-  return -ENODEV;
+  for (auto &crtc : crtcs_) {
+    bool in_use = false;
+    for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+      DrmConnector *conn = GetConnectorFromType(i);
+      if (!conn || conn->state() != DRM_MODE_CONNECTED ||
+          !conn->current_mode().id() || !conn->encoder() ||
+          !conn->encoder()->crtc())
+          continue;
+      if (crtc->id() == conn->encoder()->crtc()->id()) {
+        in_use = true;
+        break;
+      }
+    }
+    if (!in_use) {
+      DRM_ATOMIC_ADD_PROP(crtc->id(), crtc->mode_property().id(), 0);
+      DRM_ATOMIC_ADD_PROP(crtc->id(), crtc->active_property().id(), 0);
+    }
+  }
+
+
+  uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
+  ret = drmModeAtomicCommit(fd_.get(), pset, flags, this);
+  if (ret < 0) {
+    ALOGE("Failed to commit pset ret=%d\n", ret);
+    drmModeAtomicFree(pset);
+    return ret;
+  }
+
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    if (blob_id[i])
+      DestroyPropertyBlob(blob_id[i]);
+  }
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    DrmConnector *conn = GetConnectorFromType(i);
+
+    if (!conn || conn->state() != DRM_MODE_CONNECTED || !conn->current_mode().id())
+      continue;
+
+    if (!conn->encoder() || !conn->encoder()->crtc())
+      continue;
+    conn->set_active_mode(conn->current_mode());
+  }
+  enable_changed_ = false;
+
+  drmModeAtomicFree(pset);
+
+  return 0;
 }
 
 int DrmResources::CreatePropertyBlob(void *data, size_t length,

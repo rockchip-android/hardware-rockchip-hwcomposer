@@ -98,6 +98,7 @@ class DrmDisplayCompositor {
   std::unique_ptr<DrmDisplayComposition> CreateComposition() const;
   int QueueComposition(std::unique_ptr<DrmDisplayComposition> composition);
   int Composite();
+  void ClearDisplay();
   int SquashAll();
   void Dump(std::ostringstream *out) const;
 
@@ -170,7 +171,6 @@ class DrmDisplayCompositor {
   int ApplyDpms(DrmDisplayComposition *display_comp);
   int DisablePlanes(DrmDisplayComposition *display_comp);
 
-  void ClearDisplay();
   void ApplyFrame(std::unique_ptr<DrmDisplayComposition> composition,
                   int status);
 

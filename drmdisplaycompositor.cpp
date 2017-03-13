@@ -342,9 +342,6 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
   if (ret)
     ALOGE("Failed to acquire compositor lock %d", ret);
 
-  if (mode_.blob_id)
-    drm_->DestroyPropertyBlob(mode_.blob_id);
-
   while (!composite_queue_.empty()) {
     composite_queue_.front().reset();
     composite_queue_.pop();
@@ -357,7 +354,6 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 
   pthread_mutex_destroy(&lock_);
   pthread_cond_destroy(&composite_queue_cond_);
-  pthread_mutex_destroy(&mode_lock_);
 }
 
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
@@ -367,11 +363,6 @@ int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
   int ret = pthread_mutex_init(&lock_, NULL);
   if (ret) {
     ALOGE("Failed to initialize drm compositor lock %d\n", ret);
-    return ret;
-  }
-  ret = pthread_mutex_init(&mode_lock_, NULL);
-  if (ret) {
-    ALOGE("Failed to initialize drm mode lock %d\n", ret);
     return ret;
   }
 
@@ -403,15 +394,8 @@ int DrmDisplayCompositor::QueueComposition(
     std::unique_ptr<DrmDisplayComposition> composition) {
   switch (composition->type()) {
     case DRM_COMPOSITION_TYPE_FRAME:
-      if (!active_)
-        return -ENODEV;
       break;
     case DRM_COMPOSITION_TYPE_DPMS:
-      /*
-       * Update the state as soon as we get it so we can start/stop queuing
-       * frames asap.
-       */
-      active_ = (composition->dpms_mode() == DRM_MODE_DPMS_ON);
       break;
     case DRM_COMPOSITION_TYPE_MODESET:
       break;
@@ -465,7 +449,7 @@ int DrmDisplayCompositor::QueueComposition(
 
 std::tuple<uint32_t, uint32_t, int>
 DrmDisplayCompositor::GetActiveModeResolution() {
-  DrmConnector *connector = drm_->GetConnectorForDisplay(display_);
+  DrmConnector *connector = drm_->GetConnectorFromType(display_);
   if (connector == NULL) {
     ALOGE("Failed to determine display mode: no connector for display %d",
           display_);
@@ -1041,12 +1025,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
   std::vector<DrmCompositionRegion> &pre_comp_regions =
       display_comp->pre_comp_regions();
 
-  DrmConnector *connector = drm_->GetConnectorForDisplay(display_);
-  if (!connector) {
-    ALOGE("Could not locate connector for display %d", display_);
-    return -ENODEV;
-  }
-  DrmCrtc *crtc = drm_->GetCrtcForDisplay(display_);
+  DrmCrtc *crtc = display_comp->crtc();
   if (!crtc) {
     ALOGE("Could not locate crtc for display %d", display_);
     return -ENODEV;
@@ -1056,40 +1035,6 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
   if (!pset) {
     ALOGE("Failed to allocate property set");
     return -ENOMEM;
-  }
-
-  ret = pthread_mutex_lock(&mode_lock_);
-  if (ret) {
-    ALOGE("Failed to acquire mode lock %d", ret);
-    return ret;
-  }
-
-  if (!test_only && mode_.needs_modeset) {
-    if (mode_.blob_id)
-      drm_->DestroyPropertyBlob(mode_.blob_id);
-    std::tie(ret, mode_.blob_id) = CreateModeBlob(mode_.mode);
-    if (ret) {
-      ALOGE("Failed to create mode blob for display %d", display_);
-      return ret;
-    }
-
-    ret = drmModeAtomicAddProperty(pset, crtc->id(), crtc->mode_property().id(),
-                                   mode_.blob_id) < 0 ||
-          drmModeAtomicAddProperty(pset, connector->id(),
-                                   connector->crtc_id_property().id(),
-                                   crtc->id()) < 0;
-    if (ret) {
-      ALOGE("Failed to add blob %d to pset", mode_.blob_id);
-      drmModeAtomicFree(pset);
-      return ret;
-    }
-    mode_.needs_modeset = false;
-  }
-  ret = pthread_mutex_unlock(&mode_lock_);
-  if (ret) {
-    ALOGE("Failed to acquire mode lock %d", ret);
-    drmModeAtomicFree(pset);
-    return ret;
   }
 
   if (crtc->can_overscan()) {
@@ -1464,30 +1409,11 @@ PRINT_TIME_END("commit");
   if (pset)
     drmModeAtomicFree(pset);
 
-  if (!test_only && mode_.blob_id) {
-    ret = drm_->DestroyPropertyBlob(mode_.blob_id);
-    if (ret) {
-      ALOGE("Failed to destroy mode property blob %" PRIu32 "/%d",
-            mode_.blob_id, ret);
-      return ret;
-    }
-
-    /* TODO: Add dpms to the pset when the kernel supports it */
-    ret = ApplyDpms(display_comp);
-    if (ret) {
-      ALOGE("Failed to apply DPMS after modeset %d\n", ret);
-      return ret;
-    }
-
-    connector->set_active_mode(mode_.mode);
-    mode_.blob_id = 0;
-  }
-
   return ret;
 }
 
 int DrmDisplayCompositor::ApplyDpms(DrmDisplayComposition *display_comp) {
-  DrmConnector *conn = drm_->GetConnectorForDisplay(display_);
+  DrmConnector *conn = drm_->GetConnectorFromType(display_);
   if (!conn) {
     ALOGE("Failed to get DrmConnector for display %d", display_);
     return -ENODEV;
@@ -1501,23 +1427,6 @@ int DrmDisplayCompositor::ApplyDpms(DrmDisplayComposition *display_comp) {
     return ret;
   }
   return 0;
-}
-
-std::tuple<int, uint32_t> DrmDisplayCompositor::CreateModeBlob(
-    const DrmMode &mode) {
-  struct drm_mode_modeinfo drm_mode;
-  memset(&drm_mode, 0, sizeof(drm_mode));
-  mode.ToDrmModeModeInfo(&drm_mode);
-
-  uint32_t id = 0;
-  int ret = drm_->CreatePropertyBlob(&drm_mode,
-                                     sizeof(struct drm_mode_modeinfo), &id);
-  if (ret) {
-    ALOGE("Failed to create mode property blob %d", ret);
-    return std::make_tuple(ret, 0);
-  }
-  ALOGE("Create blob_id %" PRIu32 "\n", id);
-  return std::make_tuple(ret, id);
 }
 
 void DrmDisplayCompositor::ClearDisplay() {
@@ -1657,20 +1566,6 @@ int DrmDisplayCompositor::Composite() {
 #endif
       return ret;
     case DRM_COMPOSITION_TYPE_MODESET:
-      ret = pthread_mutex_lock(&mode_lock_);
-      if (ret) {
-        ALOGE("Failed to acquire mode lock %d", ret);
-        return ret;
-      }
-
-      mode_.mode = composition->display_mode();
-      mode_.needs_modeset = true;
-
-      ret = pthread_mutex_unlock(&mode_lock_);
-      if (ret) {
-        ALOGE("Failed to acquire mode lock %d", ret);
-        return ret;
-      }
       return 0;
     default:
       ALOGE("Unknown composition type %d", composition->type());

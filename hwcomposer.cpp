@@ -57,7 +57,6 @@
 #include "hwcutil.h"
 #endif
 
-
 #define UM_PER_INCH 25400
 
 namespace android {
@@ -70,6 +69,8 @@ bool isAfbcInternalFormat(uint64_t internal_format)
     return (internal_format & GRALLOC_ARM_INTFMT_AFBC);
 }
 #endif
+
+hwc_context_t* g_ctx = NULL;
 
 #if RK_DRM_HWC_DEBUG
 unsigned int g_log_level;
@@ -280,7 +281,6 @@ struct CheckedOutputFd {
 
 typedef struct hwc_drm_display {
   struct hwc_context_t *ctx;
-  int display;
 #if RK_VIDEO_UI_OPT
   int iUiFd;
   bool bHideUi;
@@ -291,17 +291,17 @@ typedef struct hwc_drm_display {
 #if RK_MIX
   MixMode mixMode;
 #endif
-  int default_w;
-  int default_h;
+  int framebuffer_width;
+  int framebuffer_height;
+  int vrefresh;
   float w_scale;
   float h_scale;
+  bool active;
 
-  VSyncWorker vsync_worker;
 } hwc_drm_display_t;
 
-static int update_display_bestmode(hwc_drm_display_t *hd, DrmConnector *c)
+static int update_display_bestmode(int display, DrmConnector *c)
 {
-  int display = hd->display;
   char resolution[PROPERTY_VALUE_MAX];
   uint32_t width, height, vrefresh;
   bool interlaced;
@@ -339,6 +339,7 @@ static int update_display_bestmode(hwc_drm_display_t *hd, DrmConnector *c)
      return 0;
   }
 
+  ALOGE("Error: Should not get here display=%d %s %d\n", display, __FUNCTION__, __LINE__);
   DrmMode mode;
   c->set_best_mode(mode);
 
@@ -357,16 +358,9 @@ class DrmHotplugHandler : public DrmEventHandler {
 
   void HandleEvent(uint64_t timestamp_us) {
     int ret;
+    DrmConnector *extend = NULL;
+
     for (auto &conn : drm_->connectors()) {
-
-        if(conn->is_fake())
-        {
-            drmModeConnectorPtr pConnector = conn->get_connector();
-            pConnector->connection = DRM_MODE_DISCONNECTED;
-            conn->update_state(DRM_MODE_DISCONNECTED);
-            conn->set_fake(false);
-        }
-
       drmModeConnection old_state = conn->state();
 
       conn->UpdateModes();
@@ -375,47 +369,62 @@ class DrmHotplugHandler : public DrmEventHandler {
 
       if (cur_state == old_state)
         continue;
-
       ALOGI("%s event @%" PRIu64 " for connector %u\n",
             cur_state == DRM_MODE_CONNECTED ? "Plug" : "Unplug", timestamp_us,
             conn->id());
 
       if (cur_state == DRM_MODE_CONNECTED) {
-	if (conn->display() == 0) {
-          ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_ON);
-            if (ret) {
-              ALOGE("Failed to set dpms mode off %d", ret);
-              return;
-            }
-        } else {
-          hwc_drm_display_t *hd = &(*displays_)[conn->display()];
-          update_display_bestmode(hd, conn.get());
-          DrmMode mode = conn->best_mode();
+        if (conn->display())
+          extend = conn.get();
+      }
+    }
 
-          if (mode.h_display() > mode.v_display() && mode.v_display() >= 2160) {
-            hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
-            hd->default_h = 1080;
-          } else {
-            hd->default_w = mode.h_display();
-            hd->default_h = mode.v_display();
-          }
-        }
-      } else {
-        if (conn->display() != 0) {
-          ret = drm_->SetDpmsMode(conn->display(), DRM_MODE_DPMS_OFF);
-          if (ret) {
-            ALOGE("Failed to set dpms mode off %d", ret);
-            return;
-          }
+    /*
+     * status changed?
+     */
+    drm_->DisplayChanged();
+
+    DrmConnector *primary = drm_->GetConnectorFromType(HWC_DISPLAY_PRIMARY);
+    if (!primary) {
+      ALOGE("%s %d Failed to find primary display\n", __FUNCTION__, __LINE__);
+      return;
+    }
+    DrmConnector *old_extend = drm_->GetConnectorFromType(HWC_DISPLAY_EXTERNAL);
+    extend = extend ? extend : old_extend;
+    if (!extend || extend->state() != DRM_MODE_CONNECTED) {
+      extend = NULL;
+      for (auto &conn : drm_->connectors()) {
+        if (conn->id() == primary->id())
+          continue;
+        if (conn->state() == DRM_MODE_CONNECTED) {
+          extend = conn.get();
+          break;
         }
       }
-
-      if (conn->display() == 0)
-	      continue;
-
-      procs_->hotplug(procs_, conn->display(),
-                      cur_state == DRM_MODE_CONNECTED ? 1 : 0);
     }
+    drm_->SetExtendDisplay(extend);
+    if (!extend) {
+      procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 0);
+      procs_->invalidate(procs_);
+      return;
+    }
+
+    hwc_drm_display_t *hd = &(*displays_)[extend->display()];
+    update_display_bestmode(HWC_DISPLAY_EXTERNAL, extend);
+    DrmMode mode = extend->best_mode();
+
+    if (mode.h_display() > mode.v_display() && mode.v_display() >= 2160) {
+      hd->framebuffer_width = mode.h_display() * (1080.0 / mode.v_display());
+      hd->framebuffer_height = 1080;
+    } else {
+      hd->framebuffer_width = mode.h_display();
+      hd->framebuffer_height = mode.v_display();
+    }
+    hd->active = false;
+    procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 0);
+    hd->active = true;
+    procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 1);
+    procs_->invalidate(procs_);
   }
 
  private:
@@ -452,6 +461,8 @@ struct hwc_context_t {
   DummySwSyncTimeline dummy_timeline;
   VirtualCompositorWorker virtual_compositor_worker;
   DrmHotplugHandler hotplug_handler;
+  VSyncWorker primary_vsync_worker;
+  VSyncWorker extend_vsync_worker;
 #if RK_DRM_HWC
   int fb_fd;
   int fb_blanked;
@@ -469,9 +480,6 @@ struct hwc_context_t {
 #endif
 
 };
-#if RK_INVALID_REFRESH
-hwc_context_t* g_ctx = NULL;
-#endif
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
   native_handle_t *new_handle =
@@ -658,41 +666,6 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 }
 #endif
 
-static int hwc_update_mode(struct hwc_composer_device_1 *dev, int display,
-			   DrmMode &mode)
-{
-  struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-  hwc_drm_display_t *hd = &ctx->displays[display];
-  DrmConnector *c = ctx->drm.GetConnectorForDisplay(display);
-  if (!c) {
-    ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
-    return -ENODEV;
-  }
-
-  if (c->state() != DRM_MODE_CONNECTED)
-    return -ENODEV;
-
-  hd->w_scale = (float)mode.h_display() / hd->default_w;
-  hd->h_scale = (float)mode.v_display() / hd->default_h;
-
-  int ret = ctx->drm.SetDisplayActiveMode(display, mode);
-  if (ret) {
-    ALOGE("Failed to set active config %d", ret);
-    return ret;
-  }
-
-  ret = ctx->drm.SetDpmsMode(c->display(), DRM_MODE_DPMS_ON);
-  if (ret) {
-    ALOGE("Failed to set dpms mode off %d", ret);
-    return ret;
-  }
-
-  c->set_current_mode(mode);
-
-  return ret;
-}
-
-
 #if RK_DRM_HWC
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_layer_1_t *sf_layer, Importer *importer,
                                   const gralloc_module_t *gralloc) {
@@ -714,13 +687,19 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
       sf_layer->sourceCropf.left, sf_layer->sourceCropf.top,
       sf_layer->sourceCropf.right, sf_layer->sourceCropf.bottom);
 
-  hwc_drm_display_t *hd = &ctx->displays[display];
+  DrmConnector *conn = ctx->drm.GetConnectorFromType(display);
+  if (!conn) {
+    ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
+    return -ENODEV;
+  }
+
+  hwc_drm_display_t *hd = &ctx->displays[conn->display()];
   display_frame = DrmHwcRect<int>(
       hd->w_scale * sf_layer->displayFrame.left, hd->h_scale * sf_layer->displayFrame.top,
       hd->w_scale * sf_layer->displayFrame.right, hd->h_scale * sf_layer->displayFrame.bottom);
 
 #if RK_DRM_HWC
-    c = ctx->drm.GetConnectorForDisplay(0);
+    c = ctx->drm.GetConnectorFromType(HWC_DISPLAY_PRIMARY);
     if (!c) {
         ALOGE("Failed to get DrmConnector for display %d", 0);
         return -ENODEV;
@@ -866,6 +845,7 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
 
 static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
                      int buff_len) {
+#if 0
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
   std::ostringstream out;
 
@@ -874,6 +854,7 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
   strncpy(buff, out_str.c_str(),
           std::min((size_t)buff_len, out_str.length() + 1));
   buff[buff_len - 1] = '\0';
+#endif
 }
 
 static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
@@ -2139,19 +2120,29 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     if (!display_contents[i])
       continue;
 
+    bool use_framebuffer_target = false;
+
     layer_contents.emplace_back();
     DrmHwcDisplayContents &layer_content = layer_contents.back();
 
-    hwc_drm_display_t *hd = &ctx->displays[i];
-    DrmConnector *connector = ctx->drm.GetConnectorForDisplay(i);
+    DrmConnector *connector = ctx->drm.GetConnectorFromType(i);
     if (!connector) {
       ALOGE("Failed to get connector for display %d line=%d", i,__LINE__);
       continue;
     }
-    update_display_bestmode(hd, connector);
-    DrmMode bestmode = connector->best_mode();
-    if (!(bestmode == connector->current_mode()))
-      hwc_update_mode(dev, i, bestmode);
+
+    DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
+    if (connector->state() != DRM_MODE_CONNECTED || !crtc) {
+      hwc_list_nodraw(display_contents[i]);
+      continue;
+    }
+
+    hwc_drm_display_t *hd = &ctx->displays[connector->display()];
+    update_display_bestmode(i, connector);
+    DrmMode mode = connector->best_mode();
+    connector->set_current_mode(mode);
+    hd->w_scale = (float)mode.h_display() / hd->framebuffer_width;
+    hd->h_scale = (float)mode.v_display() / hd->framebuffer_height;
 
 #if SKIP_BOOT
     if(g_boot_cnt < BOOT_COUNT)
@@ -2162,9 +2153,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 #endif
 
-    bool use_framebuffer_target = false;
-    DrmMode mode;
-    drmModeConnection state;
     int num_layers = display_contents[i]->numHwLayers;
 
     for (int j = 0; j < num_layers-1; j++) {
@@ -2175,24 +2163,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             if(layer->compositionType == HWC_NODRAW)
                 layer->compositionType = HWC_FRAMEBUFFER;
         }
-    }
-
-    if (i == HWC_DISPLAY_VIRTUAL) {
-      use_framebuffer_target = true;
-    } else {
-      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
-      if (!c) {
-        ALOGE("Failed to get DrmConnector for display %d", i);
-        return -ENODEV;
-      }
-
-      if (c->is_fake()) {
-        hwc_list_nodraw(display_contents[i]);
-        continue;
-      }
-
-      mode = c->active_mode();
-      state = c->state();
     }
 
     // Since we can't composite HWC_SKIP_LAYERs by ourselves, we'll let SF
@@ -2260,16 +2230,13 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
           layer.dump_drm_layer(j,&out);
           ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
 #endif
-
         }
-        DrmCrtc *crtc = ctx->drm.GetCrtcForDisplay(i);
         bool bUseMatch = false;
         int iUsePlane = 0;
         int iPlaneSize = 0;
 
         hd->mixMode = HWC_DEFAULT;
-        if(crtc)
-            bUseMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
+        bUseMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[i], layer_content.layers);
 
         std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
         //set use flag to false.
@@ -2360,11 +2327,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     for (int j = 0; j < num_layers; ++j) {
       hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
 
-      if (state != DRM_MODE_CONNECTED) {
-        layer->compositionType = HWC_NODRAW;
-        continue;
-      }
-
       if (!use_framebuffer_target && !hwc_skip_layer(skip_layer_indices, j)) {
         // If the layer is off the screen, don't earmark it for an overlay.
         // We'll leave it as-is, which effectively just drops it from the frame
@@ -2372,8 +2334,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         if ((frame->right - frame->left) <= 0 ||
             (frame->bottom - frame->top) <= 0 ||
             frame->right <= 0 || frame->bottom <= 0 ||
-            frame->left >= (int)hd->default_w ||
-            frame->top >= (int)hd->default_h)
+            frame->left >= (int)hd->framebuffer_width ||
+            frame->top >= (int)hd->framebuffer_height)
          {
             continue;
          }
@@ -2532,17 +2494,17 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 #endif
 
-      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
-
-      if (c && c->is_fake()) {
-        hwc_sync_release(sf_display_contents[i]);
-        continue;
-      }
-
     if (i == HWC_DISPLAY_VIRTUAL) {
       ctx->virtual_compositor_worker.QueueComposite(dc);
       continue;
     }
+
+    DrmConnector *c = ctx->drm.GetConnectorFromType(i);
+    if (!c || c->state() != DRM_MODE_CONNECTED) {
+      hwc_sync_release(sf_display_contents[i]);
+      continue;
+    }
+    hwc_drm_display_t *hd = &ctx->displays[c->display()];
 
     std::ostringstream display_index_formatter;
     display_index_formatter << "retire fence for display " << i;
@@ -2624,7 +2586,6 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     // skip layers, but with a value fb_target layer. This _shouldn't_ happen,
     // but it's not ruled out by the hwc specification
 #if RK_MIX
-    hwc_drm_display_t *hd = &ctx->displays[i];
     if ((indices_to_composite.empty() ||  hd->mixMode != HWC_DEFAULT)
         && framebuffer_target_index >= 0) {
 #else
@@ -2711,6 +2672,8 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     }
   }
 
+  ctx->drm.UpdateDisplayRoute();
+  ctx->drm.ClearDisplay();
   std::unique_ptr<DrmComposition> composition(
       ctx->drm.compositor()->CreateComposition(ctx->importer.get()));
   if (!composition) {
@@ -2730,15 +2693,16 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
 
   for (size_t i = 0; i < num_displays; ++i) {
     hwc_display_contents_1_t *dc = sf_display_contents[i];
-    hwc_drm_display_t *hd = &ctx->displays[i];
     bool bFindDisplay = false;
     if (!dc)
       continue;
 
-      DrmConnector *c = ctx->drm.GetConnectorForDisplay(i);
-
-      if (c && c->is_fake())
-        continue;
+    DrmConnector *c = ctx->drm.GetConnectorFromType(i);
+    if (!c || c->state() != DRM_MODE_CONNECTED) {
+      hwc_sync_release(sf_display_contents[i]);
+      continue;
+    }
+    hwc_drm_display_t *hd = &ctx->displays[c->display()];
 
 #if RK_10BIT_BYPASS
     ctx->drm.compositor()->setSkipPreComp(i,hd->is10bitVideo);
@@ -2781,8 +2745,13 @@ static int hwc_event_control(struct hwc_composer_device_1 *dev, int display,
     return -EINVAL;
 
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-  hwc_drm_display_t *hd = &ctx->displays[display];
-  return hd->vsync_worker.VSyncControl(enabled);
+  if (display == HWC_DISPLAY_PRIMARY)
+    return ctx->primary_vsync_worker.VSyncControl(enabled);
+  else if (display == HWC_DISPLAY_EXTERNAL)
+    return ctx->extend_vsync_worker.VSyncControl(enabled);
+
+  ALOGE("Can't support vsync control for display %d\n", display);
+  return -EINVAL;
 }
 
 static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
@@ -2827,8 +2796,16 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
         ctx->fb_blanked = fb_blank;
     }
 #endif
+  DrmConnector *connector = ctx->drm.GetConnectorFromType(display);
+  if (!connector) {
+    ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
+    return -ENODEV;
+  }
 
-  return ctx->drm.SetDpmsMode(display, dpmsValue);
+  connector->force_disconnect(dpmsValue == DRM_MODE_DPMS_OFF);
+
+  ctx->drm.UpdateDisplayRoute();
+  return 0;
 }
 
 static int hwc_query(struct hwc_composer_device_1 * /* dev */, int what,
@@ -2855,9 +2832,8 @@ static void hwc_register_procs(struct hwc_composer_device_1 *dev,
 
   ctx->procs = procs;
 
-  for (std::pair<const int, hwc_drm_display> &display_entry : ctx->displays)
-    display_entry.second.vsync_worker.SetProcs(procs);
-
+  ctx->primary_vsync_worker.SetProcs(procs);
+  ctx->extend_vsync_worker.SetProcs(procs);
   ctx->hotplug_handler.Init(&ctx->displays, &ctx->drm, procs);
   ctx->drm.event_listener()->RegisterHotplugHandler(&ctx->hotplug_handler);
 }
@@ -2865,50 +2841,64 @@ static void hwc_register_procs(struct hwc_composer_device_1 *dev,
 static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
                                    int display, uint32_t *configs,
                                    size_t *num_configs) {
-  if (!*num_configs)
+  if (!num_configs)
     return 0;
 
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-  hwc_drm_display_t *hd = &ctx->displays[display];
-
-  DrmConnector *connector = ctx->drm.GetConnectorForDisplay(display);
+  DrmConnector *connector = ctx->drm.GetConnectorFromType(display);
   if (!connector) {
     ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
+
+  hwc_drm_display_t *hd = &ctx->displays[connector->display()];
+  if (!hd->active)
+    return -ENODEV;
 
   int ret = connector->UpdateModes();
   if (ret) {
     ALOGE("Failed to update display modes %d", ret);
     return ret;
   }
-  update_display_bestmode(hd, connector);
+
+  if (connector->state() != DRM_MODE_CONNECTED && display == HWC_DISPLAY_EXTERNAL) {
+    ALOGE("connector is not connected with display %d", display);
+    return -ENODEV;
+  }
+
+  update_display_bestmode(display, connector);
   DrmMode mode = connector->best_mode();
 
-  if (mode.h_display() == 0 || mode.v_display() == 0) {
-    *num_configs = 0;
-  } else {
-    *num_configs = 1;
-    configs[0] = mode.id();
-  }
-
-
   char framebuffer_size[PROPERTY_VALUE_MAX];
-  uint32_t width, height;
-  property_get("persist.sys.framebuffer.main", framebuffer_size, "0x0");
-  sscanf(framebuffer_size, "%dx%d", &width, &height);
+  uint32_t width, height, vrefresh;
+  property_get("persist.sys.framebuffer.main", framebuffer_size, "0x0@60");
+  sscanf(framebuffer_size, "%dx%d@%d", &width, &height, &vrefresh);
   if (width && height) {
-    hd->default_w = width;
-    hd->default_h = height;
-  } else if( (mode.h_display() > mode.v_display()) && mode.v_display() >= 2160) {
-    hd->default_w = mode.h_display() * (1080.0 / mode.v_display());
-    hd->default_h = 1080;
+    hd->framebuffer_width = width;
+    hd->framebuffer_height = height;
+    hd->vrefresh = vrefresh ? vrefresh : 60;
+  } else if (mode.h_display() && mode.v_display() && mode.v_refresh()) {
+    hd->framebuffer_width = mode.h_display();
+    hd->framebuffer_height = mode.v_display();
+    hd->vrefresh = mode.v_refresh();
+    /*
+     * Limit to 1080p if large than 2160p
+     */
+    if (hd->framebuffer_height >= 2160 && hd->framebuffer_width >= hd->framebuffer_height) {
+      hd->framebuffer_width = hd->framebuffer_width * (1080.0 / hd->framebuffer_height);
+      hd->framebuffer_height = 1080;
+    }
   } else {
-    hd->default_w = mode.h_display();
-    hd->default_h = mode.v_display();
+    hd->framebuffer_width = 1920;
+    hd->framebuffer_height = 1080;
+    hd->vrefresh = 60;
+    ALOGE("Failed to find available display mode for display %d\n", display);
   }
 
-  return *num_configs == 0 ? -1 : 0;
+  *num_configs = 1;
+  configs[0] = connector->display();
+
+  return 0;
 }
 
 static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
@@ -2916,67 +2906,39 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
                                       const uint32_t *attributes,
                                       int32_t *values) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-  hwc_drm_display_t *hd = &ctx->displays[display];
-  DrmConnector *c = ctx->drm.GetConnectorForDisplay(display);
+  DrmConnector *c = ctx->drm.GetConnectorFromType(display);
   if (!c) {
     ALOGE("Failed to get DrmConnector for display %d", display);
     return -ENODEV;
   }
-  DrmMode mode;
-  for (const DrmMode &conn_mode : c->modes()) {
-    if (conn_mode.id() == config) {
-      mode = conn_mode;
-      break;
-    }
-  }
-  if (mode.id() == 0) {
-    ALOGE("Failed to find active mode for display %d", display);
-    return -ENOENT;
-  }
+  hwc_drm_display_t *hd = &ctx->displays[c->display()];
+  if (!hd->active)
+    return -ENODEV;
   uint32_t mm_width = c->mm_width();
   uint32_t mm_height = c->mm_height();
-  int w = hd->default_w;
-  int h = hd->default_h;
+  int w = hd->framebuffer_width;
+  int h = hd->framebuffer_height;
+  int vrefresh = hd->vrefresh;
 
   for (int i = 0; attributes[i] != HWC_DISPLAY_NO_ATTRIBUTE; ++i) {
     switch (attributes[i]) {
       case HWC_DISPLAY_VSYNC_PERIOD:
-        values[i] = 1000 * 1000 * 1000 / mode.v_refresh();
+        values[i] = 1000 * 1000 * 1000 / vrefresh;
         break;
       case HWC_DISPLAY_WIDTH:
-      {
-#if RK_VR
-        int xxx_w =  hwc_get_int_property("sys.xxx.x_w","720");
-        if(xxx_w)
-            values[i] = xxx_w;
-        else
-            values[i] = w;
-#else
         values[i] = w;
-#endif
-       }
         break;
       case HWC_DISPLAY_HEIGHT:
-      {
-#if RK_VR
-        int xxx_h =  hwc_get_int_property("sys.xxx.x_h","1280");
-        if(xxx_h)
-            values[i] = xxx_h;
-        else
-            values[i] = h;
-#else
         values[i] = h;
-#endif
-      }
         break;
       case HWC_DISPLAY_DPI_X:
         /* Dots per 1000 inches */
-        values[i] = mm_width ? (mode.h_display() * UM_PER_INCH) / mm_width : 0;
+        values[i] = mm_width ? (w * UM_PER_INCH) / mm_width : 0;
         break;
       case HWC_DISPLAY_DPI_Y:
         /* Dots per 1000 inches */
         values[i] =
-            mm_height ? (mode.v_display() * UM_PER_INCH) / mm_height : 0;
+            mm_height ? (h * UM_PER_INCH) / mm_height : 0;
         break;
     }
   }
@@ -2993,30 +2955,39 @@ static int hwc_get_active_config(struct hwc_composer_device_1 *dev,
 static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
                                  int index) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
-  hwc_drm_display_t *hd = &ctx->displays[display];
 
-  DrmConnector *c = ctx->drm.GetConnectorForDisplay(display);
+  UN_USED(index);
+  DrmConnector *c = ctx->drm.GetConnectorFromType(display);
   if (!c) {
     ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
     return -ENODEV;
   }
 
-  UN_USED(index);
+  if (c->state() != DRM_MODE_CONNECTED) {
+    /*
+     * fake primary display if primary is not connected.
+     */
+    if (display == HWC_DISPLAY_PRIMARY)
+      return 0;
 
-  if (c->state() != DRM_MODE_CONNECTED)
     return -ENODEV;
-
-  update_display_bestmode(hd, c);
-  DrmMode mode = c->best_mode();
-
-  if (!mode.id()) {
-    ALOGE("Could not find active mode for mode_id=%d", mode.id());
-    return -ENOENT;
   }
 
-  int ret = hwc_update_mode(dev, display, mode);
+  hwc_drm_display_t *hd = &ctx->displays[c->display()];
 
-  return ret;
+
+  DrmMode mode = c->best_mode();
+  if (!mode.id()) {
+    ALOGE("Could not find active mode for display=%d", display);
+    return -ENOENT;
+  }
+  hd->w_scale = (float)mode.h_display() / hd->framebuffer_width;
+  hd->h_scale = (float)mode.v_display() / hd->framebuffer_height;
+
+  c->set_current_mode(mode);
+  ctx->drm.UpdateDisplayRoute();
+
+  return 0;
 }
 
 int init_thread_pamaters(threadPamaters* mThreadPamaters)
@@ -3067,17 +3038,17 @@ static int hwc_device_close(struct hw_device_t *dev) {
  * should be fixed such that it selects the preferred mode for the display, or
  * some other, saner, method of choosing the config.
  */
-static int hwc_set_initial_config(hwc_drm_display_t *hd) {
+static int hwc_set_initial_config(struct hwc_context_t *ctx, int display) {
   uint32_t config;
   size_t num_configs = 1;
-  int ret = hwc_get_display_configs(&hd->ctx->device, hd->display, &config,
+  int ret = hwc_get_display_configs(&ctx->device, display, &config,
                                     &num_configs);
   if (ret || !num_configs)
     return 0;
 
-  ret = hwc_set_active_config(&hd->ctx->device, hd->display, 0);
+  ret = hwc_set_active_config(&ctx->device, display, 0);
   if (ret) {
-    ALOGE("Failed to set active config d=%d ret=%d", hd->display, ret);
+    ALOGE("Failed to set active config d=%d ret=%d", display, ret);
     return ret;
   }
 
@@ -3087,37 +3058,54 @@ static int hwc_set_initial_config(hwc_drm_display_t *hd) {
 static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
   hwc_drm_display_t *hd = &ctx->displays[display];
   hd->ctx = ctx;
-  hd->display = display;
 #if RK_VIDEO_UI_OPT
   hd->iUiFd = -1;
   hd->bHideUi = false;
 #endif
-  hd->default_w = 0;
-  hd->default_h = 0;
+  hd->framebuffer_width = 0;
+  hd->framebuffer_height = 0;
   hd->w_scale = 1.0;
   hd->h_scale = 1.0;
-
-  int ret = hwc_set_initial_config(hd);
-  if (ret) {
-    ALOGE("Failed to set initial config for d=%d ret=%d", display, ret);
-    return ret;
-  }
-
-  ret = hd->vsync_worker.Init(&ctx->drm, display);
-  if (ret) {
-    ALOGE("Failed to create event worker for display %d %d\n", display, ret);
-    return ret;
-  }
+  hd->active = true;
 
   return 0;
 }
 
 static int hwc_enumerate_displays(struct hwc_context_t *ctx) {
-  int ret;
+  int ret, num_connectors = 0;
+
   for (auto &conn : ctx->drm.connectors()) {
     ret = hwc_initialize_display(ctx, conn->display());
     if (ret) {
       ALOGE("Failed to initialize display %d", conn->display());
+      return ret;
+    }
+    num_connectors++;
+  }
+#if 0
+  ret = hwc_set_initial_config(ctx, HWC_DISPLAY_PRIMARY);
+  if (ret) {
+    ALOGE("Failed to set initial config for primary display ret=%d", ret);
+    return ret;
+  }
+
+  ret = hwc_set_initial_config(ctx, HWC_DISPLAY_EXTERNAL);
+  if (ret) {
+    ALOGE("Failed to set initial config for extend display ret=%d", ret);
+//    return ret;
+  }
+#endif
+
+  ret = ctx->primary_vsync_worker.Init(&ctx->drm, HWC_DISPLAY_PRIMARY);
+  if (ret) {
+    ALOGE("Failed to create event worker for primary display %d\n", ret);
+    return ret;
+  }
+
+  if (num_connectors > 1) {
+    ret = ctx->extend_vsync_worker.Init(&ctx->drm, HWC_DISPLAY_EXTERNAL);
+    if (ret) {
+      ALOGE("Failed to create event worker for extend display %d\n", ret);
       return ret;
     }
   }
@@ -3129,8 +3117,6 @@ static int hwc_enumerate_displays(struct hwc_context_t *ctx) {
   }
   return 0;
 }
-
-
 
 #if RK_INVALID_REFRESH
 static void hwc_static_screen_opt_handler(int sig)
@@ -3369,6 +3355,7 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
   ctx->device.setActiveConfig = hwc_set_active_config;
   ctx->device.setCursorPositionAsync = NULL; /* TODO: Add cursor */
 
+  g_ctx = ctx.get();
 
 
 #if RK_DRM_HWC
@@ -3386,7 +3373,6 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     ctx->mOneWinOpt = false;
     ctx->isGLESComp = false;
     init_thread_pamaters(&ctx->mRefresh);
-    g_ctx = ctx.get();
     pthread_t invalidate_refresh_th;
     if (pthread_create(&invalidate_refresh_th, NULL, invalidate_refresh, ctx.get()))
     {

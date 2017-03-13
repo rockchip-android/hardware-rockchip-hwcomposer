@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <xf86drm.h>
 #include <xf86drmMode.h>
 
 namespace android {
@@ -40,6 +41,18 @@ DrmMode::DrmMode(drmModeModeInfoPtr m)
       flags_(m->flags),
       type_(m->type),
       name_(m->name) {
+}
+
+DrmMode::~DrmMode()
+{
+  if (blob_id_ && fd_) {
+    struct drm_mode_destroy_blob destroy_blob;
+    memset(&destroy_blob, 0, sizeof(destroy_blob));
+    destroy_blob.blob_id = (__u32)blob_id_;
+    int ret = drmIoctl(fd_, DRM_IOCTL_MODE_DESTROYPROPBLOB, &destroy_blob);
+    if (ret)
+      ALOGE("Failed to destroy mode property blob %d, ret=%d", blob_id_, ret);
+  }
 }
 
 bool DrmMode::operator==(const drmModeModeInfo &m) const {

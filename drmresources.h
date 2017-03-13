@@ -78,8 +78,12 @@ class DrmResources {
   }
 #endif
 
-  DrmConnector *GetConnectorForDisplay(int display) const;
-  DrmCrtc *GetCrtcForDisplay(int display) const;
+  void DisplayChanged(void);
+  void SetPrimaryDisplay(DrmConnector *c);
+  void SetExtendDisplay(DrmConnector *c);
+
+  DrmCrtc *GetCrtcFromConnector(DrmConnector *conn) const;
+  DrmConnector *GetConnectorFromType(int display_type) const;
   DrmPlane *GetPlane(uint32_t id) const;
   DrmCompositor *compositor();
   DrmEventListener *event_listener();
@@ -94,6 +98,8 @@ class DrmResources {
   uint32_t next_mode_id();
   int SetDisplayActiveMode(int display, const DrmMode &mode);
   int SetDpmsMode(int display, uint64_t mode);
+  int UpdateDisplayRoute(void);
+  void ClearDisplay(void);
 
   int CreatePropertyBlob(void *data, size_t length, uint32_t *blob_id);
   int DestroyPropertyBlob(uint32_t blob_id);
@@ -123,8 +129,6 @@ class DrmResources {
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
                   DrmProperty *property);
 
-  int CreateDisplayPipe(DrmConnector *connector);
-
 #if RK_DRM_HWC_DEBUG
   void dump_blob(uint32_t blob_id, std::ostringstream *out);
   void dump_prop(drmModePropertyPtr prop,
@@ -134,6 +138,9 @@ class DrmResources {
 
   UniqueFd fd_;
   uint32_t mode_id_ = 0;
+  bool enable_changed_;
+  DrmConnector *primary_;
+  DrmConnector *extend_;
 
   std::vector<std::unique_ptr<DrmConnector>> connectors_;
   std::vector<std::unique_ptr<DrmEncoder>> encoders_;

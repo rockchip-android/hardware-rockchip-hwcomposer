@@ -56,21 +56,25 @@ DrmComposition::DrmComposition(DrmResources *drm, Importer *importer,
 }
 
 int DrmComposition::Init(uint64_t frame_no) {
-  for (auto &conn : drm_->connectors()) {
-    int display = conn->display();
-    composition_map_[display].reset(new DrmDisplayComposition());
-    if (!composition_map_[display]) {
+  int i;
+
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    composition_map_[i].reset(new DrmDisplayComposition());
+    if (!composition_map_[i]) {
       ALOGE("Failed to allocate new display composition\n");
       return -ENOMEM;
     }
 
-    // If the display hasn't been modeset yet, this will be NULL
-    DrmCrtc *crtc = drm_->GetCrtcForDisplay(display);
+    DrmConnector *c = drm_->GetConnectorFromType(i);
+    if (!c || c->state() != DRM_MODE_CONNECTED)
+      continue;
+    DrmCrtc *crtc = drm_->GetCrtcFromConnector(c);
+    if (!crtc)
+      continue;
 
-    int ret = composition_map_[display]->Init(drm_, crtc, importer_, planner_,
-                                              frame_no);
+    int ret = composition_map_[i]->Init(drm_, crtc, importer_, planner_, frame_no);
     if (ret) {
-      ALOGE("Failed to init display composition for %d", display);
+      ALOGE("Failed to init display composition for %d", c->display());
       return ret;
     }
   }
@@ -85,10 +89,8 @@ int DrmComposition::SetLayers(size_t num_displays,
     DrmCompositionDisplayLayersMap &map = maps[display_index];
     int display = map.display;
 
-    if (!drm_->GetConnectorForDisplay(display)) {
-      ALOGE("Invalid display given to SetLayers %d", display);
+    if (!composition_map_[display]->crtc())
       continue;
-    }
 
     ret = composition_map_[display]->SetLayers(
         map.layers.data(), map.layers.size(), map.geometry_changed);
@@ -113,18 +115,15 @@ std::unique_ptr<DrmDisplayComposition> DrmComposition::TakeDisplayComposition(
 }
 
 int DrmComposition::Plan(std::map<int, DrmDisplayCompositor> &compositor_map) {
-  int ret = 0;
-  for (auto &conn : drm_->connectors()) {
-    int display = conn->display();
-
-    if (conn->is_fake())
+  int i, ret = 0;
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    if (!composition_map_[i]->crtc())
       continue;
-
-    DrmDisplayComposition *comp = GetDisplayComposition(display);
-    ret = comp->Plan(compositor_map[display].squash_state(), &primary_planes_,
+    DrmDisplayComposition *comp = GetDisplayComposition(i);
+    ret = comp->Plan(compositor_map[i].squash_state(), &primary_planes_,
                      &overlay_planes_);
     if (ret) {
-      ALOGE("Failed to plan composition for dislay %d", display);
+      ALOGE("Failed to plan composition for dislay %d", i);
       return ret;
     }
   }
@@ -136,12 +135,13 @@ int DrmComposition::DisableUnusedPlanes() {
 #if RK_DRM_HWC
 std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
 #endif
-  for (auto &conn : drm_->connectors()) {
-    int display = conn->display();
-    DrmDisplayComposition *comp = GetDisplayComposition(display);
-
-    if (conn->is_fake())
+  int i;
+  for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+    DrmCrtc *crtc = composition_map_[i]->crtc();
+    if (!crtc)
       continue;
+
+    DrmDisplayComposition *comp = GetDisplayComposition(i);
 
     /*
      * Leave empty compositions alone
@@ -151,12 +151,6 @@ std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
     if (comp->type() == DRM_COMPOSITION_TYPE_EMPTY ||
         comp->type() == DRM_COMPOSITION_TYPE_MODESET)
       continue;
-
-    DrmCrtc *crtc = drm_->GetCrtcForDisplay(display);
-    if (!crtc) {
-      ALOGE("Failed to find crtc for display %d", display);
-      continue;
-    }
 
 #if RK_DRM_HWC
     //loop plane groups.
