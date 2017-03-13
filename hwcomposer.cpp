@@ -845,7 +845,6 @@ int DrmHwcLayer::InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
 
 static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
                      int buff_len) {
-#if 0
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
   std::ostringstream out;
 
@@ -854,7 +853,6 @@ static void hwc_dump(struct hwc_composer_device_1 *dev, char *buff,
   strncpy(buff, out_str.c_str(),
           std::min((size_t)buff_len, out_str.length() + 1));
   buff[buff_len - 1] = '\0';
-#endif
 }
 
 static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
