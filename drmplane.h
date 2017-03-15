@@ -26,7 +26,6 @@
 
 namespace android {
 
-#if RK_DRM_HWC
 enum DrmWinType {
         DRM_WIN0,
         DRM_WIN1,
@@ -47,7 +46,6 @@ enum DrmAreaType {
         DRM_AREA3_2,
         DRM_AREA3_3,
 };
-#endif
 
 class DrmResources;
 
@@ -77,7 +75,6 @@ class DrmPlane {
   const DrmProperty &src_h_property() const;
   const DrmProperty &rotation_property() const;
   const DrmProperty &alpha_property() const;
-#if RK_DRM_HWC
   bool is_use();
   void set_use(bool b_use);
   bool get_scale();
@@ -93,11 +90,9 @@ class DrmPlane {
   {
         return possible_crtc_mask_;
   }
-#endif
 
-#if RK_DRM_HWC_DEBUG
   void dump_plane(std::ostringstream *out) const;
-#endif
+
 
  private:
   DrmResources *drm_;
@@ -120,7 +115,6 @@ class DrmPlane {
   DrmProperty rotation_property_;
   DrmProperty alpha_property_;
 
-#if RK_DRM_HWC
   DrmProperty zpos_property_;
   DrmProperty share_id_property_;
   DrmProperty feature_property_;
@@ -129,7 +123,6 @@ class DrmPlane {
   bool b_yuv_;
   bool b_scale_;
   bool b_rotate_;
-#endif
 
   drmModePlanePtr plane_;
 };

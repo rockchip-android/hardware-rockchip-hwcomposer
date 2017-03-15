@@ -25,10 +25,10 @@
 #include "autofd.h"
 #include "separate_rects.h"
 #include "drmhwcgralloc.h"
-
+#include "hwc_debug.h"
 
 /*hwc version*/
-#define GHWC_VERSION                    "0.22"
+#define GHWC_VERSION                    "0.23"
 
 struct hwc_import_context;
 
@@ -44,87 +44,16 @@ namespace android {
 
 #define UN_USED(arg)     (arg=arg)
 
-#if RK_DRM_HWC
 #if USE_AFBC_LAYER
 #define GRALLOC_ARM_INTFMT_EXTENSION_BIT_START          32
 /* This format will use AFBC */
 #define	    GRALLOC_ARM_INTFMT_AFBC                     (1ULL << (GRALLOC_ARM_INTFMT_EXTENSION_BIT_START+0))
 #define SKIP_BOOT                                       (1)
 #define MAGIC_USAGE_FOR_AFBC_LAYER                      (0x88)
-
-#if USE_AFBC_LAYER
-bool isAfbcInternalFormat(uint64_t internal_format);
-#endif
-
 #endif
 
 #if SKIP_BOOT
 #define BOOT_COUNT       (2)
-#endif
-
-typedef enum attribute_flag {
-    ATT_WIDTH = 0,
-    ATT_HEIGHT,
-    ATT_STRIDE,
-    ATT_FORMAT,
-    ATT_SIZE
-}attribute_flag_t;
-
-int hwc_get_handle_attibute(struct hwc_context_t *ctx, buffer_handle_t hnd, attribute_flag_t flag);
-int hwc_get_handle_attributes(struct hwc_context_t *ctx, buffer_handle_t hnd, std::vector<int> *attrs);
-int hwc_get_handle_primefd(struct hwc_context_t *ctx, buffer_handle_t hnd);
-
-#endif
-
-enum LOG_LEVEL
-{
-    //Log level flag
-    /*1*/
-    DBG_VERBOSE = 1 << 0,
-    /*2*/
-    DBG_DEBUG = 1 << 1,
-    /*4*/
-    DBG_INFO = 1 << 2,
-    /*8*/
-    DBG_WARN = 1 << 3,
-    /*16*/
-    DBG_ERROR = 1 << 4,
-    /*32*/
-    DBG_FETAL = 1 << 5,
-    /*64*/
-    DBG_SILENT = 1 << 6,
-};
-bool log_level(LOG_LEVEL log_level);
-
-#if RK_MIX
-typedef enum tagMixMode
-{
-    HWC_DEFAULT,
-    HWC_MIX_DOWN,
-    HWC_MIX_UP,
-    HWC_POLICY_NUM
-}MixMode;
-#endif
-
-#if RK_DRM_HWC_DEBUG
-/* interval ms of print fps.*/
-#define HWC_DEBUG_FPS_INTERVAL_MS 1
-
-/* print time macros. */
-#define PRINT_TIME_START        \
-    struct timeval tpend1, tpend2;\
-    long usec1 = 0;\
-    gettimeofday(&tpend1,NULL);\
-
-#define PRINT_TIME_END(tag)        \
-    gettimeofday(&tpend2,NULL);\
-    usec1 = 1000*(tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec- tpend1.tv_usec)/1000;\
-    if (property_get_bool("sys.hwc.time", 0)) \
-    ALOGD_IF(1,"%s use time=%ld ms",tag,usec1);\
-
-
-struct DrmHwcLayer;
-int DumpLayer(const char* layer_name,buffer_handle_t handle);
 #endif
 
 class Importer;
@@ -244,15 +173,13 @@ struct DrmHwcLayer {
   UniqueFd acquire_fence;
   OutputFd release_fence;
 
-#if RK_DRM_HWC
+  bool bSkipLayer;
   bool is_match;
   bool is_take;
   bool is_yuv;
   bool is_scale;
   bool is_large;
-#if RK_ZPOS_SUPPORT
   int zpos;
-#endif
 
 #if USE_AFBC_LAYER
   uint64_t internal_format;
@@ -267,10 +194,9 @@ struct DrmHwcLayer {
 #if RK_VIDEO_SKIP_LINE
   bool bSkipLine;
 #endif
-#if RK_MIX
+  bool bUse;
   bool bMix;
   hwc_layer_1_t *raw_sf_layer;
-#endif
   int format;
   int width;
   int height;
@@ -282,16 +208,11 @@ struct DrmHwcLayer {
   size_t index;
   hwc_layer_1_t *mlayer;
 
+  int ImportBuffer(hwc_layer_1_t *sf_layer, Importer *importer);
   int InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_layer_1_t *sf_layer, Importer *importer,
                         const gralloc_module_t *gralloc);
-#else
-  int InitFromHwcLayer(hwc_layer_1_t *sf_layer, Importer *importer,
-                        const gralloc_module_t *gralloc);
-#endif
 
-#if RK_DRM_HWC_DEBUG
 void dump_drm_layer(int index, std::ostringstream *out) const;
-#endif
 
   buffer_handle_t get_usable_handle() const {
     return handle.get() != NULL ? handle.get() : sf_handle;

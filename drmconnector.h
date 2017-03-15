@@ -78,10 +78,8 @@ class DrmConnector {
   drmModeConnectorPtr get_connector() { return connector_; }
   void update_state(drmModeConnection state);
   void update_size(int w, int h);
-
-#if RK_DRM_HWC_DEBUG
   void dump_connector(std::ostringstream *out) const;
-#endif
+
 
  private:
   DrmResources *drm_;

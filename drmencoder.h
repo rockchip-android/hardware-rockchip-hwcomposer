@@ -40,9 +40,7 @@ class DrmEncoder {
   const std::vector<DrmCrtc *> &possible_crtcs() const {
     return possible_crtcs_;
   }
-#if RK_DRM_HWC_DEBUG
   void dump_encoder(std::ostringstream *out) const;
-#endif
 
  private:
   uint32_t id_;

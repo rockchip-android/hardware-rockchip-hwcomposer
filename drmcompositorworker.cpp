@@ -64,13 +64,6 @@ void DrmCompositorWorker::Routine() {
       return;
     }
 
-#if RK_10BIT_BYPASS
-    if(compositor_->isSkipPreComp() && wait_ret == -ETIMEDOUT)
-    {
-        return;
-    }
-#endif
-
     switch (wait_ret) {
       case 0:
         break;

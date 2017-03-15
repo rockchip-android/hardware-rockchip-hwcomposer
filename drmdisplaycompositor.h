@@ -110,11 +110,6 @@ class DrmDisplayCompositor {
     return &squash_state_;
   }
 
-#if RK_10BIT_BYPASS
-  inline bool isSkipPreComp() { return mSkipTimeoutPreComp; }
-  inline void setSkipPreComp (bool bSkip) { mSkipTimeoutPreComp = bSkip; }
-#endif
-
  private:
   struct FrameState {
     std::unique_ptr<DrmDisplayComposition> composition;
@@ -201,9 +196,6 @@ class DrmDisplayCompositor {
   DrmRgaBuffer rgaBuffers_[MaxRgaBuffers];
   RockchipRga& mRga_;
   bool mUseRga_;
-#endif
-#if RK_10BIT_BYPASS
-  bool mSkipTimeoutPreComp;
 #endif
   std::unique_ptr<GLWorkerCompositor> pre_compositor_;
 

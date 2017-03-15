@@ -128,7 +128,6 @@ const DrmProperty &DrmCrtc::bottom_margin_property() const {
   return bottom_margin_property_;
 }
 
-#if RK_DRM_HWC_DEBUG
 void DrmCrtc::dump_crtc(std::ostringstream *out) const
 {
 	uint32_t j;
@@ -142,5 +141,5 @@ void DrmCrtc::dump_crtc(std::ostringstream *out) const
 
 	drm_->DumpCrtcProperty(*this,out);
 }
-#endif
+
 }

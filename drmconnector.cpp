@@ -180,7 +180,6 @@ uint32_t DrmConnector::mm_height() const {
   return mm_height_;
 }
 
-#if RK_DRM_HWC_DEBUG
 void DrmConnector::dump_connector(std::ostringstream *out) const {
     int j;
 
@@ -212,5 +211,5 @@ void DrmConnector::dump_connector(std::ostringstream *out) const {
 
 		drm_->DumpConnectorProperty(*this,out);
 }
-#endif
+
 }

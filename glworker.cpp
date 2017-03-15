@@ -314,14 +314,6 @@ static void ConstructCommand(const DrmHwcLayer *layers,
   for (size_t texture_index : region.source_layers) {
     const DrmHwcLayer &layer = layers[texture_index];
 
-#if RK_10BIT_BYPASS
-    if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
-    {
-        //don't show 10bit video layer when use GLES.
-        continue;
-    }
-#endif
-
     DrmHwcRect<float> display_rect(layer.display_frame);
     float display_size[2] = {display_rect.bounds[2] - display_rect.bounds[0],
                              display_rect.bounds[3] - display_rect.bounds[1]};
@@ -343,7 +335,6 @@ static void ConstructCommand(const DrmHwcLayer *layers,
     float crop_size[2] = {crop_rect.bounds[2] - crop_rect.bounds[0],
                           crop_rect.bounds[3] - crop_rect.bounds[1]};
 
-#if RK_DRM_HWC_DEBUG
     ALOGD_IF(log_level(DBG_SILENT),"ConstructCommand name[%zu]=%s,source_crop(%f,%f,%f,%f),display_rect(%d,%d,%d,%d)",
             texture_index,layer.name.c_str(),layer.source_crop.left,layer.source_crop.top,
             layer.source_crop.right,layer.source_crop.bottom,layer.display_frame.left,
@@ -351,7 +342,6 @@ static void ConstructCommand(const DrmHwcLayer *layers,
     ALOGD_IF(log_level(DBG_SILENT),"ConstructCommand crop_rect(%f,%f,%f,%f),tex_width=%f,tex_height=%f",crop_rect.left,crop_rect.top,
             crop_rect.right,crop_rect.bottom,tex_width,tex_height);
     ALOGD_IF(log_level(DBG_SILENT),"ConstructCommand cmd.bounds[%f,%f,%f,%f]",cmd.bounds[0],cmd.bounds[1],cmd.bounds[2],cmd.bounds[3]);
-#endif
 
     RenderingCommand::TextureSource &src = cmd.textures[cmd.texture_count];
     cmd.texture_count++;
@@ -617,9 +607,7 @@ int GLWorkerCompositor::Composite(DrmHwcLayer *layers,
 
     if (layers_used_indices.count(layer_index) == 0)
       continue;
-#if RK_DRM_HWC
     ALOGD_IF(log_level(DBG_DEBUG),"Squash layer name=%s",layer->name.c_str());
-#endif
     ret = CreateTextureFromHandle(egl_display_, layer->get_usable_handle(),
                                   &layer_textures.back());
 

@@ -30,12 +30,9 @@
 #endif
 
 namespace android {
-#if RK_DRM_HWC_DEBUG
 #define type_name_define(res) \
 const char * res##_str(int type);
-#endif
 
-#if RK_DRM_HWC
 typedef struct tagPlaneGroup{
         bool     bUse;
         uint32_t zpos;
@@ -43,7 +40,6 @@ typedef struct tagPlaneGroup{
         uint64_t share_id;
         std::vector<DrmPlane*> planes;
 }PlaneGroup;
-#endif
 
 class DrmResources {
  public:
@@ -72,11 +68,9 @@ class DrmResources {
     return planes_;
   }
 
-#if RK_DRM_HWC
    const std::vector<DrmPlane*> &sort_planes() const {
     return sort_planes_;
   }
-#endif
 
   void DisplayChanged(void);
   void SetPrimaryDisplay(DrmConnector *c);
@@ -103,7 +97,6 @@ class DrmResources {
 
   int CreatePropertyBlob(void *data, size_t length, uint32_t *blob_id);
   int DestroyPropertyBlob(uint32_t blob_id);
-#if RK_DRM_HWC_DEBUG
   type_name_define(encoder_type);
   type_name_define(connector_status);
   type_name_define(connector_type);
@@ -111,11 +104,8 @@ class DrmResources {
   int DumpCrtcProperty(const DrmCrtc &crtc, std::ostringstream *out);
   int DumpConnectorProperty(const DrmConnector &connector, std::ostringstream *out);
   void dump_mode(drmModeModeInfo *mode,std::ostringstream *out);
-#endif
 
-#if RK_DRM_HWC
   std::vector<PlaneGroup *>& GetPlaneGroups();
-#endif
 
 #if RK_RGA
   bool isSupportRkRga() {
@@ -129,12 +119,10 @@ class DrmResources {
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
                   DrmProperty *property);
 
-#if RK_DRM_HWC_DEBUG
   void dump_blob(uint32_t blob_id, std::ostringstream *out);
   void dump_prop(drmModePropertyPtr prop,
                      uint32_t prop_id, uint64_t value, std::ostringstream *out);
   int DumpProperty(uint32_t obj_id, uint32_t obj_type, std::ostringstream *out);
-#endif
 
   UniqueFd fd_;
   uint32_t mode_id_ = 0;
@@ -146,10 +134,8 @@ class DrmResources {
   std::vector<std::unique_ptr<DrmEncoder>> encoders_;
   std::vector<std::unique_ptr<DrmCrtc>> crtcs_;
   std::vector<std::unique_ptr<DrmPlane>> planes_;
-#if RK_DRM_HWC
   std::vector<DrmPlane*> sort_planes_;
   std::vector<PlaneGroup *> plane_groups_;
-#endif
   DrmCompositor compositor_;
   DrmEventListener event_listener_;
   const gralloc_module_t *gralloc_;

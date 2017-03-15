@@ -37,16 +37,12 @@
 #include "drmplane.h"
 #include "drmresources.h"
 #include "glworker.h"
-#if 1
-#include "hwcutil.h"
-#endif
+#include "hwc_util.h"
+#include "hwc_debug.h"
 
-#if RK_DRM_HWC
+
 #define DRM_QUEUE_USLEEP 10
 #define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 1
-#else
-#define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 2
-#endif
 
 namespace android {
 
@@ -307,9 +303,6 @@ DrmDisplayCompositor::DrmDisplayCompositor()
       rgaBuffer_index_(0),
       mRga_(RockchipRga::get()),
       mUseRga_(false),
-#endif
-#if RK_10BIT_BYPASS
-      mSkipTimeoutPreComp(false),
 #endif
       squash_framebuffer_index_(0),
       dump_frames_composited_(0),
@@ -608,9 +601,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     dst_r = dst_w;
     dst_b = dst_h;
 
-#if RK_DRM_HWC_DEBUG
-      //DumpLayer("rga", layer.sf_handle);
-#endif
+    //DumpLayer("rga", layer.sf_handle);
 
     if(layer.transform & DrmHwcTransform::kRotate90) {
         rga_transform = DRM_RGA_TRANSFORM_ROT_90;
@@ -666,9 +657,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
             strerror(errno), (void*)layer.sf_handle, (void*)(rgaBuffer.buffer()->handle));
     }
 
-#if RK_DRM_HWC_DEBUG
     //DumpLayer("rga", dst.hnd);
-#endif
 
     //instead of the original DrmHwcLayer
     layer.is_rotate_by_rga = true;
@@ -989,7 +978,6 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
   return ret;
 }
 
-#if RK_DRM_HWC_DEBUG
 static const char *RotatingToString(uint64_t rotating) {
   switch (rotating) {
     case (1 << DRM_REFLECT_X):
@@ -1008,16 +996,13 @@ static const char *RotatingToString(uint64_t rotating) {
       return "<invalid>";
   }
 }
-#endif
 
 int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
                                       bool test_only) {
   ATRACE_CALL();
 
   int ret = 0;
-#if RK_DRM_HWC
   uint32_t afbc_plane_id = 0;
-#endif
 
   std::vector<DrmHwcLayer> &layers = display_comp->layers();
   std::vector<DrmCompositionPlane> &comp_planes =
@@ -1101,9 +1086,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_RGA
     bool is_rotate_by_rga = false;
 #endif
-#if RK_ZPOS_SUPPORT
     int zpos = 0;
-#endif
 #if RK_DEBUG_CHECK_CRC
     unsigned int crc32 = 0;
 #endif
@@ -1123,13 +1106,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         break;
       }
 
-#if RK_ZPOS_SUPPORT
       zpos = comp_plane.get_zpos();
       if(zpos < 0)
       {
         ALOGE("The zpos(%d) is invalid", zpos);
       }
-#endif
 
       DrmHwcLayer &layer = layers[source_layers.front()];
       if (!test_only && layer.acquire_fence.get() >= 0) {
@@ -1161,9 +1142,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         break;
       }
 
-#if RK_DRM_HWC_DEBUG
-      //DumpLayer(layer.name.c_str(),layer.get_usable_handle());
-#endif
+      DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 
 #if RK_VIDEO_SKIP_LINE
       bSkipLine = layer.bSkipLine;
@@ -1306,16 +1285,13 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->src_h_property().id(),
                src_h << 16) < 0;
-#if RK_ZPOS_SUPPORT
     ret = drmModeAtomicAddProperty(pset, plane->id(),
                                    plane->zpos_property().id(), zpos) < 0;
-#endif
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
       break;
     }
 
-#if RK_DRM_HWC_DEBUG
     size_t index=0;
     std::ostringstream out_log;
 
@@ -1329,15 +1305,12 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
             << " source_crop[" << src_l << ","
             << src_t << "," << src_w
             << "," << src_h << "]"
-#if RK_ZPOS_SUPPORT
             << ", zpos=" << zpos
-#endif
 #if USE_AFBC_LAYER
             << ", is_afbc=" << is_afbc
 #endif
             ;
     index++;
-#endif
 
     if (
 #if RK_RGA
@@ -1352,9 +1325,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
               plane->rotation_property().id(), plane->id());
         break;
       }
-#if RK_DRM_HWC_DEBUG
       out_log << " rotation=" << RotatingToString(rotation);
-#endif
     }
     if (plane->alpha_property().id()) {
       ret = drmModeAtomicAddProperty(pset, plane->id(),
@@ -1365,15 +1336,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
               plane->alpha_property().id(), plane->id());
         break;
       }
-#if RK_DRM_HWC_DEBUG
       out_log << " alpha=" << std::hex <<  alpha;
-#endif
     }
-#if RK_DRM_HWC_DEBUG
     out_log << "\n";
     ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
     out_log.clear();
-#endif
   }
 
 out:
@@ -1383,9 +1350,7 @@ out:
     if (test_only)
       flags |= DRM_MODE_ATOMIC_TEST_ONLY;
 
-#if RK_DRM_HWC_DEBUG
 PRINT_TIME_START;
-#endif
     char value[PROPERTY_VALUE_MAX];
     int new_value;
     property_get("sys.hwc.msleep", value, "0");
@@ -1401,9 +1366,7 @@ PRINT_TIME_START;
       drmModeAtomicFree(pset);
       return ret;
     }
-#if RK_DRM_HWC_DEBUG
 PRINT_TIME_END("commit");
-#endif
   }
 
   if (pset)
@@ -1463,6 +1426,7 @@ void DrmDisplayCompositor::ApplyFrame(
 
   if (active_composition_)
     active_composition_->SignalCompositionDone();
+
 
   ret = pthread_mutex_lock(&lock_);
   if (ret)
@@ -1680,9 +1644,6 @@ int DrmDisplayCompositor::SquashFrame(DrmDisplayComposition *src,
     if (!squashed_comp.plane())
     {
       squashed_comp.set_plane(comp_plane.plane());
-#if RK_ZPOS_SUPPORT
-      squashed_comp.set_zpos(0);
-#endif
     }
     else
       dst->AddPlaneDisable(comp_plane.plane());

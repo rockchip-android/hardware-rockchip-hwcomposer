@@ -115,6 +115,14 @@ int DrmDisplayComposition::SetDisplayMode(const DrmMode &display_mode) {
   return 0;
 }
 
+int DrmDisplayComposition::SetCompPlanes(std::vector<DrmCompositionPlane>& composition_planes) {
+    for(size_t i = 0; i < composition_planes.size(); i++)
+    {
+        composition_planes_.emplace_back(std::move(composition_planes[i]));
+    }
+    return 0;
+}
+
 int DrmDisplayComposition::AddPlaneDisable(DrmPlane *plane) {
   composition_planes_.emplace_back(DrmCompositionPlane::Type::kDisable, plane,
                                    crtc_);
@@ -179,6 +187,7 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
     }
   }
 #endif
+
   // Index at which the actual layers begin
   size_t layer_offset = num_exclude_rects + dedicated_layers.size();
   if (comp_layers.size() + layer_offset > 64) {
@@ -246,7 +255,6 @@ void DrmDisplayComposition::SeparateLayers(DrmHwcRect<int> *exclude_rects,
   }
 }
 
-#if RK_DRM_HWC_DEBUG
 void DrmCompositionPlane::dump_drm_com_plane(int index, std::ostringstream *out) const {
     *out << "DrmCompositionPlane[" << index << "]"
          << " plane=" << (plane_ ? plane_->id() : -1)
@@ -271,7 +279,6 @@ void DrmCompositionPlane::dump_drm_com_plane(int index, std::ostringstream *out)
 
     *out << "\n";
 }
-#endif
 
 int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   std::unordered_set<DrmHwcLayer *> squash_layers;
@@ -325,7 +332,9 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
   char acBuf[50];
   for (DrmHwcLayer *layer : comp_layers) {
     if (!layer->release_fence)
+    {
       continue;
+    }
 #if RK_VR
     if(layer->release_fence.get() > -1 && (layer->gralloc_buffer_usage & 0x08000000))
     {
@@ -340,7 +349,10 @@ int DrmDisplayComposition::CreateAndAssignReleaseFences() {
         sprintf(acBuf,"frame-%d",layer->frame_no);
         int ret = layer->release_fence.Set(CreateNextTimelineFence(acBuf));
         if (ret < 0)
+        {
+            ALOGE("creat release fence failed ret=%d,%s",ret,strerror(errno));
           return ret;
+        }
     }
   }
 
@@ -523,7 +535,6 @@ int DrmDisplayComposition::combine_layer()
         }
   }
 
-#if RK_DRM_HWC_DEBUG
   for (LayerMap::iterator iter = layer_map_.begin();
        iter != layer_map_.end(); ++iter) {
         ALOGD_IF(log_level(DBG_DEBUG),"layer map id=%d,size=%zu",iter->first,iter->second.size());
@@ -533,7 +544,6 @@ int DrmDisplayComposition::combine_layer()
              ALOGD_IF(log_level(DBG_DEBUG),"\tlayer name=%s",(*iter_layer)->name.c_str());
         }
   }
-#endif
 
     return 0;
 }
@@ -551,24 +561,11 @@ int DrmDisplayComposition::Plan(SquashState *squash,
   // squashed layers).
   std::map<size_t, DrmHwcLayer *> to_composite;
   bool use_squash_framebuffer = false;
+
   if (!crtc_) {
     ALOGE("can't not plan when crtc is NULL\n");
     return -EINVAL;
   }
-#if RK_DRM_HWC
-  std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
-
-    //set use flag to false.
-    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
-       iter != plane_groups.end(); ++iter) {
-        (*iter)->bUse=false;
-        for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
-            iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            if(crtc_ && (*iter_plane)->GetCrtcSupported(*crtc_))  //only init the special crtc's plane
-                (*iter_plane)->set_use(false);
-        }
-    }
-#endif
 
 #if USE_SQUASH
   // Used to determine which layers were entirely squashed
@@ -645,29 +642,11 @@ int DrmDisplayComposition::Plan(SquashState *squash,
       to_composite.emplace(std::make_pair(i, &layers_[i]));
 #endif
 
- int ret=-1;
-#if USE_MULTI_AREAS
-  ret = combine_layer();
-
-  if(0==ret)
+  //must set composition_planes_ before.
+  if(composition_planes_.size() <= 0)
   {
-      std::tie(ret, composition_planes_) = planner_->MatchPlanes(layer_map_,crtc_,drm_);
-      if (ret) {
-        ALOGD_IF(log_level(DBG_VERBOSE),"Planner failed MatchPlanes planes ret=%d", ret);
-      }
-  }
-#endif
-
-  std::vector<DrmCompositionPlane> plan;
-  if(ret)
-  {
-      std::tie(ret, composition_planes_) =
-          planner_->ProvisionPlanes(to_composite, use_squash_framebuffer, crtc_,
-                                    primary_planes, overlay_planes);
-      if (ret) {
-        ALOGE("Planner failed provisioning planes ret=%d", ret);
-        return ret;
-      }
+    ALOGE("composition_planes_ is null");
+    return -1;
   }
 
   // Remove the planes we used from the pool before returning. This ensures they
@@ -689,7 +668,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     }
   }
 
-#if RK_DRM_HWC_DEBUG
   size_t j=0;
   for (const DrmCompositionPlane &plane : composition_planes_) {
     std::ostringstream out;
@@ -697,7 +675,6 @@ int DrmDisplayComposition::Plan(SquashState *squash,
     ALOGD_IF(log_level(DBG_VERBOSE),"%s",out.str().c_str());
     j++;
   }
-#endif
 
 #if USE_SQUASH
   return FinalizeComposition(exclude_rects.data(), exclude_rects.size());
@@ -742,7 +719,6 @@ static const char *DPMSModeToString(int dpms_mode) {
   }
 }
 
-#if !RK_DRM_HWC_DEBUG
 static void DumpBuffer(const DrmHwcBuffer &buffer, std::ostringstream *out) {
   if (!buffer) {
     *out << "buffer=<invalid>";
@@ -813,7 +789,6 @@ static const char *BlendingToString(DrmHwcBlending blending) {
       return "<invalid>";
   }
 }
-#endif
 
 static void DumpRegion(const DrmCompositionRegion &region,
                        std::ostringstream *out) {
@@ -856,61 +831,13 @@ void DrmDisplayComposition::Dump(std::ostringstream *out) const {
   *out << "    Layers: count=" << layers_.size() << "\n";
   for (size_t i = 0; i < layers_.size(); i++) {
     const DrmHwcLayer &layer = layers_[i];
-#if RK_DRM_HWC_DEBUG
     layer.dump_drm_layer(i,out);
-#else
-    *out << "      [" << i << "] ";
-
-    DumpBuffer(layer.buffer, out);
-
-    if (layer.protected_usage())
-      *out << " protected";
-
-    *out << " transform=";
-    DumpTransform(layer.transform, out);
-    *out << " blending[a=" << (int)layer.alpha
-         << "]=" << BlendingToString(layer.blending) << " source_crop";
-    layer.source_crop.Dump(out);
-    *out << " display_frame";
-    layer.display_frame.Dump(out);
-
-    *out << "\n";
-#endif
   }
 
   *out << "    Planes: count=" << composition_planes_.size() << "\n";
   for (size_t i = 0; i < composition_planes_.size(); i++) {
     const DrmCompositionPlane &comp_plane = composition_planes_[i];
-#if RK_DRM_HWC_DEBUG
     comp_plane.dump_drm_com_plane(i,out);
-#else
-    *out << "      [" << i << "]"
-         << " plane=" << (comp_plane.plane() ? comp_plane.plane()->id() : -1)
-         << " type=";
-    switch (comp_plane.type()) {
-      case DrmCompositionPlane::Type::kDisable:
-        *out << "DISABLE";
-        break;
-      case DrmCompositionPlane::Type::kLayer:
-        *out << "LAYER";
-        break;
-      case DrmCompositionPlane::Type::kPrecomp:
-        *out << "PRECOMP";
-        break;
-      case DrmCompositionPlane::Type::kSquash:
-        *out << "SQUASH";
-        break;
-      default:
-        *out << "<invalid>";
-        break;
-    }
-
-    *out << " source_layer=";
-    for (auto i : comp_plane.source_layers()) {
-      *out << i << " ";
-    }
-    *out << "\n";
-#endif
   }
 
   *out << "    Squash Regions: count=" << squash_regions_.size() << "\n";

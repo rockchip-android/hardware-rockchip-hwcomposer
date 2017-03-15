@@ -96,21 +96,12 @@ class Planner {
       if (!plane)
         return -ENOENT;
 
-#if USE_PRE_COMP
       auto precomp = GetPrecompIter(composition);
       composition->emplace(precomp, type, plane, crtc, source_layer);
-#else
-      composition->emplace_back(type, plane, crtc, source_layer);
-#endif
+
       return 0;
     }
-#if RK_DRM_HWC
-    int TakePlane(std::vector<DrmCompositionPlane> *composition,
-                       std::vector<DrmPlane *> *planes,
-                       DrmCompositionPlane::Type type, DrmCrtc *crtc,
-                       size_t source_layer,
-                       DrmHwcLayer* layer);
-#endif
+
    private:
     static std::vector<DrmCompositionPlane>::iterator GetPrecompIter(
         std::vector<DrmCompositionPlane> *composition) {
@@ -164,9 +155,7 @@ class Planner {
   std::vector<DrmPlane *> GetUsablePlanes(
       DrmCrtc *crtc, std::vector<DrmPlane *> *primary_planes,
       std::vector<DrmPlane *> *overlay_planes);
-#if RK_DRM_HWC
-  std::vector<DrmPlane *> rkGetUsablePlanes(DrmCrtc *crtc);
-#endif
+
   std::vector<std::unique_ptr<PlanStage>> stages_;
 };
 

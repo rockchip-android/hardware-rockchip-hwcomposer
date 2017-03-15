@@ -48,10 +48,8 @@ class DrmCrtc {
   const DrmProperty &right_margin_property() const;
   const DrmProperty &top_margin_property() const;
   const DrmProperty &bottom_margin_property() const;
-
-#if RK_DRM_HWC_DEBUG
   void dump_crtc(std::ostringstream *out) const;
-#endif
+
 
   DrmResources *getDrmReoources()
   {

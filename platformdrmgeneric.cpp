@@ -25,9 +25,12 @@
 #include <xf86drmMode.h>
 
 #include <cutils/log.h>
+#if RK_DRM_GRALLOC
 #include <gralloc_drm_handle.h>
+#endif
 #include <hardware/gralloc.h>
-#include "hwcutil.h"
+#include "hwc_util.h"
+#include "hwc_rockchip.h"
 
 namespace android {
 
@@ -97,50 +100,56 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
 , bool bSkipLine
 #endif
 ) {
-  gralloc_drm_handle_t *gr_handle = gralloc_drm_handle(handle);
-  if (!gr_handle)
-  {
-    gralloc_drm_unlock_handle(handle);
-    return -EINVAL;
-  }
+  int fd,width,height,byte_stride,format;
 
+  fd = hwc_get_handle_primefd(gralloc_, handle);
+#if RK_DRM_GRALLOC
+  width = hwc_get_handle_attibute(gralloc_,handle,ATT_WIDTH);
+  height = hwc_get_handle_attibute(gralloc_,handle,ATT_HEIGHT);
+  byte_stride = hwc_get_handle_attibute(gralloc_,handle,ATT_BYTE_STRIDE);
+  format = hwc_get_handle_attibute(gralloc_,handle,ATT_FORMAT);
+#else
+  width = hwc_get_handle_width(gralloc_,handle);
+  height = hwc_get_handle_height(gralloc_,handle);
+  byte_stride = hwc_get_handle_byte_stride(gralloc_,handle);
+  format = hwc_get_handle_format(gralloc_,handle);
+#endif
   uint32_t gem_handle;
-  int ret = drmPrimeFDToHandle(drm_->fd(), gr_handle->prime_fd, &gem_handle);
+  int ret = drmPrimeFDToHandle(drm_->fd(), fd, &gem_handle);
   if (ret) {
-    gralloc_drm_unlock_handle(handle);
-    ALOGE("failed to import prime fd %d ret=%d", gr_handle->prime_fd, ret);
+    ALOGE("failed to import prime fd %d ret=%d", fd, ret);
     return ret;
   }
 
   memset(bo, 0, sizeof(hwc_drm_bo_t));
-  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+  if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
-      bo->width = gr_handle->width/1.25;
+      bo->width = width/1.25;
       bo->width = ALIGN_DOWN(bo->width,2);
   }
   else
   {
-      bo->width = gr_handle->width;
+      bo->width = width;
   }
 
 #if RK_VIDEO_SKIP_LINE
   if(bSkipLine)
   {
-      bo->pitches[0] = gr_handle->stride*2;
-      bo->height = gr_handle->height/2;
+      bo->pitches[0] = byte_stride*2;
+      bo->height = height/2;
   }
   else
 #endif
   {
-      bo->pitches[0] = gr_handle->stride;
-      bo->height = gr_handle->height;
+      bo->pitches[0] = byte_stride;
+      bo->height = height;
   }
 
-  bo->format = ConvertHalFormatToDrm(gr_handle->format);
+  bo->format = ConvertHalFormatToDrm(format);
   bo->gem_handles[0] = gem_handle;
   bo->offsets[0] = 0;
 
-  if(gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12 || gr_handle->format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+  if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
   {
     bo->pitches[1] = bo->pitches[0];
     bo->gem_handles[1] = gem_handle;
@@ -148,9 +157,11 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
   }
 #if USE_AFBC_LAYER
   __u64 modifier[4];
+  uint64_t internal_format;
   memset(modifier, 0, sizeof(modifier));
-
-  if (isAfbcInternalFormat(gr_handle->internal_format))
+  gralloc_->perform(gralloc_, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                         handle., &internal_format);
+  if (isAfbcInternalFormat(internal_format))
     modifier[0] = DRM_FORMAT_MOD_ARM_AFBC;
 
   ret = drmModeAddFB2_ext(drm_->fd(), bo->width, bo->height, bo->format,
@@ -163,12 +174,11 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
   if (ret) {
     ALOGE("could not create drm fb %d", ret);
     ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",
-        drm_->fd(), bo->width, bo->height, gr_handle->format,bo->format,
+        drm_->fd(), bo->width, bo->height, format,bo->format,
         gem_handle, bo->pitches[0], bo->fb_id);
 #if RK_VIDEO_SKIP_LINE
     ALOGE("bSkipLine=%d",bSkipLine);
 #endif
-    gralloc_drm_unlock_handle(handle);
     return ret;
   }
 
@@ -191,7 +201,6 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
             bo->gem_handles[i] = 0;
     }
 #endif
-  gralloc_drm_unlock_handle(handle);
 
   return ret;
 }

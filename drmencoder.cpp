@@ -45,7 +45,6 @@ void DrmEncoder::set_crtc(DrmCrtc *crtc) {
   crtc_ = crtc;
 }
 
-#if RK_DRM_HWC_DEBUG
 void DrmEncoder::dump_encoder(std::ostringstream *out) const {
     *out << encoder_->encoder_id << "\t"
          << encoder_->crtc_id << "\t"
@@ -53,5 +52,4 @@ void DrmEncoder::dump_encoder(std::ostringstream *out) const {
          << std::hex << encoder_->possible_crtcs << "\t"
          << std::hex << encoder_->possible_clones << "\n";
 }
-#endif
 }

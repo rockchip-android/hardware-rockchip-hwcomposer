@@ -126,7 +126,6 @@ int DrmPlane::Init() {
   if (ret)
     ALOGI("Could not get alpha property");
 
-#if RK_DRM_HWC
   ret = drm_->GetPlaneProperty(*this, "ZPOS", &zpos_property_);
   if (ret)
     ALOGE("Could not get ZPOS property");
@@ -154,8 +153,6 @@ int DrmPlane::Init() {
     rotation_property().set_feature("rotate");
     rotation_property().value(&rotate);
     b_rotate_ = rotate;
-
-#endif
 
   return 0;
 }
@@ -220,7 +217,6 @@ const DrmProperty &DrmPlane::alpha_property() const {
   return alpha_property_;
 }
 
-#if RK_DRM_HWC
 bool DrmPlane::get_scale(){
     return b_scale_;
 }
@@ -262,12 +258,11 @@ const DrmProperty &DrmPlane::feature_property() const {
 bool DrmPlane::is_reserved(){
   return b_reserved_;
 }
+
 void DrmPlane::set_reserved(bool b_reserved) {
     b_reserved_ = b_reserved;
 }
-#endif
 
-#if RK_DRM_HWC_DEBUG
 void DrmPlane::dump_plane(std::ostringstream *out) const {
         unsigned int j;
 
@@ -292,6 +287,5 @@ void DrmPlane::dump_plane(std::ostringstream *out) const {
 
 		drm_->DumpPlaneProperty(*this,out);
 }
-#endif
 
 }

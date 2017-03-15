@@ -37,7 +37,6 @@ DrmComposition::DrmComposition(DrmResources *drm, Importer *importer,
   char use_overlay_planes_prop[PROPERTY_VALUE_MAX];
   property_get("hwc.drm.use_overlay_planes", use_overlay_planes_prop, "1");
   bool use_overlay_planes = atoi(use_overlay_planes_prop);
-#if RK_DRM_HWC
   for (auto &plane : drm->sort_planes()) {
     if (plane->type() == DRM_PLANE_TYPE_PRIMARY)
       primary_planes_.push_back(plane);
@@ -45,14 +44,6 @@ DrmComposition::DrmComposition(DrmResources *drm, Importer *importer,
             plane->type() == DRM_PLANE_TYPE_CURSOR))
       overlay_planes_.push_back(plane);
   }
-#else
-  for (auto &plane : drm->planes()) {
-    if (plane->type() == DRM_PLANE_TYPE_PRIMARY)
-      primary_planes_.push_back(plane.get());
-    else if (use_overlay_planes && (plane->type() == DRM_PLANE_TYPE_OVERLAY))
-      overlay_planes_.push_back(plane.get());
-  }
-#endif
 }
 
 int DrmComposition::Init(uint64_t frame_no) {
@@ -109,6 +100,10 @@ int DrmComposition::SetDisplayMode(int display, const DrmMode &display_mode) {
   return composition_map_[display]->SetDisplayMode(display_mode);
 }
 
+int DrmComposition::SetCompPlanes(int display, std::vector<DrmCompositionPlane>& composition_planes) {
+    return composition_map_[display]->SetCompPlanes(composition_planes);
+}
+
 std::unique_ptr<DrmDisplayComposition> DrmComposition::TakeDisplayComposition(
     int display) {
   return std::move(composition_map_[display]);
@@ -132,13 +127,13 @@ int DrmComposition::Plan(std::map<int, DrmDisplayCompositor> &compositor_map) {
 }
 
 int DrmComposition::DisableUnusedPlanes() {
-#if RK_DRM_HWC
 std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
-#endif
+
   int i;
   for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
     DrmCrtc *crtc = composition_map_[i]->crtc();
     if (!crtc)
+
       continue;
 
     DrmDisplayComposition *comp = GetDisplayComposition(i);
@@ -152,7 +147,6 @@ std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
         comp->type() == DRM_COMPOSITION_TYPE_MODESET)
       continue;
 
-#if RK_DRM_HWC
     //loop plane groups.
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
        iter != plane_groups.end(); ++iter) {
@@ -166,27 +160,6 @@ std::vector<PlaneGroup *>& plane_groups = drm_->GetPlaneGroups();
             }
         }
     }
-#else
-    for (std::vector<DrmPlane *>::iterator iter = primary_planes_.begin();
-         iter != primary_planes_.end(); ++iter) {
-      if ((*iter)->GetCrtcSupported(*crtc)) {
-        ALOGD_IF(log_level(DBG_DEBUG),"DisableUnusedPlanes primary plane id=%d",(*iter)->id());
-        comp->AddPlaneDisable(*iter);
-        primary_planes_.erase(iter);
-        break;
-      }
-    }
-    for (std::vector<DrmPlane *>::iterator iter = overlay_planes_.begin();
-         iter != overlay_planes_.end();) {
-      if ((*iter)->GetCrtcSupported(*crtc)) {
-        ALOGD_IF(log_level(DBG_DEBUG),"DisableUnusedPlanes verlay plane id=%d",(*iter)->id());
-        comp->AddPlaneDisable(*iter);
-        iter = overlay_planes_.erase(iter);
-      } else {
-        iter++;
-      }
-    }
-#endif
   }
   return 0;
 }

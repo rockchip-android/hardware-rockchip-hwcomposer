@@ -36,10 +36,8 @@ class Importer;
 class Planner;
 class SquashState;
 
-#if RK_DRM_HWC
   typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
   typedef LayerMap::iterator LayerMapIter;
-#endif
 
 
 enum DrmCompositionType {
@@ -100,19 +98,13 @@ class DrmCompositionPlane {
     return source_layers_;
   }
 
-#if RK_ZPOS_SUPPORT
   int get_zpos() { return zpos_; }
   void set_zpos( int zpos) { zpos_ =  zpos; }
-#endif
 
-#if RK_DRM_HWC_DEBUG
   void dump_drm_com_plane(int index, std::ostringstream *out) const;
-#endif
 
  private:
-#if RK_ZPOS_SUPPORT
   int zpos_;
-#endif
   Type type_ = Type::kDisable;
   DrmPlane *plane_ = NULL;
   DrmCrtc *crtc_ = NULL;
@@ -133,6 +125,7 @@ class DrmDisplayComposition {
   int AddPlaneDisable(DrmPlane *plane);
   int SetDpmsMode(uint32_t dpms_mode);
   int SetDisplayMode(const DrmMode &display_mode);
+  int SetCompPlanes(std::vector<DrmCompositionPlane>& composition_planes);
 
   int Plan(SquashState *squash, std::vector<DrmPlane *> *primary_planes,
            std::vector<DrmPlane *> *overlay_planes);
@@ -232,9 +225,7 @@ class DrmDisplayComposition {
   std::vector<DrmCompositionRegion> pre_comp_regions_;
   std::vector<DrmCompositionPlane> composition_planes_;
 
-#if RK_DRM_HWC
   LayerMap layer_map_;
-#endif
 
   uint64_t frame_no_ = 0;
 };

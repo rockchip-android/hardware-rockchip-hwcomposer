@@ -41,11 +41,6 @@ class DrmCompositor {
   void ClearDisplay(int display);
   void Dump(std::ostringstream *out) const;
 
-#if RK_10BIT_BYPASS
-  inline bool isSkipPreComp(int display) { return compositor_map_[display].isSkipPreComp(); }
-  inline void setSkipPreComp (int display, bool bSkip) { compositor_map_[display].setSkipPreComp(bSkip); }
-#endif
-
  private:
   DrmCompositor(const DrmCompositor &) = delete;
 

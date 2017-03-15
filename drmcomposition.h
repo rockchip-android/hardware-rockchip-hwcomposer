@@ -42,6 +42,15 @@ struct DrmCompositionDisplayLayersMap {
       default;
 };
 
+struct DrmCompositionDisplayPlane {
+  int display;
+  std::vector<DrmCompositionPlane> composition_planes;
+
+  DrmCompositionDisplayPlane() = default;
+  DrmCompositionDisplayPlane(DrmCompositionDisplayPlane &&rhs) =
+      default;
+};
+
 class DrmComposition {
  public:
   DrmComposition(DrmResources *drm, Importer *importer, Planner *planner);
@@ -51,6 +60,7 @@ class DrmComposition {
   int SetLayers(size_t num_displays, DrmCompositionDisplayLayersMap *maps);
   int SetDpmsMode(int display, uint32_t dpms_mode);
   int SetDisplayMode(int display, const DrmMode &display_mode);
+  int SetCompPlanes(int display, std::vector<DrmCompositionPlane>& composition_planes);
 
   std::unique_ptr<DrmDisplayComposition> TakeDisplayComposition(int display);
   DrmDisplayComposition *GetDisplayComposition(int display);
@@ -67,6 +77,7 @@ class DrmComposition {
 
   std::vector<DrmPlane *> primary_planes_;
   std::vector<DrmPlane *> overlay_planes_;
+  std::vector<DrmCompositionDisplayPlane> comp_plane_group;
 
   /*
    * This _must_ be read-only after it's passed to QueueComposition. Otherwise
