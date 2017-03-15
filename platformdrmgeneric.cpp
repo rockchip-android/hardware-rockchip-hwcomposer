@@ -160,7 +160,7 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
   uint64_t internal_format;
   memset(modifier, 0, sizeof(modifier));
   gralloc_->perform(gralloc_, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
-                         handle., &internal_format);
+                         handle, &internal_format);
   if (isAfbcInternalFormat(internal_format))
     modifier[0] = DRM_FORMAT_MOD_ARM_AFBC;
 
