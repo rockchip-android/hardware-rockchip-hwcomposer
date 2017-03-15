@@ -18,50 +18,7 @@
 #define ANDROID_DRMHWCGRALLOC_H_
 
 #include <stdint.h>
-
-enum {
-  GRALLOC_MODULE_PERFORM_GET_DRM_FD                = 0x08000002,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD       = 0x08100002,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_ATTRIBUTES     = 0x08100004,
-  GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT       = 0x08100006,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_WIDTH          = 0x08100008,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_HEIGHT         = 0x0810000A,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_STRIDE         = 0x0810000C,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_BYTE_STRIDE    = 0x0810000E,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_FORMAT         = 0x08100010,
-  GRALLOC_MODULE_PERFORM_GET_HADNLE_SIZE           = 0x08100012,
-
-  /* perform(const struct gralloc_module_t *mod,
-   *	   int op,
-   *	   int drm_fd,
-   *	   buffer_handle_t buffer,
-   *	   struct hwc_drm_bo *bo);
-   */
-  GRALLOC_MODULE_PERFORM_DRM_IMPORT = 0xffeeff00,
-
-  /* perform(const struct gralloc_module_t *mod,
-   *	   int op,
-   *	   buffer_handle_t buffer,
-   *	   void (*free_callback)(void *),
-   *	   void *priv);
-   */
-  GRALLOC_MODULE_PERFORM_SET_IMPORTER_PRIVATE = 0xffeeff01,
-
-  /* perform(const struct gralloc_module_t *mod,
-   *	   int op,
-   *	   buffer_handle_t buffer,
-   *	   void (*free_callback)(void *),
-   *	   void **priv);
-   */
-  GRALLOC_MODULE_PERFORM_GET_IMPORTER_PRIVATE = 0xffeeff02,
-
-  /* perform(const struct gralloc_module_t *mod,
-   *     int op,
-   *     buffer_handle_t buffer,
-   *     int *usage);
-   */
-  GRALLOC_MODULE_PERFORM_GET_USAGE = 0x0feeff03,
-};
+#include <hardware/gralloc.h>
 
 typedef struct hwc_drm_bo {
   uint32_t width;
