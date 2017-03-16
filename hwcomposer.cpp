@@ -844,7 +844,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     init_log_level();
     hwc_dump_fps();
     ALOGD_IF(log_level(DBG_VERBOSE),"----------------------------frame=%d start ----------------------------",get_frame());
-
     ctx->layer_contents.clear();
     ctx->layer_contents.reserve(num_displays);
     ctx->comp_plane_group.clear();
@@ -978,8 +977,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
         hd->mixMode = HWC_DEFAULT;
         if(crtc && layer_content.layers.size()>0)
+        {
             bAllMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[i],layer_content.layers,
                                     hd->iPlaneSize, comp_plane.composition_planes);
+        }
         if(!bAllMatch)
         {
             ALOGD_IF(log_level(DBG_DEBUG),"mix_policy failed,go to GPU GLES at line=%d", __LINE__);
@@ -1641,32 +1642,34 @@ static int hwc_set_initial_config(struct hwc_context_t *ctx, int display) {
 }
 
 static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
-  hwc_drm_display_t *hd = &ctx->displays[display];
-  hd->ctx = ctx;
+    hwc_drm_display_t *hd = &ctx->displays[display];
+    hd->ctx = ctx;
 #if RK_VIDEO_UI_OPT
-  hd->iUiFd = -1;
-  hd->bHideUi = false;
+    hd->iUiFd = -1;
+    hd->bHideUi = false;
 #endif
-  hd->framebuffer_width = 0;
-  hd->framebuffer_height = 0;
-  hd->w_scale = 1.0;
-  hd->h_scale = 1.0;
-  hd->active = true;
-  hd->iPlaneSize = 0;
+    hd->framebuffer_width = 0;
+    hd->framebuffer_height = 0;
+    hd->w_scale = 1.0;
+    hd->h_scale = 1.0;
+    hd->active = true;
+    hd->iPlaneSize = 0;
 
-    //get plane size for display
-    std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
     DrmConnector *connector = ctx->drm.GetConnectorFromType(display);
-    if (!connector) {
-      ALOGE("Failed to get connector for display %d line=%d", display,__LINE__);
-      return -1;
-    }
-    
-    DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
-    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
-       iter != plane_groups.end(); ++iter) {
-        if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
-            hd->iPlaneSize++;
+    if (connector)
+    {
+        //get plane size for display
+        std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
+        DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
+        if(crtc)
+        {
+            for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+                iter != plane_groups.end(); ++iter)
+            {
+                if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
+                    hd->iPlaneSize++;
+            }
+        }
     }
 
   return 0;

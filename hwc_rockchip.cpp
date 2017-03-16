@@ -1086,6 +1086,12 @@ bool match_process(DrmResources* drm, DrmCrtc *crtc,
     int iMatchCnt = 0;
     bool bMatch = false;
 
+    if(!crtc)
+    {
+        ALOGE("%s:line=%d crtc is null",__FUNCTION__,__LINE__);
+        return false;
+    }
+
     //update zpos of layer
     for (size_t i = 0; i < layers.size(); ++i)
     {
@@ -1236,6 +1242,13 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     // outer indices and mark everything in between as HWC_FRAMEBUFFER
     std::pair<int, int> skip_layer_indices(-1, -1);
     std::pair<int, int> layer_indices(-1, -1);
+
+
+    if(!crtc)
+    {
+        ALOGE("%s:line=%d crtc is null",__FUNCTION__,__LINE__);
+        return false;
+    }
 
     //save fb into tmp_layers
     move_fb_layer_to_tmp(layers, tmp_layers);
