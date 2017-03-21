@@ -1414,7 +1414,6 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
 
   connector->force_disconnect(dpmsValue == DRM_MODE_DPMS_OFF);
 
-  ctx->drm.UpdateDisplayRoute();
   return 0;
 }
 
