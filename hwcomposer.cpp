@@ -881,6 +881,15 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     connector->set_current_mode(mode);
     hd->w_scale = (float)mode.h_display() / hd->framebuffer_width;
     hd->h_scale = (float)mode.v_display() / hd->framebuffer_height;
+    //get plane size for display
+    std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
+    hd->iPlaneSize = 0;
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+        iter != plane_groups.end(); ++iter)
+    {
+        if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
+            hd->iPlaneSize++;
+    }
 
 #if SKIP_BOOT
     if(g_boot_cnt < BOOT_COUNT)
@@ -1653,24 +1662,6 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hd->w_scale = 1.0;
     hd->h_scale = 1.0;
     hd->active = true;
-    hd->iPlaneSize = 0;
-
-    DrmConnector *connector = ctx->drm.GetConnectorFromType(display);
-    if (connector)
-    {
-        //get plane size for display
-        std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
-        DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
-        if(crtc)
-        {
-            for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
-                iter != plane_groups.end(); ++iter)
-            {
-                if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
-                    hd->iPlaneSize++;
-            }
-        }
-    }
 
   return 0;
 }
