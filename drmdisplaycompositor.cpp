@@ -1076,6 +1076,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     std::vector<size_t> &source_layers = comp_plane.source_layers();
 
     int fb_id = -1;
+    bool is_yuv = false;
     DrmHwcRect<int> display_frame = DrmHwcRect<int>(0, 0, 0, 0);
     DrmHwcRect<float> source_crop = DrmHwcRect<float>(0.0, 0.0, 0.0, 0.0);
 #if RK_VIDEO_SKIP_LINE
@@ -1151,6 +1152,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       fb_id = layer.buffer->fb_id;
       display_frame = layer.display_frame;
       source_crop = layer.source_crop;
+      is_yuv = layer.is_yuv;
       if (layer.blending == DrmHwcBlending::kPreMult)
         alpha = layer.alpha;
 
@@ -1256,6 +1258,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         src_h = IS_ALIGN(src_h, 4)?src_h:(ALIGN(src_h - src_t, 4)-4);
     }
 #endif
+    if(is_yuv)
+        src_l = ALIGN_DOWN(src_l, 2);
 
     ret = drmModeAtomicAddProperty(pset, plane->id(),
                                    plane->crtc_property().id(), crtc->id()) < 0;
