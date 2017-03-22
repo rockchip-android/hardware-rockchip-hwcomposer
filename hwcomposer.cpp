@@ -1422,6 +1422,9 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
   }
 
   connector->force_disconnect(dpmsValue == DRM_MODE_DPMS_OFF);
+  ctx->drm.DisplayChanged();
+  ctx->drm.UpdateDisplayRoute();
+  ctx->drm.ClearDisplay();
 
   return 0;
 }
@@ -1486,6 +1489,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
 
   update_display_bestmode(display, connector);
   DrmMode mode = connector->best_mode();
+  connector->set_current_mode(mode);
 
   char framebuffer_size[PROPERTY_VALUE_MAX];
   uint32_t width, height, vrefresh;
