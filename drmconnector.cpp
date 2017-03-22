@@ -169,6 +169,8 @@ void DrmConnector::force_disconnect(bool force) {
 }
 
 drmModeConnection DrmConnector::state() const {
+  if (force_disconnect_)
+    return DRM_MODE_DISCONNECTED;
   return state_;
 }
 
