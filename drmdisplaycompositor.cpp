@@ -601,6 +601,13 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     dst_r = dst_w;
     dst_b = dst_h;
 
+    src_l = (int)layer.source_crop.left;
+    src_t = (int)layer.source_crop.top;
+    src_r = (int)(layer.source_crop.right - layer.source_crop.left);
+    src_b = (int)(layer.source_crop.bottom - layer.source_crop.top);
+    src_l = ALIGN_DOWN(src_l, 2);
+    src_r = ALIGN_DOWN(src_r, 2);
+
     //DumpLayer("rga", layer.sf_handle);
 
     if(layer.transform & DrmHwcTransform::kRotate90) {
@@ -634,9 +641,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
         rga_transform |= DRM_RGA_TRANSFORM_FLIP_V;
 
     rga_set_rect(&src.rect,
-                (int)layer.source_crop.left, (int)layer.source_crop.top,
-                (int)(layer.source_crop.right - layer.source_crop.left),
-                (int)(layer.source_crop.bottom - layer.source_crop.top),
+                src_l, src_t, src_r, src_b,
                 layer.stride, layer.height, layer.format);
     rga_set_rect(&dst.rect, dst_l, dst_t,  dst_r - dst_l, dst_b - dst_t, dst_stride, dst_h, alloc_format);
     ALOGD_IF(log_level(DBG_DEBUG),"rgaRotateScale  : src[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x],dst[x=%d,y=%d,w=%d,h=%d,ws=%d,hs=%d,format=0x%x]",
