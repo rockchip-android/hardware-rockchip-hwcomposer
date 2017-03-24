@@ -1300,12 +1300,10 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     return -EINVAL;
   }
 
-  for (size_t i = 0; i < num_displays; ++i) {
-   if (!sf_display_contents[i])
-      continue;
+  for (size_t i = 0; i < ctx->comp_plane_group.size(); ++i) {
       if(ctx->comp_plane_group[i].composition_planes.size() > 0)
       {
-          ret = composition->SetCompPlanes(i, ctx->comp_plane_group[i].composition_planes);
+          ret = composition->SetCompPlanes(ctx->comp_plane_group[i].display, ctx->comp_plane_group[i].composition_planes);
           if (ret) {
             return -EINVAL;
           }
