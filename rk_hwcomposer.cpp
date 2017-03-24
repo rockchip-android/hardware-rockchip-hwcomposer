@@ -1086,6 +1086,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     ctx->Is_Lvideo = false;
     ctx->Is_Secure = false;
     ctx->special_app = false;
+    ctx->hasPlaneAlpha = false;
     is_debug_log();    
     
     if(cnt < 2)
@@ -1175,7 +1176,9 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                     ALOGW("line=%d",__LINE__);            
                 return -1;
             }
-
+	    if (layer && (layer->blending & 0xffff) == 0x105 &&
+						(layer->blending >> 16) < 255)
+		ctx->hasPlaneAlpha = true;
         }
                  
     }    
@@ -1337,6 +1340,12 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     if(context->IsRk3328 || context->IsRk322x || context->IsRk3126)
     {
         if(is_out_log())
+            ALOGD("Hwc rga policy out,line=%d",__LINE__);
+        return -1;
+    }
+    if(context->hasPlaneAlpha)
+    {
+	if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
         return -1;
     }

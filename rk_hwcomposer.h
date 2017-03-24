@@ -443,6 +443,7 @@ FenceMangrRga;
         int hdrFrameStatus;
         int hdrSupportType;
         int deviceConected;
+	bool hasPlaneAlpha;
     }
     hwcContext;
 
