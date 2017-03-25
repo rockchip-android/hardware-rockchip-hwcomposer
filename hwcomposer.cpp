@@ -1300,12 +1300,10 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
     return -EINVAL;
   }
 
-  for (size_t i = 0; i < num_displays; ++i) {
-   if (!sf_display_contents[i])
-      continue;
+  for (size_t i = 0; i < ctx->comp_plane_group.size(); ++i) {
       if(ctx->comp_plane_group[i].composition_planes.size() > 0)
       {
-          ret = composition->SetCompPlanes(i, ctx->comp_plane_group[i].composition_planes);
+          ret = composition->SetCompPlanes(ctx->comp_plane_group[i].display, ctx->comp_plane_group[i].composition_planes);
           if (ret) {
             return -EINVAL;
           }
@@ -1422,6 +1420,9 @@ static int hwc_set_power_mode(struct hwc_composer_device_1 *dev, int display,
   }
 
   connector->force_disconnect(dpmsValue == DRM_MODE_DPMS_OFF);
+  ctx->drm.DisplayChanged();
+  ctx->drm.UpdateDisplayRoute();
+  ctx->drm.ClearDisplay();
 
   return 0;
 }
@@ -1486,6 +1487,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
 
   update_display_bestmode(display, connector);
   DrmMode mode = connector->best_mode();
+  connector->set_current_mode(mode);
 
   char framebuffer_size[PROPERTY_VALUE_MAX];
   uint32_t width, height, vrefresh;
