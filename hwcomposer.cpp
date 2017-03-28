@@ -725,6 +725,12 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     if( iMode <= 0 )
         return true;
 
+    if(num_layers == 1)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG),"No layer,go to GPU GLES at line=%d", __LINE__);
+        return true;
+    }
+
 #if RK_INVALID_REFRESH
     if(ctx->mOneWinOpt)
     {
@@ -862,6 +868,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     ctx->layer_contents.emplace_back();
     DrmHwcDisplayContents &layer_content = ctx->layer_contents.back();
+    ctx->comp_plane_group.emplace_back();
+    DrmCompositionDisplayPlane &comp_plane = ctx->comp_plane_group.back();
+    comp_plane.display = i;
 
     DrmConnector *connector = ctx->drm.GetConnectorFromType(i);
     if (!connector) {
@@ -951,11 +960,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #if RK_VIDEO_UI_OPT
     video_ui_optimize(ctx->gralloc, display_contents[i], &ctx->displays[i]);
 #endif
-
-    ctx->comp_plane_group.emplace_back();
-    DrmCompositionDisplayPlane &comp_plane = ctx->comp_plane_group.back();
-    comp_plane.display = i;
-
 
     int ret = -1;
     for (int j = 0; j < num_layers; j++) {
@@ -1307,6 +1311,11 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
           if (ret) {
             return -EINVAL;
           }
+      }
+      else
+      {
+          if (sf_display_contents[i])
+              hwc_sync_release(sf_display_contents[i]);
       }
   }
 
