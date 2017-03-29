@@ -28,7 +28,7 @@
 #include "hwc_debug.h"
 
 /*hwc version*/
-#define GHWC_VERSION                    "0.24"
+#define GHWC_VERSION                    "0.25"
 
 struct hwc_import_context;
 

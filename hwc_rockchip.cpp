@@ -11,13 +11,35 @@ int hwc_init_version()
     char acVersion[50];
     char acCommit[50];
     memset(acVersion,0,sizeof(acVersion));
-    if(sizeof(GHWC_VERSION) > 12) {
-        strncpy(acVersion,GHWC_VERSION,12);
-    } else {
-        strcpy(acVersion,GHWC_VERSION);
-    }
 
+    strcpy(acVersion,GHWC_VERSION);
+
+#ifdef TARGET_BOARD_PLATFORM_RK3288
+    strcat(acVersion,"-rk3288");
+#endif
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+    strcat(acVersion,"-rk3368");
+#endif
+#ifdef TARGET_BOARD_PLATFORM_RK3366
+    strcat(acVersion,"-rk3366");
+#endif
+#ifdef TARGET_BOARD_PLATFORM_RK3399
     strcat(acVersion,"-rk3399");
+#endif
+
+#ifdef RK_MID
+    strcat(acVersion,"-MID");
+#endif
+#ifdef RK_BOX
+    strcat(acVersion,"-BOX");
+#endif
+#ifdef RK_PHONE
+    strcat(acVersion,"-PHONE");
+#endif
+#ifdef RK_VIR
+    strcat(acVersion,"-VR");
+#endif
+
     /* RK_GRAPHICS_VER=commit-id:067e5d0: only keep string after '=' */
     sscanf(RK_GRAPHICS_VER, "%*[^=]=%s", acCommit);
 
