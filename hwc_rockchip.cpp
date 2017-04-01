@@ -695,6 +695,7 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
             i++;
     }
 
+#ifndef TARGET_BOARD_PLATFORM_RK3288
   //sort layer by xpos
   for (LayerMap::iterator iter = layer_map.begin();
        iter != layer_map.end(); ++iter) {
@@ -709,6 +710,22 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
             }
         }
   }
+#else
+  //sort layer by ypos
+  for (LayerMap::iterator iter = layer_map.begin();
+       iter != layer_map.end(); ++iter) {
+        if(iter->second.size() > 1) {
+            for(uint32_t i=0;i < iter->second.size()-1;i++) {
+                for(uint32_t j=i+1;j < iter->second.size();j++) {
+                     if(iter->second[i]->display_frame.top > iter->second[j]->display_frame.top) {
+                        ALOGD_IF(log_level(DBG_DEBUG),"swap %s and %s",iter->second[i]->name.c_str(),iter->second[j]->name.c_str());
+                        std::swap(iter->second[i],iter->second[j]);
+                     }
+                 }
+            }
+        }
+  }
+#endif
 
   for (LayerMap::iterator iter = layer_map.begin();
        iter != layer_map.end(); ++iter) {
