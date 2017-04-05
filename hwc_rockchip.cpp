@@ -548,13 +548,39 @@ static bool is_rec1_intersect_rec2(DrmHwcRect<int>* rec1,DrmHwcRect<int>* rec2)
     return false;
 }
 
+int is_x_intersect(DrmHwcRect<int>* rec,DrmHwcRect<int>* rec2)
+{
+    if(rec2->top == rec->top)
+        return 1;
+    else if(rec2->top < rec->top)
+    {
+        if(rec2->bottom > rec->top)
+            return 1;
+        else
+            return 0;
+    }
+    else
+    {
+        if(rec->bottom > rec2->top  )
+            return 1;
+        else
+            return 0;
+    }
+    return 0;
+}
+
+
 static bool is_layer_combine(DrmHwcLayer * layer_one,DrmHwcLayer * layer_two)
 {
     //Don't care format.
     if(/*layer_one->format != layer_two->format
         ||*/ layer_one->alpha!= layer_two->alpha
         || layer_one->is_scale || layer_two->is_scale
-        || is_rec1_intersect_rec2(&layer_one->display_frame,&layer_two->display_frame))
+        || is_rec1_intersect_rec2(&layer_one->display_frame,&layer_two->display_frame)
+ #ifdef TARGET_BOARD_PLATFORM_RK3288
+        || is_x_intersect(&layer_one->display_frame,&layer_two->display_frame)
+ #endif
+        )
     {
         ALOGD_IF(log_level(DBG_SILENT),"is_layer_combine layer one alpha=%d,is_scale=%d",layer_one->alpha,layer_one->is_scale);
         ALOGD_IF(log_level(DBG_SILENT),"is_layer_combine layer two alpha=%d,is_scale=%d",layer_two->alpha,layer_two->is_scale);
