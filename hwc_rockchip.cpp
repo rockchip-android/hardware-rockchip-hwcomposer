@@ -1505,6 +1505,12 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
                             layer_indices.first, layer_indices.second);
         if(bAllMatch)
             goto AllMatch;
+        else
+            goto FailMatch;
+    }
+    else
+    {
+       goto FailMatch;
     }
 
 AllMatch:
