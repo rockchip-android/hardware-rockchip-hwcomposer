@@ -1055,14 +1055,23 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     char overscan[PROPERTY_VALUE_MAX];
     int left_margin, right_margin, top_margin, bottom_margin;
 
-    if (display_ == 0)
-      property_get("persist.sys.overscan.main", overscan, "overscan 100,100,100,100");
+    if(display_comp->mode_3d() != NON_3D)
+    {
+        left_margin = 100;
+        top_margin = 100;
+        right_margin = 100;
+        bottom_margin = 100;
+    }
     else
-      property_get("persist.sys.overscan.aux", overscan, "overscan 100,100,100,100");
+    {
+        if (display_ == 0)
+          property_get("persist.sys.overscan.main", overscan, "overscan 100,100,100,100");
+        else
+          property_get("persist.sys.overscan.aux", overscan, "overscan 100,100,100,100");
 
-    sscanf(overscan, "overscan %d,%d,%d,%d", &left_margin, &top_margin,
-           &right_margin, &bottom_margin);
-
+        sscanf(overscan, "overscan %d,%d,%d,%d", &left_margin, &top_margin,
+               &right_margin, &bottom_margin);
+    }
     ret = drmModeAtomicAddProperty(pset, crtc->id(), crtc->left_margin_property().id(), left_margin) < 0 ||
           drmModeAtomicAddProperty(pset, crtc->id(), crtc->right_margin_property().id(), right_margin) < 0 ||
           drmModeAtomicAddProperty(pset, crtc->id(), crtc->top_margin_property().id(), top_margin) < 0 ||
@@ -1098,6 +1107,35 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     h_scale = (float)act_h / xxx_h;
   }
 #endif
+
+    //Find out the fb target for clone layer.
+    int fb_target_fb_id = -1;
+    if(display_comp->mode_3d() == FPS_3D)
+    {
+        for (DrmCompositionPlane &comp_plane : comp_planes) {
+            if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
+                std::vector<size_t> &source_layers = comp_plane.source_layers();
+
+                if (source_layers.size() > 1) {
+                    ALOGE("Can't handle more than one source layer sz=%zu type=%d",
+                    source_layers.size(), comp_plane.type());
+                    continue;
+                }
+
+                if (source_layers.empty() || source_layers.front() >= layers.size()) {
+                    ALOGE("Source layer index %zu out of bounds %zu type=%d",
+                    source_layers.front(), layers.size(), comp_plane.type());
+                    break;
+                }
+                DrmHwcLayer &layer = layers[source_layers.front()];
+                if(layer.bFbTarget_ && !layer.bClone_ && layer.buffer)
+                {
+                    fb_target_fb_id = layer.buffer->fb_id;
+                    break;
+                }
+            }
+        }
+    }
 
   for (DrmCompositionPlane &comp_plane : comp_planes) {
     DrmPlane *plane = comp_plane.plane();
@@ -1167,7 +1205,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         }
         layer.acquire_fence.Close();
       }
-      if (!layer.buffer) {
+      if (!layer.bClone_ && !layer.buffer) {
         ALOGE("Expected a valid framebuffer for pset");
         break;
       }
@@ -1177,8 +1215,15 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if RK_VIDEO_SKIP_LINE
       bSkipLine = layer.bSkipLine;
 #endif
-
-      fb_id = layer.buffer->fb_id;
+      if(layer.bClone_)
+      {
+        if(fb_target_fb_id > 0)
+            fb_id = fb_target_fb_id;
+        else
+            ALOGE("Invalid fb_target_fb_id=%d in 3D FPS mode", fb_target_fb_id);
+      }
+      else
+        fb_id = layer.buffer->fb_id;
       display_frame = layer.display_frame;
       source_crop = layer.source_crop;
       is_yuv = layer.is_yuv;

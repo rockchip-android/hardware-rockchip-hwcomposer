@@ -106,24 +106,14 @@ int hwc_static_screen_opt_set(bool isGLESComp)
 }
 #endif
 
-#if RK_STEREO
-void detect_3d_mode(threadPamaters& mControlStereo, hwc_display_contents_1_t *display_content, int display)
+#if 1
+int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_content, int display)
 {
     bool is_3d = false;
-    int forceStereop = 0;
-    int forceStereoe = 0;
     int force3d = 0;
-    int force3dp = hwc_get_int_property("sys.hwc.force3d.primary","0");
-    int force3de = hwc_get_int_property("sys.hwc.force3d.external","0");
-
-    if(1==force3dp || 2==force3dp){
-        forceStereoe = forceStereop = force3dp;
-    }else{
-        forceStereoe = forceStereop = 0;
-    }
-
     unsigned int numlayer = display_content->numHwLayers;
     int needStereo = 0;
+
     for (unsigned int j = 0; j <(numlayer - 1); j++) {
         if(display_content->hwLayers[j].alreadyStereo) {
             needStereo = display_content->hwLayers[j].alreadyStereo;
@@ -131,22 +121,31 @@ void detect_3d_mode(threadPamaters& mControlStereo, hwc_display_contents_1_t *di
         }
     }
 
-    if(0==display && forceStereop){
-        needStereo = forceStereop;
-    }else if(1==display && forceStereoe){
-        needStereo = forceStereoe;
+    if(!needStereo)
+    {
+        force3d = hwc_get_int_property("sys.hwc.force3d.primary","0");
+
+        if(1==force3d || 2==force3d){
+            if(display == 0 || display == 1)
+                needStereo = force3d;
+        }
     }
 
-    if(needStereo) {
+    if(needStereo)
+    {
         is_3d = true;
+        if(needStereo == 1)
+            hd->stereo_mode = H_3D;
+        else if (needStereo == 2)
+            hd->stereo_mode = V_3D;
+        else if (needStereo == 8)
+            hd->stereo_mode = FPS_3D;
+        else
+            ALOGE("It is unknow 3d mode needStereo=%d",needStereo);
+    }
 
-        for (unsigned int j = 0; j <(numlayer - 1); j++) {
-            display_content->hwLayers[j].displayStereo = needStereo;
-        }
-    } else {
-        for (unsigned int j = 0; j <(numlayer - 1); j++) {
-            display_content->hwLayers[j].displayStereo = needStereo;
-        }
+    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+        display_content->hwLayers[j].displayStereo = needStereo;
     }
 
     if (needStereo & 0x8000) {
@@ -155,7 +154,7 @@ void detect_3d_mode(threadPamaters& mControlStereo, hwc_display_contents_1_t *di
             display_content->hwLayers[j].displayStereo = (needStereo & (~0x8000));
         }
     }
-
+#if 0
     if(1==display && numlayer > 1) {
         ALOGD_IF(log_level(DBG_VERBOSE),"Wake up hwc control stereo");
         pthread_mutex_lock(&mControlStereo->mlk);
@@ -163,10 +162,12 @@ void detect_3d_mode(threadPamaters& mControlStereo, hwc_display_contents_1_t *di
         pthread_mutex_unlock(&mControlStereo->mlk);
         pthread_cond_signal(&mControlStereo->cond);
     }
-
+#endif
     return is_3d;
 }
+#endif
 
+#if 0
 int map_3d_mode(int value, int flag)
 {
     if(flag == READ_3D_MODE)
@@ -595,6 +596,7 @@ static bool has_layer(std::vector<DrmHwcLayer*>& layer_vector,DrmHwcLayer &layer
         for (std::vector<DrmHwcLayer*>::const_iterator iter = layer_vector.begin();
                iter != layer_vector.end(); ++iter) {
             if((*iter)->sf_handle==layer.sf_handle)
+              if((*iter)->bClone_ == layer.bClone_)
                 return true;
           }
 
@@ -635,6 +637,7 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
             DrmHwcLayer &layer_one = layers[j];
             //layer_one.index = j;
             is_combine = false;
+
             for(size_t k = 0; k <= sort_cnt; k++ ) {
                 DrmHwcLayer &layer_two = layers[j-1-k];
                 //layer_two.index = j-1-k;
@@ -661,7 +664,8 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
                             iter != layer_map[zpos].end();++iter)
                         {
                             if((*iter)->sf_handle==layer_one.sf_handle)
-                                continue;
+                                if((*iter)->bClone_==layer_one.bClone_)
+                                    continue;
 
                             if(!is_layer_combine(*iter,&layer_two))
                             {
@@ -680,7 +684,8 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
                             iter != layer_map[zpos].end();++iter)
                         {
                             if((*iter)->sf_handle==layer_two.sf_handle)
-                                continue;
+                                if((*iter)->bClone_==layer_two.bClone_)
+                                    continue;
 
                             if(!is_layer_combine(*iter,&layer_one))
                             {
@@ -690,7 +695,9 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
                         }
 
                         if(is_combine)
+                        {
                             layer_map[zpos].emplace_back(&layer_one);
+                        }
                     }
                 }
 
@@ -1216,6 +1223,9 @@ static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc,
     ALOGD_IF(log_level(DBG_DEBUG), "try_mix_policy iFirst=%d,interval=%d",iFirst,interval);
     for (auto i = layers.begin() + iFirst; i != layers.end() - interval;)
     {
+        if((*i).bClone_)
+            continue;
+
         (*i).bMix = true;
         (*i).raw_sf_layer->compositionType = HWC_MIX;
 
@@ -1225,13 +1235,15 @@ static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc,
     }
 
     //add fb layer.
+    int pos = iFirst;
     for (auto i = tmp_layers.begin(); i != tmp_layers.end();)
     {
         if((*i).raw_sf_layer->compositionType == HWC_FRAMEBUFFER_TARGET)
         {
-            layers.insert(layers.begin() + iFirst, std::move(*i));
+            layers.insert(layers.begin() + pos, std::move(*i));
+            pos++;
             i = tmp_layers.erase(i);
-            break;
+            continue;
         }
         i++;
     }
@@ -1245,8 +1257,16 @@ static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc,
 
 void move_fb_layer_to_tmp(std::vector<DrmHwcLayer>& layers, std::vector<DrmHwcLayer>& tmp_layers)
 {
-    tmp_layers.emplace_back(std::move(layers.back()));
-    layers.pop_back();
+    for (auto i = layers.begin(); i != layers.end();)
+    {
+        if((*i).raw_sf_layer->compositionType == HWC_FRAMEBUFFER_TARGET)
+        {
+            tmp_layers.emplace_back(std::move(*i));
+            i = layers.erase(i);
+            continue;
+        }
+        i++;
+    }
 }
 
 void resore_all_tmp_layers(std::vector<DrmHwcLayer>& layers, std::vector<DrmHwcLayer>& tmp_layers)
@@ -1374,6 +1394,38 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
         {
             ALOGD_IF(log_level(DBG_DEBUG), "%s:line=%d fail match (%d,%d)",__FUNCTION__,__LINE__,skip_layer_indices.first, skip_layer_indices.second);
             goto FailMatch;
+        }
+    }
+
+    /*************************mix 3d layer(mix up)*************************/
+    if(hd->is_3d)
+    {
+        ALOGD_IF(log_level(DBG_DEBUG), "%s:mix 3d (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
+        if(hd->mixMode != HWC_MIX_3D)
+            hd->mixMode = HWC_MIX_3D;
+
+        if(hd->stereo_mode == H_3D || hd->stereo_mode == V_3D || hd->stereo_mode == FPS_3D)
+        {
+            if(layers[0].stereo)
+            {
+                layer_indices.first = 1;
+                layer_indices.second = layers.size() - 1;
+
+                bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+                                    layer_indices.first, layer_indices.second);
+                if(bAllMatch)
+                    goto AllMatch;
+                else
+                {
+                    //ALOGD_IF(log_level(DBG_DEBUG), "%s:line=%d fail match (%d,%d)",__FUNCTION__,__LINE__,skip_layer_indices.first, skip_layer_indices.second);
+                    resore_tmp_layers_except_fb(layers, tmp_layers);
+                }
+            }
+            else
+            {
+                ALOGD_IF(log_level(DBG_DEBUG), "%s:line=%d fail match (%d,%d)",__FUNCTION__,__LINE__,skip_layer_indices.first, skip_layer_indices.second);
+                goto FailMatch;
+            }
         }
     }
 

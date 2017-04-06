@@ -37,6 +37,7 @@ typedef enum tagMixMode
     HWC_MIX_DOWN,
     HWC_MIX_UP,
     HWC_MIX_CROSS,
+    HWC_MIX_3D,
     HWC_POLICY_NUM
 }MixMode;
 
@@ -62,12 +63,16 @@ typedef struct hwc_drm_display {
   bool isVideo;
   int framebuffer_width;
   int framebuffer_height;
+  int rel_xres;
+  int rel_yres;
+  int v_total;
   int vrefresh;
   int iPlaneSize;
   float w_scale;
   float h_scale;
   bool active;
-
+  bool is_3d;
+  Mode3D stereo_mode;
 } hwc_drm_display_t;
 
 int hwc_init_version();
@@ -83,8 +88,10 @@ int free_thread_pamaters(threadPamaters* mThreadPamaters);
 int hwc_static_screen_opt_set(bool isGLESComp);
 #endif
 
-#if RK_STEREO
-void detect_3d_mode(threadPamaters& mControlStereo, hwc_display_contents_1_t *display_content, int display);
+#if 1
+int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_content, int display);
+#endif
+#if 0
 int hwc_control_3dmode(int fd_3d, int value, int flag);
 #endif
 int hwc_get_handle_width(const gralloc_module_t *gralloc, buffer_handle_t hnd);

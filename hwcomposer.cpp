@@ -66,7 +66,9 @@ static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
 #if SKIP_BOOT
 static unsigned int g_boot_cnt = 0;
 #endif
-
+#if RK_INVALID_REFRESH
+hwc_context_t* g_ctx = NULL;
+#endif
 
 class DummySwSyncTimeline {
  public:
@@ -134,32 +136,69 @@ struct CheckedOutputFd {
   DummySwSyncTimeline &timeline_;
 };
 
-static int update_display_bestmode(int display, DrmConnector *c)
+/**
+ * sys.3d_resolution.main 1920x1080p60-114693:148500
+ * width x height p|i refresh-flag:clock
+ */
+static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnector *c)
 {
   char resolution[PROPERTY_VALUE_MAX];
+  char resolution_3d[PROPERTY_VALUE_MAX];
   uint32_t width, height, vrefresh;
-  bool interlaced;
-  char val;
+  uint32_t width_3d, height_3d, vrefresh_3d, flag_3d, clk_3d;
+  bool interlaced, interlaced_3d;
+  char val,val_3d;
 
   if (display == HWC_DISPLAY_PRIMARY)
+  {
     property_get("persist.sys.resolution.main", resolution, "0x0p0");
-  else
-    property_get("persist.sys.resolution.aux", resolution, "0x0p0");
-
-  sscanf(resolution, "%dx%d%c%d", &width, &height, &val, &vrefresh);
-  if (val == 'i')
-    interlaced = true;
-  else
-    interlaced = false;
-
-  if (width != 0 && height != 0) {
-    for (const DrmMode &conn_mode : c->modes()) {
-      if (conn_mode.equal(width, height, vrefresh, interlaced)) {
-        c->set_best_mode(conn_mode);
-        return 0;
-      }
-    }
+    property_get("sys.3d_resolution.main", resolution_3d, "0x0p0-0:0");
   }
+  else
+  {
+    property_get("persist.sys.resolution.aux", resolution, "0x0p0");
+    property_get("sys.3d_resolution.aux", resolution_3d, "0x0p0-0:0");
+  }
+
+ if(hd->is_3d && strcmp(resolution_3d,"0x0p0-0:0"))
+ {
+      ALOGD_IF(log_level(DBG_DEBUG), "Enter 3d resolution=%s",resolution_3d);
+      sscanf(resolution_3d, "%dx%d%c%d-%d:%d", &width_3d, &height_3d, &val_3d,
+            &vrefresh_3d, &flag_3d, &clk_3d);
+
+      if (val_3d == 'i')
+        interlaced_3d = true;
+      else
+        interlaced_3d = false;
+
+      if (width_3d != 0 && height_3d != 0) {
+        for (const DrmMode &conn_mode : c->modes()) {
+          if (conn_mode.equal(width_3d, height_3d, vrefresh_3d,  flag_3d, clk_3d, interlaced_3d)) {
+             ALOGD_IF(log_level(DBG_DEBUG), "Match 3D parameters: w=%d,h=%d,val=%c,vrefresh_3d=%d,flag=%d,clk=%d",
+                   width_3d,height_3d,val_3d,vrefresh_3d,flag_3d,clk_3d);
+            c->set_best_mode(conn_mode);
+            return 0;
+          }
+        }
+      }
+ }
+ else
+ {
+      sscanf(resolution, "%dx%d%c%d", &width, &height, &val, &vrefresh);
+      if (val == 'i')
+        interlaced = true;
+      else
+        interlaced = false;
+
+      if (width != 0 && height != 0) {
+        for (const DrmMode &conn_mode : c->modes()) {
+          if (conn_mode.equal(width, height, vrefresh, interlaced)) {
+            c->set_best_mode(conn_mode);
+            return 0;
+          }
+        }
+      }
+ }
 
   for (const DrmMode &conn_mode : c->modes()) {
     if (conn_mode.type() & DRM_MODE_TYPE_PREFERRED) {
@@ -179,6 +218,7 @@ static int update_display_bestmode(int display, DrmConnector *c)
 
   return -ENOENT;
 }
+
 
 // map of display:hwc_drm_display_t
 typedef std::map<int, hwc_drm_display_t> DisplayMap;
@@ -244,7 +284,7 @@ class DrmHotplugHandler : public DrmEventHandler {
     }
 
     hwc_drm_display_t *hd = &(*displays_)[extend->display()];
-    update_display_bestmode(HWC_DISPLAY_EXTERNAL, extend);
+    update_display_bestmode(hd, HWC_DISPLAY_EXTERNAL, extend);
     DrmMode mode = extend->best_mode();
 
     if (mode.h_display() > mode.v_display() && mode.v_display() >= 2160) {
@@ -254,6 +294,9 @@ class DrmHotplugHandler : public DrmEventHandler {
       hd->framebuffer_width = mode.h_display();
       hd->framebuffer_height = mode.v_display();
     }
+    hd->rel_xres = mode.h_display();
+    hd->rel_yres = mode.v_display();
+    hd->v_total = mode.v_total();
     hd->active = false;
     procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 0);
     hd->active = true;
@@ -298,17 +341,13 @@ struct hwc_context_t {
 
 #if RK_STEREO
     bool is_3d;
-    int fd_3d;
-    threadPamaters mControlStereo;
+    //int fd_3d;
+    //threadPamaters mControlStereo;
 #endif
 
     std::vector<DrmCompositionDisplayPlane> comp_plane_group;
     std::vector<DrmHwcDisplayContents> layer_contents;
 };
-
-#if RK_INVALID_REFRESH
-hwc_context_t* g_ctx = NULL;
-#endif
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
   native_handle_t *new_handle =
@@ -493,7 +532,7 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
 }
 
 int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_layer_1_t *sf_layer, Importer *importer,
-                                  const gralloc_module_t *gralloc) {
+                                  const gralloc_module_t *gralloc, bool bClone) {
     DrmConnector *c;
     DrmMode mode;
     unsigned int size;
@@ -501,6 +540,13 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     int ret = 0;
 
   UN_USED(importer);
+
+  bClone_ = bClone;
+  stereo = sf_layer->alreadyStereo;
+  if(sf_layer->compositionType == HWC_FRAMEBUFFER_TARGET)
+   bFbTarget_ = true;
+  else
+   bFbTarget_ = false;
 
   if(sf_layer->flags & HWC_SKIP_LAYER)
     bSkipLayer = true;
@@ -524,10 +570,32 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
   }
 
   hwc_drm_display_t *hd = &ctx->displays[conn->display()];
-  display_frame = DrmHwcRect<int>(
-      hd->w_scale * sf_layer->displayFrame.left, hd->h_scale * sf_layer->displayFrame.top,
-      hd->w_scale * sf_layer->displayFrame.right, hd->h_scale * sf_layer->displayFrame.bottom);
 
+  if(bClone)
+  {
+      //int panle_height = hd->rel_yres + hd->v_total;
+      //int y_offset =  (panle_height - panle_height * 3 / 147) / 2 + panle_height * 3 / 147;
+      int y_offset = hd->v_total;
+      display_frame = DrmHwcRect<int>(
+          hd->w_scale * sf_layer->displayFrame.left, hd->h_scale * sf_layer->displayFrame.top + y_offset,
+          hd->w_scale * sf_layer->displayFrame.right, hd->h_scale * sf_layer->displayFrame.bottom + y_offset);
+  }
+  else
+  {
+      if(stereo == FPS_3D)
+      {
+        int y_offset = hd->v_total;
+        display_frame = DrmHwcRect<int>(
+          hd->w_scale * sf_layer->displayFrame.left, hd->h_scale * sf_layer->displayFrame.top,
+          hd->w_scale * sf_layer->displayFrame.right, hd->h_scale * sf_layer->displayFrame.bottom + y_offset);
+      }
+      else
+      {
+        display_frame = DrmHwcRect<int>(
+          hd->w_scale * sf_layer->displayFrame.left, hd->h_scale * sf_layer->displayFrame.top,
+          hd->w_scale * sf_layer->displayFrame.right, hd->h_scale * sf_layer->displayFrame.bottom);
+      }
+  }
 
     c = ctx->drm.GetConnectorFromType(HWC_DISPLAY_PRIMARY);
     if (!c) {
@@ -885,9 +953,12 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 
     hwc_drm_display_t *hd = &ctx->displays[connector->display()];
-    update_display_bestmode(i, connector);
+    update_display_bestmode(hd, i, connector);
     DrmMode mode = connector->best_mode();
     connector->set_current_mode(mode);
+    hd->rel_xres = mode.h_display();
+    hd->rel_yres = mode.v_display();
+    hd->v_total = mode.v_total();
     hd->w_scale = (float)mode.h_display() / hd->framebuffer_width;
     hd->h_scale = (float)mode.v_display() / hd->framebuffer_height;
     //get plane size for display
@@ -950,9 +1021,27 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
     }
 
-#if RK_STEREO
-    ctx->is_3d = detect_3d_mode(&ctx->mControlStereo, display_contents[i], i);
+#if 1
+    hd->stereo_mode = NON_3D;
+    hd->is_3d = detect_3d_mode(hd, display_contents[i], i);
 #endif
+
+    int iLastFps = num_layers-1;
+    if(hd->stereo_mode == FPS_3D)
+    {
+        for(int j=num_layers-1; j>=0; j--) {
+            hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+            if(layer->alreadyStereo == FPS_3D) {
+                iLastFps = j;
+                break;
+            }
+        }
+
+        for (int j = 0; j < iLastFps; j++)
+        {
+            display_contents[i]->hwLayers[j].compositionType = HWC_NODRAW;
+        }
+    }
 
     if(!use_framebuffer_target)
         use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
@@ -962,6 +1051,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #endif
 
     int ret = -1;
+    bool bHasFPS_3D_UI = false;
+    int index = 0;
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
       if(sf_layer->handle == NULL)
@@ -969,18 +1060,48 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       if(sf_layer->compositionType == HWC_NODRAW)
         continue;
 
+        if(hd->stereo_mode == FPS_3D && iLastFps < num_layers-1)
+        {
+            if(j>iLastFps  && sf_layer->alreadyStereo != FPS_3D && sf_layer->displayStereo)
+            {
+                bHasFPS_3D_UI = true;
+            }
+        }
+
       layer_content.layers.emplace_back();
       DrmHwcLayer &layer = layer_content.layers.back();
-      ret = layer.InitFromHwcLayer(ctx, i, sf_layer, ctx->importer.get(), ctx->gralloc);
+      ret = layer.InitFromHwcLayer(ctx, i, sf_layer, ctx->importer.get(), ctx->gralloc, false);
       if (ret) {
         ALOGE("Failed to init composition from layer %d", ret);
         return ret;
       }
       layer.index = j;
+      index = j;
 
       std::ostringstream out;
       layer.dump_drm_layer(j,&out);
       ALOGD_IF(log_level(DBG_DEBUG),"%s",out.str().c_str());
+    }
+
+    if(bHasFPS_3D_UI)
+    {
+      hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[num_layers-1];
+      if(sf_layer->handle == NULL)
+        continue;
+
+      layer_content.layers.emplace_back();
+      DrmHwcLayer &layer = layer_content.layers.back();
+      ret = layer.InitFromHwcLayer(ctx, i, sf_layer, ctx->importer.get(), ctx->gralloc, true);
+      if (ret) {
+        ALOGE("Failed to init composition from layer %d", ret);
+        return ret;
+      }
+      index++;
+      layer.index = index;
+
+      std::ostringstream out;
+      layer.dump_drm_layer(index,&out);
+      ALOGD_IF(log_level(DBG_DEBUG),"clone layer: %s",out.str().c_str());
     }
 
     if(!use_framebuffer_target)
@@ -1285,7 +1406,8 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         (dc->flags & HWC_GEOMETRY_CHANGED) == HWC_GEOMETRY_CHANGED;
     for (size_t j=0; j< display_contents.layers.size(); j++) {
       DrmHwcLayer &layer = display_contents.layers[j];
-      layer.ImportBuffer(layer.raw_sf_layer, ctx->importer.get());
+      if(!layer.bClone_)
+        layer.ImportBuffer(layer.raw_sf_layer, ctx->importer.get());
       map.layers.emplace_back(std::move(layer));
     }
   }
@@ -1302,6 +1424,18 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   ret = composition->SetLayers(layers_map.size(), layers_map.data());
   if (ret) {
     return -EINVAL;
+  }
+
+  for (size_t i = 0; i < num_displays; ++i) {
+    if (!sf_display_contents[i])
+        continue;
+
+    DrmConnector *c = ctx->drm.GetConnectorFromType(i);
+    if (!c || c->state() != DRM_MODE_CONNECTED) {
+        continue;
+    }
+    hwc_drm_display_t *hd = &ctx->displays[c->display()];
+    composition->SetMode3D(i, hd->stereo_mode);
   }
 
   for (size_t i = 0; i < ctx->comp_plane_group.size(); ++i) {
@@ -1494,7 +1628,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
     return -ENODEV;
   }
 
-  update_display_bestmode(display, connector);
+  update_display_bestmode(hd, display, connector);
   DrmMode mode = connector->best_mode();
   connector->set_current_mode(mode);
 
@@ -1523,6 +1657,10 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
     hd->vrefresh = 60;
     ALOGE("Failed to find available display mode for display %d\n", display);
   }
+
+  hd->rel_xres = mode.h_display();
+  hd->rel_yres = mode.v_display();
+  hd->v_total = mode.v_total();
 
   *num_configs = 1;
   configs[0] = connector->display();
@@ -1626,7 +1764,7 @@ static int hwc_device_close(struct hw_device_t *dev) {
 #if RK_INVALID_REFRESH
     free_thread_pamaters(&ctx->mRefresh);
 #endif
-#if RK_STEREO
+#if 0
     if(ctx->fd_3d >= 0)
     {
         close(ctx->fd_3d);
@@ -1669,6 +1807,9 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
 #endif
     hd->framebuffer_width = 0;
     hd->framebuffer_height = 0;
+    hd->rel_xres = 0;
+    hd->rel_yres = 0;
+    hd->v_total = 0;
     hd->w_scale = 1.0;
     hd->h_scale = 1.0;
     hd->active = true;
@@ -1766,7 +1907,7 @@ void  *invalidate_refresh(void *arg)
 }
 #endif
 
-#if RK_STEREO
+#if 0
 void* hwc_control_3dmode_thread(void *arg)
 {
     hwc_context_t* ctx = (hwc_context_t*)arg;
@@ -1885,7 +2026,7 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     signal(SIGALRM, hwc_static_screen_opt_handler);
 #endif
 
-#if RK_STEREO
+#if 0
     init_thread_pamaters(&ctx->mControlStereo);
     ctx->fd_3d = open("/sys/class/display/HDMI/3dmode", O_RDWR, 0);
     if(ctx->fd_3d < 0){

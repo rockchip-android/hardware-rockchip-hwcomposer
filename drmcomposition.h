@@ -58,6 +58,7 @@ class DrmComposition {
   int Init(uint64_t frame_no);
 
   int SetLayers(size_t num_displays, DrmCompositionDisplayLayersMap *maps);
+  int SetMode3D(int display, Mode3D mode);
   int SetDpmsMode(int display, uint32_t dpms_mode);
   int SetDisplayMode(int display, const DrmMode &display_mode);
   int SetCompPlanes(int display, std::vector<DrmCompositionPlane>& composition_planes);

@@ -123,6 +123,7 @@ class DrmDisplayComposition {
   int SetLayers(DrmHwcLayer *layers, size_t num_layers, bool geometry_changed);
   int AddPlaneComposition(DrmCompositionPlane plane);
   int AddPlaneDisable(DrmPlane *plane);
+  int SetMode3D(Mode3D mode);
   int SetDpmsMode(uint32_t dpms_mode);
   int SetDisplayMode(const DrmMode &display_mode);
   int SetCompPlanes(std::vector<DrmCompositionPlane>& composition_planes);
@@ -171,6 +172,10 @@ class DrmDisplayComposition {
     return type_;
   }
 
+  Mode3D mode_3d() const {
+	return mode_3d_;
+  }
+
   uint32_t dpms_mode() const {
     return dpms_mode_;
   }
@@ -212,6 +217,7 @@ class DrmDisplayComposition {
   DrmCompositionType type_ = DRM_COMPOSITION_TYPE_EMPTY;
   uint32_t dpms_mode_ = DRM_MODE_DPMS_ON;
   DrmMode display_mode_;
+  Mode3D  mode_3d_;
 
   int timeline_fd_ = -1;
   int timeline_ = 0;

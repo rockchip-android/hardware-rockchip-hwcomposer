@@ -56,6 +56,14 @@ namespace android {
 #define BOOT_COUNT       (2)
 #endif
 
+typedef enum tagMode3D
+{
+	NON_3D = 0,
+	H_3D=1,
+	V_3D=2,
+	FPS_3D=8,
+}Mode3D;
+
 class Importer;
 
 class DrmHwcBuffer {
@@ -194,8 +202,11 @@ struct DrmHwcLayer {
 #if RK_VIDEO_SKIP_LINE
   bool bSkipLine;
 #endif
+  bool bClone_;
+  bool bFbTarget_;
   bool bUse;
   bool bMix;
+  int stereo;
   hwc_layer_1_t *raw_sf_layer;
   int format;
   int width;
@@ -210,7 +221,7 @@ struct DrmHwcLayer {
 
   int ImportBuffer(hwc_layer_1_t *sf_layer, Importer *importer);
   int InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_layer_1_t *sf_layer, Importer *importer,
-                        const gralloc_module_t *gralloc);
+                        const gralloc_module_t *gralloc, bool bClone);
 
 void dump_drm_layer(int index, std::ostringstream *out) const;
 

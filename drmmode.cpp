@@ -84,6 +84,19 @@ bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
   return false;
 }
 
+bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
+                     uint32_t flag, uint32_t clk, bool interlaced) const
+{
+  int interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
+  ALOGV("DrmMode h=%d,v=%d,interlaced=%d,v_refresh_=%d,flags=%d,clk=%d",
+         h_display_, v_display_, interlaced_, v_refresh_, flags_,clock_);
+  if (h_display_ == width && v_display_ == height &&
+      interlaced_ == interlaced && v_refresh_ == vrefresh &&
+      flags_ == flag && clock_ == clk)
+    return true;
+  return false;
+}
+
 void DrmMode::ToDrmModeModeInfo(drm_mode_modeinfo *m) const {
   m->clock = clock_;
   m->hdisplay = h_display_;

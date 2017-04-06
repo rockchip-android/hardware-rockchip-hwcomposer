@@ -84,6 +84,13 @@ int DrmResources::Init() {
     return ret;
   }
 
+  //Enable 3d function.
+  ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_STEREO_3D, 1);
+  if (ret) {
+    ALOGE("Failed to set stereo 3d cap %d", ret);
+    return ret;
+  }
+
 #if USE_MULTI_AREAS
   //Open Multi-area support.
   ret = drmSetClientCap(fd(), DRM_CLIENT_CAP_SHARE_PLANES, 1);

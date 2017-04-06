@@ -56,6 +56,7 @@ int DrmDisplayComposition::Init(DrmResources *drm, DrmCrtc *crtc,
     return ret;
   }
   timeline_fd_ = ret;
+  mode_3d_ = NON_3D;
   return 0;
 }
 
@@ -96,6 +97,11 @@ int DrmDisplayComposition::SetLayers(DrmHwcLayer *layers, size_t num_layers,
 
   type_ = DRM_COMPOSITION_TYPE_FRAME;
   return 0;
+}
+
+int DrmDisplayComposition::SetMode3D(Mode3D mode) {
+    mode_3d_ = mode;
+    return 0;
 }
 
 int DrmDisplayComposition::SetDpmsMode(uint32_t dpms_mode) {

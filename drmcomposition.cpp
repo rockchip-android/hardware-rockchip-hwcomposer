@@ -92,6 +92,10 @@ int DrmComposition::SetLayers(size_t num_displays,
   return 0;
 }
 
+int DrmComposition::SetMode3D(int display, Mode3D mode) {
+  return composition_map_[display]->SetMode3D(mode);
+}
+
 int DrmComposition::SetDpmsMode(int display, uint32_t dpms_mode) {
   return composition_map_[display]->SetDpmsMode(dpms_mode);
 }
