@@ -141,7 +141,7 @@ int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_cont
         else if (needStereo == 8)
             hd->stereo_mode = FPS_3D;
         else
-            ALOGE("It is unknow 3d mode needStereo=%d",needStereo);
+            ALOGD_IF(log_level(DBG_VERBOSE),"It is unknow 3d mode needStereo=%d",needStereo);
     }
 
     for (unsigned int j = 0; j <(numlayer - 1); j++) {

@@ -30,6 +30,9 @@
 /*hwc version*/
 #define GHWC_VERSION                    "0.26"
 
+/* hdr usage */
+#define HDRUSAGE                                       0x3000000
+
 struct hwc_import_context;
 
 int hwc_import_init(struct hwc_import_context **ctx);

@@ -821,6 +821,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     int transform_normal = 0;
     int ret = 0;
     int format = 0;
+    int usage = 0;
 #if USE_AFBC_LAYER
     uint64_t internal_format = 0;
     int iFbdcCnt = 0;
@@ -864,6 +865,19 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
             if(!vop_support_format(format))
             {
                 ALOGD_IF(log_level(DBG_DEBUG),"layer's format=0x%x is not support,go to GPU GLES at line=%d", format, __LINE__);
+                return true;
+            }
+
+            ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
+                                   layer->handle, &usage);
+            if (ret) {
+              ALOGE("Failed to get usage for buffer %p (%d)", layer->handle, ret);
+              return ret;
+            }
+
+            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10 && (usage & HDRUSAGE))
+            {
+                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video usage=0x%x,go to GPU GLES at line=%d", usage, __LINE__);
                 return true;
             }
 
