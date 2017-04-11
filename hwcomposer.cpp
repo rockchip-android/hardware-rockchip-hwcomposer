@@ -890,6 +890,13 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
 #endif
             if(layer->transform)
             {
+#ifdef TARGET_BOARD_PLATFORM_RK3288
+                if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+                {
+                    ALOGD_IF(log_level(DBG_DEBUG),"rk3288'rga cann't support nv12_10,go to GPU GLES at line=%d", __LINE__);
+                    return true;
+                }
+#endif
                 if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
                     transform_nv12++;
                 else
