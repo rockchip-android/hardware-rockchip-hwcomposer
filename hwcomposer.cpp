@@ -684,6 +684,8 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
       transform |= DrmHwcTransform::kFlipV;
     if (sf_layer->transform & HWC_TRANSFORM_ROT_90)
       transform |= DrmHwcTransform::kRotate90;
+    if(!sf_layer->transform)
+      transform |= DrmHwcTransform::kRotate0;
   }
 
 #if RK_RGA_TEST
@@ -1123,6 +1125,39 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       std::ostringstream out;
       layer.dump_drm_layer(index,&out);
       ALOGD_IF(log_level(DBG_DEBUG),"clone layer: %s",out.str().c_str());
+    }
+
+    if(!use_framebuffer_target)
+    {
+        int iRgaCnt = 0;
+        for (size_t j = 0; j < layer_content.layers.size(); j++) {
+            DrmHwcLayer& layer = layer_content.layers[j];
+
+            if(layer.mlayer->compositionType == HWC_FRAMEBUFFER_TARGET)
+                continue;
+
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+            if(layer.h_scale_mul > 1.0 &&  (int)(layer.display_frame.right - layer.display_frame.left) > 2560)
+            {
+                ALOGD_IF(log_level(DBG_DEBUG),"On rk3368 don't use rga for scale, go to GPU GLES at line=%d", iRgaCnt, __LINE__);
+                use_framebuffer_target = true;
+                break;
+            }
+#endif
+            if(layer.transform!=DrmHwcTransform::kRotate0
+#ifndef TARGET_BOARD_PLATFORM_RK3368
+                || (layer.h_scale_mul > 1.0 &&  (int)(layer.display_frame.right - layer.display_frame.left) > 2560)
+#endif
+                )
+            {
+                iRgaCnt++;
+            }
+        }
+        if(iRgaCnt > 1)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"rga cnt = %d, go to GPU GLES at line=%d", iRgaCnt, __LINE__);
+            use_framebuffer_target = true;
+        }
     }
 
     if(!use_framebuffer_target)

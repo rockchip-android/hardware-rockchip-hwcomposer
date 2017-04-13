@@ -974,7 +974,9 @@ int DrmDisplayCompositor::PrepareFrame(DrmDisplayComposition *display_comp) {
         if(drm_->isSupportRkRga() && !source_layers.empty())
         {
             DrmHwcLayer &layer = layers[source_layers.front()];
-            if(/*layer.is_yuv &&*/ layer.transform!=0)
+
+            if(/*layer.is_yuv &&*/ layer.transform!=DrmHwcTransform::kRotate0 ||
+                (layer.h_scale_mul > 1.0 &&  (int)(layer.display_frame.right - layer.display_frame.left) > 2560))
             {
                 ret = ApplyPreRotate(display_comp,layer);
                 if (ret)
