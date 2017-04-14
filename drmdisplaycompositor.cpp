@@ -581,7 +581,6 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     src_w = (int)(layer.source_crop.right - layer.source_crop.left);
     src_h = (int)(layer.source_crop.bottom - layer.source_crop.top);
     src_l = ALIGN_DOWN(src_l, 2);
-    src_w = ALIGN_DOWN(src_w, 2);
     dst_l = 0;
     dst_t = 0;
 
@@ -606,8 +605,8 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     dst_w = ALIGN_DOWN(dst_w, 8);
     dst_h = ALIGN_DOWN(dst_h, 2);
 #else
-    src_l = ALIGN_DOWN(src_l, 2);
     src_w = ALIGN_DOWN(src_w, 2);
+    src_h = ALIGN_DOWN(src_h, 2);
 
     dst_w = rect_merge.right - rect_merge.left;
     dst_h = rect_merge.bottom - rect_merge.top;
