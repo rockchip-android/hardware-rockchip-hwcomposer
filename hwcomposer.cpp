@@ -934,6 +934,21 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     return false;
 }
 
+static HDMI_STAT detect_hdmi_status(int display)
+{
+    char status[PROPERTY_VALUE_MAX];
+
+    if(display == HWC_DISPLAY_PRIMARY)
+        property_get("sys.hdmi_status.main", status, "on");
+    else
+        property_get("sys.hdmi_status.aux", status, "on");
+    ALOGD_IF(log_level(DBG_DEBUG),"detect_hdmi_status display=%d status=%s", display, status);
+    if(!strcmp(status, "off"))
+        return HDMI_OFF;
+    else
+        return HDMI_ON;
+}
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
@@ -967,6 +982,21 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     if (!connector) {
       ALOGE("Failed to get connector for display %d line=%d", i,__LINE__);
       continue;
+    }
+
+    HDMI_STAT hdmi_status = detect_hdmi_status(i);
+    switch (hdmi_status)
+    {
+        case HDMI_OFF:
+            connector->force_disconnect(true);
+            ctx->drm.DisplayChanged();
+            break;
+        case HDMI_ON:
+            connector->force_disconnect(false);
+            ctx->drm.DisplayChanged();
+            break;
+        default:
+            break;
     }
 
     DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);

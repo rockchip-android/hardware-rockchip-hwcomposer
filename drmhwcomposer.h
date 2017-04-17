@@ -67,6 +67,12 @@ typedef enum tagMode3D
 	FPS_3D=8,
 }Mode3D;
 
+enum HDMI_STAT
+{
+    HDMI_ON,
+    HDMI_OFF
+};
+
 class Importer;
 
 class DrmHwcBuffer {
