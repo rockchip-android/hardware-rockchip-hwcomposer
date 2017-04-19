@@ -984,19 +984,22 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       continue;
     }
 
-    HDMI_STAT hdmi_status = detect_hdmi_status(i);
-    switch (hdmi_status)
+    if(ctx->fb_blanked != FB_BLANK_POWERDOWN)
     {
-        case HDMI_OFF:
-            connector->force_disconnect(true);
-            ctx->drm.DisplayChanged();
-            break;
-        case HDMI_ON:
-            connector->force_disconnect(false);
-            ctx->drm.DisplayChanged();
-            break;
-        default:
-            break;
+        HDMI_STAT hdmi_status = detect_hdmi_status(i);
+        switch (hdmi_status)
+        {
+            case HDMI_OFF:
+                connector->force_disconnect(true);
+                ctx->drm.DisplayChanged();
+                break;
+            case HDMI_ON:
+                connector->force_disconnect(false);
+                ctx->drm.DisplayChanged();
+                break;
+            default:
+                break;
+        }
     }
 
     DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
@@ -1169,7 +1172,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #ifdef TARGET_BOARD_PLATFORM_RK3368
             if(layer.h_scale_mul > 1.0 &&  (int)(layer.display_frame.right - layer.display_frame.left) > 2560)
             {
-                ALOGD_IF(log_level(DBG_DEBUG),"On rk3368 don't use rga for scale, go to GPU GLES at line=%d", iRgaCnt, __LINE__);
+                ALOGD_IF(log_level(DBG_DEBUG),"On rk3368 don't use rga for scale, go to GPU GLES at line=%d", __LINE__);
                 use_framebuffer_target = true;
                 break;
             }
