@@ -477,7 +477,7 @@ int DrmResources::UpdateDisplayRoute(void)
           if (crtc->get_afbc()) {
             enc->set_crtc(crtc);
             primary->set_encoder(enc);
-            ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
+            ALOGD_IF(log_level(DBG_VERBOSE), "set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
           }
         }
       }
@@ -489,7 +489,7 @@ int DrmResources::UpdateDisplayRoute(void)
           for (DrmCrtc *crtc : enc->possible_crtcs()) {
               enc->set_crtc(crtc);
               primary->set_encoder(enc);
-              ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
+              ALOGD_IF(log_level(DBG_VERBOSE), "set primary with conn[%d] crtc=%d\n",primary->id(), crtc->id());
           }
         }
       }
@@ -501,7 +501,7 @@ int DrmResources::UpdateDisplayRoute(void)
             if (crtc == primary->encoder()->crtc())
               continue;
           }
-          ALOGE("set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
+          ALOGD_IF(log_level(DBG_VERBOSE), "set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
           enc->set_crtc(crtc);
           extend->set_encoder(enc);
         }
@@ -511,7 +511,7 @@ int DrmResources::UpdateDisplayRoute(void)
           for (DrmCrtc *crtc : enc->possible_crtcs()) {
             enc->set_crtc(crtc);
             extend->set_encoder(enc);
-            ALOGE("set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
+            ALOGD_IF(log_level(DBG_VERBOSE), "set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
             if (primary && primary->encoder() && primary->encoder()->crtc()) {
               if (crtc == primary->encoder()->crtc()) {
                 for (DrmEncoder *primary_enc : primary->possible_encoders()) {
@@ -523,7 +523,7 @@ int DrmResources::UpdateDisplayRoute(void)
 
                     primary_enc->set_crtc(primary_crtc);
                     primary->set_encoder(primary_enc);
-                    ALOGE("set primary with conn[%d] crtc=%d\n",primary->id(), primary_crtc->id());
+                    ALOGD_IF(log_level(DBG_VERBOSE), "set primary with conn[%d] crtc=%d\n",primary->id(), primary_crtc->id());
                   }
                 }
               }
