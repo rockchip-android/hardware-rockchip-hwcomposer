@@ -942,7 +942,7 @@ static HDMI_STAT detect_hdmi_status(int display)
         property_get("sys.hdmi_status.main", status, "on");
     else
         property_get("sys.hdmi_status.aux", status, "on");
-    ALOGD_IF(log_level(DBG_DEBUG),"detect_hdmi_status display=%d status=%s", display, status);
+    ALOGD_IF(log_level(DBG_VERBOSE),"detect_hdmi_status display=%d status=%s", display, status);
     if(!strcmp(status, "off"))
         return HDMI_OFF;
     else
@@ -983,22 +983,27 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       ALOGE("Failed to get connector for display %d line=%d", i,__LINE__);
       continue;
     }
+    hwc_drm_display_t *hd = &ctx->displays[connector->display()];
 
     if(ctx->fb_blanked != FB_BLANK_POWERDOWN)
     {
         HDMI_STAT hdmi_status = detect_hdmi_status(i);
-        switch (hdmi_status)
+        if(hdmi_status != hd->last_hdmi_status)
         {
-            case HDMI_OFF:
-                connector->force_disconnect(true);
-                ctx->drm.DisplayChanged();
-                break;
-            case HDMI_ON:
-                connector->force_disconnect(false);
-                ctx->drm.DisplayChanged();
-                break;
-            default:
-                break;
+            switch (hdmi_status)
+            {
+                case HDMI_OFF:
+                    connector->force_disconnect(true);
+                    ctx->drm.DisplayChanged();
+                    break;
+                case HDMI_ON:
+                    connector->force_disconnect(false);
+                    ctx->drm.DisplayChanged();
+                    break;
+                default:
+                    break;
+            }
+            hd->last_hdmi_status = hdmi_status;
         }
     }
 
@@ -1008,7 +1013,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       continue;
     }
 
-    hwc_drm_display_t *hd = &ctx->displays[connector->display()];
     update_display_bestmode(hd, i, connector);
     DrmMode mode = connector->best_mode();
     connector->set_current_mode(mode);
@@ -1902,6 +1906,7 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hd->w_scale = 1.0;
     hd->h_scale = 1.0;
     hd->active = true;
+    hd->last_hdmi_status = HDMI_ON;
 
   return 0;
 }

@@ -41,6 +41,12 @@ typedef enum tagMixMode
     HWC_POLICY_NUM
 }MixMode;
 
+enum HDMI_STAT
+{
+    HDMI_ON,
+    HDMI_OFF
+};
+
 #if RK_INVALID_REFRESH
 typedef struct _threadPamaters
 {
@@ -73,6 +79,7 @@ typedef struct hwc_drm_display {
   bool active;
   bool is_3d;
   Mode3D stereo_mode;
+  HDMI_STAT last_hdmi_status;
 } hwc_drm_display_t;
 
 int hwc_init_version();
