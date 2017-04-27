@@ -3468,8 +3468,11 @@ int hwc_vop_config(hwcContext * context, hwc_display_contents_1_t *list)
         fb_info.win_par[winIndex].area_par[0].x_offset =  hwcMAX(srcRects.left, 0);
         if( i == int(list->numHwLayers -1))
         {           
-            fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / context->fbStride;    
+            fb_info.win_par[winIndex].area_par[0].y_offset = handle->offset / (android::bytesPerPixel(handle->format) * handle->stride);//context->fbStride;    
             fb_info.win_par[winIndex].area_par[0].yvir = handle->height*NUM_FB_BUFFERS;
+//            ALOGD("rk_debug fmtsize=%d",android::bytesPerPixel(handle->format)); 
+//            ALOGD("rk_debug11 offset[%d,%d],stride=%d,strid2=%d",fb_info.win_par[winIndex].area_par[0].y_offset, handle->offset,context->fbStride,handle->stride);
+            
         }
         else
         {        
