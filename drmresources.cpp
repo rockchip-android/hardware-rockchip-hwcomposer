@@ -514,6 +514,8 @@ int DrmResources::UpdateDisplayRoute(void)
             ALOGD_IF(log_level(DBG_VERBOSE), "set extend[%d] with crtc=%d\n", extend->id(), crtc->id());
             if (primary && primary->encoder() && primary->encoder()->crtc()) {
               if (crtc == primary->encoder()->crtc()) {
+                primary->encoder()->set_crtc(NULL);
+                primary->set_encoder(NULL);
                 for (DrmEncoder *primary_enc : primary->possible_encoders()) {
                   for (DrmCrtc *primary_crtc : primary_enc->possible_crtcs()) {
                     if (extend && extend->encoder() && extend->encoder()->crtc()) {

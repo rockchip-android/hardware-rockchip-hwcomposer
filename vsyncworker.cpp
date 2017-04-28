@@ -119,9 +119,6 @@ int VSyncWorker::SyntheticWaitVBlank(int64_t *timestamp) {
   if (conn && conn->state() == DRM_MODE_CONNECTED) {
     if (conn->active_mode().v_refresh() > 0.0f)
       refresh = conn->active_mode().v_refresh();
-    else
-      ALOGW("Vsync worker active with conn=%p refresh=%f\n", conn,
-            conn->active_mode().v_refresh());
   }
 
   int64_t phased_timestamp = GetPhasedVSync(
@@ -173,13 +170,8 @@ void VSyncWorker::Routine() {
     return;
   }
   DrmCrtc *crtc = NULL;
-  if (conn && conn->state() == DRM_MODE_CONNECTED) {
+  if (conn)
     crtc = drm_->GetCrtcFromConnector(conn);
-    if (!crtc) {
-      ALOGE("Failed to get crtc for display");
-      return;
-    }
-  }
 
   if (!crtc) {
     ret = SyntheticWaitVBlank(&timestamp);
