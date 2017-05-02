@@ -959,6 +959,9 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     ctx->layer_contents.clear();
     ctx->layer_contents.reserve(num_displays);
     ctx->comp_plane_group.clear();
+
+  ctx->drm.UpdateDisplayRoute();
+
   for (int i = 0; i < (int)num_displays; ++i) {
     bool use_framebuffer_target = false;
     drmModeConnection state;
