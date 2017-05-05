@@ -400,6 +400,8 @@ void DrmResources::SetPrimaryDisplay(DrmConnector *c) {
 
 void DrmResources::SetExtendDisplay(DrmConnector *c) {
   if (extend_ != c) {
+    if (extend_)
+      extend_->force_disconnect(false);
     extend_ = c;
     enable_changed_ = true;
   }
