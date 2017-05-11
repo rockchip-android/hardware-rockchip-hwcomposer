@@ -850,6 +850,15 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
             return true;
         }
 
+        if((layer->transform & HWC_TRANSFORM_FLIP_H) || (layer->transform & HWC_TRANSFORM_FLIP_V) )
+        {
+            if(layer->transform & HWC_TRANSFORM_ROT_90)
+            {
+                ALOGD_IF(log_level(DBG_DEBUG),"layer's transform=0x%x,go to GPU GLES at line=%d", layer->transform, __LINE__);
+                return true;
+            }
+        }
+
         if( (layer->blending == HWC_BLENDING_PREMULT)&& layer->planeAlpha!=0xFF )
         {
             ALOGD_IF(log_level(DBG_DEBUG),"layer's blending planeAlpha=0x%x,go to GPU GLES at line=%d", layer->planeAlpha, __LINE__);
