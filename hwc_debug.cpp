@@ -54,6 +54,7 @@ void init_rk_debug()
  * @return 				Errno no
  */
 #define DUMP_LAYER_CNT (10)
+static int DumpSurfaceCount = 0;
 int DumpLayer(const char* layer_name,buffer_handle_t handle)
 {
     char pro_value[PROPERTY_VALUE_MAX];
@@ -62,7 +63,6 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
 
     if(handle && !strcmp(pro_value,"true"))
     {
-        static int DumpSurfaceCount = 0;
         FILE * pfile = NULL;
         char data_name[100] ;
         const gralloc_module_t *gralloc;
@@ -114,8 +114,11 @@ int DumpLayer(const char* layer_name,buffer_handle_t handle)
         }
         gralloc->unlock(gralloc, handle);
         //only dump once time.
-        if(DumpSurfaceCount == DUMP_LAYER_CNT)
+        if(DumpSurfaceCount > DUMP_LAYER_CNT)
+        {
+            DumpSurfaceCount = 0;
             property_set("sys.dump","0");
+        }
     }
     return 0;
 }
