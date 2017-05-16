@@ -685,7 +685,7 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
             strerror(errno), (void*)layer.sf_handle, (void*)(rgaBuffer.buffer()->handle));
     }
 
-    //DumpLayer("rga", dst.hnd);
+    DumpLayer("rga", dst.hnd);
 
     //instead of the original DrmHwcLayer
     layer.is_rotate_by_rga = true;
@@ -1211,7 +1211,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         break;
       }
 
-      DumpLayer(layer.name.c_str(),layer.get_usable_handle());
+     // DumpLayer(layer.name.c_str(),layer.get_usable_handle());
 
 #if RK_VIDEO_SKIP_LINE
       bSkipLine = layer.bSkipLine;

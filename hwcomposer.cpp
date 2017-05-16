@@ -867,7 +867,8 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
 
         if(layer->handle)
         {
-            //DumpLayer(layer->LayerName,layer->handle);
+            DumpLayer(layer->LayerName,layer->handle);
+
 #if RK_DRM_GRALLOC
             format = hwc_get_handle_attibute(ctx->gralloc,layer->handle,ATT_FORMAT);
 #else
