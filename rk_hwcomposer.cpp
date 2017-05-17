@@ -5764,6 +5764,8 @@ int hotplug_get_config(int flag)
          hwcONERROR(hwcSTATUS_IO_ERR);
     }
 
+    /*----------- IPP not used by extern device*/
+    /* 
     context->ippDev = new ipp_device_t();
     rel = ipp_open(context->ippDev);
     if (rel < 0){
@@ -5771,6 +5773,7 @@ int hotplug_get_config(int flag)
         context->ippDev = NULL;
         ALOGE("Open ipp device fail.");
     }
+    */
     return 0;
 
 OnError:
