@@ -1040,9 +1040,12 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     //get plane size for display
     std::vector<PlaneGroup *>& plane_groups = ctx->drm.GetPlaneGroups();
     hd->iPlaneSize = 0;
+    hd->is_interlaced = (mode.interlaced()>0) ? true:false;
     for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
         iter != plane_groups.end(); ++iter)
     {
+        if(hd->is_interlaced && (*iter)->planes.size() > 2)
+            continue;
         if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
             hd->iPlaneSize++;
     }
@@ -1313,7 +1316,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
 
         //match plane for gles composer.
-        bool bAllMatch = match_process(&ctx->drm, crtc, layer_content.layers,
+        bool bAllMatch = match_process(&ctx->drm, crtc, hd->is_interlaced ,layer_content.layers,
                                         hd->iPlaneSize, comp_plane.composition_planes);
         if(!bAllMatch)
             ALOGE("Fetal error when match plane for fb layer");

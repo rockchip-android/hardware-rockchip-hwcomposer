@@ -55,6 +55,7 @@ class DrmMode {
   float v_refresh() const;
 
   uint32_t flags() const;
+  uint32_t interlaced() const;
   uint32_t type() const;
 
   std::string name() const;
@@ -81,6 +82,7 @@ class DrmMode {
 
   uint32_t flags_ = 0;
   uint32_t type_ = 0;
+  int interlaced_ =0;
 
   std::string name_;
 };

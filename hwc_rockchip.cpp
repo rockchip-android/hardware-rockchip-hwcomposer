@@ -628,7 +628,7 @@ static bool has_layer(std::vector<DrmHwcLayer*>& layer_vector,DrmHwcLayer &layer
 }
 
 static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
-                        int iPlaneSize)
+                        int iPlaneSize, bool use_combine)
 {
     /*Group layer*/
     int zpos = 0;
@@ -673,7 +673,7 @@ static int combine_layer(LayerMap& layer_map,std::vector<DrmHwcLayer>& layers,
                 if(bHasLayerOne && bHasLayerTwo)
                     continue;
 
-                if(is_layer_combine(&layer_one,&layer_two)) {
+                if(use_combine && is_layer_combine(&layer_one,&layer_two)) {
                     //append layer into layer_vector of layer_map_.
                     if(!bHasLayerOne && !bHasLayerTwo)
                     {
@@ -1070,7 +1070,8 @@ bool MatchPlanes(
   DrmCrtc *crtc,
   DrmResources *drm,
   std::vector<DrmCompositionPlane>& composition_planes,
-  bool bMulArea)
+  bool bMulArea,
+  bool is_interlaced)
 {
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
     uint64_t last_zpos=0;
@@ -1083,7 +1084,13 @@ bool MatchPlanes(
         (*iter)->bUse=false;
         for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
             iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            if((*iter_plane)->GetCrtcSupported(*crtc))  //only init the special crtc's plane
+            if(is_interlaced && (*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() > 2)
+            {
+                (*iter_plane)->set_use(true);
+                ALOGD_IF(log_level(DBG_DEBUG), "MatchPlanes in interlaced mode, close plane id=%d",(*iter_plane)->id());
+                continue;
+            }
+            if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() == 1)  //only init the special crtc's plane
                 (*iter_plane)->set_use(false);
         }
     }
@@ -1172,7 +1179,7 @@ bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask) {
   return !!((1 << crtc.pipe()) & possible_crtc_mask);
 }
 
-bool match_process(DrmResources* drm, DrmCrtc *crtc,
+bool match_process(DrmResources* drm, DrmCrtc *crtc, bool is_interlaced,
                         std::vector<DrmHwcLayer>& layers, int iPlaneSize,
                         std::vector<DrmCompositionPlane>& composition_planes)
 {
@@ -1194,11 +1201,11 @@ bool match_process(DrmResources* drm, DrmCrtc *crtc,
       zpos++;
     }
 
-    int ret = combine_layer(layer_map, layers, iPlaneSize);
+    int ret = combine_layer(layer_map, layers, iPlaneSize, !is_interlaced);
     if(ret == 0)
     {
         bool bMulArea = layers.size() > layer_map.size();
-        bMatch = MatchPlanes(layer_map,crtc,drm,composition_planes,bMulArea);
+        bMatch = MatchPlanes(layer_map,crtc,drm,composition_planes,bMulArea, is_interlaced);
     }
 
     if(bMatch)
@@ -1219,7 +1226,7 @@ bool match_process(DrmResources* drm, DrmCrtc *crtc,
     return false;
 }
 
-static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc,
+static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc, bool is_interlaced,
                         std::vector<DrmHwcLayer>& layers, std::vector<DrmHwcLayer>& tmp_layers,
                         int iPlaneSize, std::vector<DrmCompositionPlane>& composition_planes,
                         int iFirst, int iLast)
@@ -1271,7 +1278,7 @@ static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc,
         i++;
     }
 
-    bAllMatch = match_process(drm, crtc, layers, iPlaneSize, composition_planes);
+    bAllMatch = match_process(drm, crtc, is_interlaced, layers, iPlaneSize, composition_planes);
     if(bAllMatch)
         return true;
 
@@ -1409,7 +1416,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
         ALOGD_IF(log_level(DBG_DEBUG), "%s:has skip layer (%d,%d)",__FUNCTION__,skip_layer_indices.first, skip_layer_indices.second);
         if(hd->mixMode != HWC_MIX_CROSS)
             hd->mixMode = HWC_MIX_CROSS;
-        bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+        bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                                     skip_layer_indices.first, skip_layer_indices.second);
         if(bAllMatch)
             goto AllMatch;
@@ -1434,7 +1441,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
                 layer_indices.first = 1;
                 layer_indices.second = layers.size() - 1;
 
-                bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+                bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                                     layer_indices.first, layer_indices.second);
                 if(bAllMatch)
                     goto AllMatch;
@@ -1453,7 +1460,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     }
 
     /*************************common match*************************/
-    bAllMatch = match_process(drm, crtc, layers, iPlaneSize, composition_planes);
+    bAllMatch = match_process(drm, crtc, hd->is_interlaced, layers, iPlaneSize, composition_planes);
 
     if(bAllMatch)
         goto AllMatch;
@@ -1482,7 +1489,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
         layer_indices.first = 3;
         layer_indices.second = layers.size() - 1;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up for video (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
-        bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+        bAllMatch = try_mix_policy(drm, crtc,hd->is_interlaced,  layers, tmp_layers, iPlaneSize, composition_planes,
                             layer_indices.first, layer_indices.second);
         if(bAllMatch)
             goto AllMatch;
@@ -1506,7 +1513,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
         layer_indices.first = 0;
         layer_indices.second = 2;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix down (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
-        bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+        bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                             layer_indices.first, layer_indices.second);
         if(bAllMatch)
             goto AllMatch;
@@ -1524,7 +1531,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
         layer_indices.first = 3;
         layer_indices.second = layers.size() - 1;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
-        bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+        bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                             layer_indices.first, layer_indices.second);
         if(bAllMatch)
             goto AllMatch;
@@ -1574,7 +1581,7 @@ AllMatch:
                     layer_indices.first = 0;
                     layer_indices.second = 1;
                     ALOGD_IF(log_level(DBG_DEBUG), "%s:mix down (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
-                    bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+                    bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                                         layer_indices.first, layer_indices.second);
                     scale_factor = vop_band_width(hd, layers);
                     if(bAllMatch && scale_factor <= 3.3)
@@ -1596,7 +1603,7 @@ AllMatch:
                     layer_indices.first = layers.size() - 2;
                     layer_indices.second = layers.size() - 1;
                     ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
-                    bAllMatch = try_mix_policy(drm, crtc, layers, tmp_layers, iPlaneSize, composition_planes,
+                    bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
                                         layer_indices.first, layer_indices.second);
                     scale_factor = vop_band_width(hd, layers);
                     if(bAllMatch && scale_factor <= 3.3)

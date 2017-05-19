@@ -86,6 +86,7 @@ typedef struct hwc_drm_display {
   float h_scale;
   bool active;
   bool is_3d;
+  bool is_interlaced;
   Mode3D stereo_mode;
   HDMI_STAT last_hdmi_status;
 } hwc_drm_display_t;
@@ -123,7 +124,7 @@ int hwc_get_handle_primefd(const gralloc_module_t *gralloc, buffer_handle_t hnd)
 bool vop_support_format(uint32_t hal_format);
 bool vop_support_scale(hwc_layer_1_t *layer);
 bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask);
-bool match_process(DrmResources* drm, DrmCrtc *crtc,
+bool match_process(DrmResources* drm, DrmCrtc *crtc, bool is_interlaced,
                         std::vector<DrmHwcLayer>& layers, int iPlaneSize,
                         std::vector<DrmCompositionPlane>& composition_planes);
 bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,

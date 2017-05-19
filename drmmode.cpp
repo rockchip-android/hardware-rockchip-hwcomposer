@@ -41,6 +41,7 @@ DrmMode::DrmMode(drmModeModeInfoPtr m)
       flags_(m->flags),
       type_(m->type),
       name_(m->name) {
+      interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
 }
 
 DrmMode::~DrmMode()
@@ -76,8 +77,6 @@ bool DrmMode::operator==(const DrmMode &m) const {
 bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
                     bool interlaced) const
 {
-  int interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
-
   if (h_display_ == width && v_display_ == height &&
       interlaced_ == interlaced && v_refresh_ == vrefresh)
     return true;
@@ -87,7 +86,6 @@ bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
 bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
                      uint32_t flag, uint32_t clk, bool interlaced) const
 {
-  int interlaced_ = !!(flags_ & DRM_MODE_FLAG_INTERLACE);
   ALOGV("DrmMode h=%d,v=%d,interlaced=%d,v_refresh_=%d,flags=%d,clk=%d",
          h_display_, v_display_, interlaced_, v_refresh_, flags_,clock_);
   if (h_display_ == width && v_display_ == height &&
@@ -174,6 +172,10 @@ float DrmMode::v_refresh() const {
 
 uint32_t DrmMode::flags() const {
   return flags_;
+}
+
+uint32_t DrmMode::interlaced() const {
+    return interlaced_;
 }
 
 uint32_t DrmMode::type() const {
