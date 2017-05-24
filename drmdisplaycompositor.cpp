@@ -1323,14 +1323,19 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     ALOGD_IF(log_level(DBG_VERBOSE),"scale dst: w_scale=%f,h_scale=%f",w_scale,h_scale);
 #endif
 
-//zxl: src_l/src_w need 16bytes aligned and src_t/src_h need 4bytes aligned in FBDC area.
+//zxl: src_l/src_w need 16 pixels aligned and src_t/src_h need 4 pixels aligned in FBDC area.
 #if USE_AFBC_LAYER
     if(afbc_plane_id == plane->id())
     {
         src_l = IS_ALIGN(src_l, 16)?src_l:ALIGN(src_l, 16);
         src_t = IS_ALIGN(src_t, 4)?src_t:ALIGN(src_t, 4);
-        src_w = IS_ALIGN(src_w, 16)?src_w:(ALIGN(src_w - src_l, 16)-16);
-        src_h = IS_ALIGN(src_h, 4)?src_h:(ALIGN(src_h - src_t, 4)-4);
+        src_w = IS_ALIGN(src_w, 16)?src_w:(ALIGN(src_w, 16)-16);
+        src_h = IS_ALIGN(src_h, 4)?src_h:(ALIGN(src_h, 4)-4);
+
+        dst_l = IS_ALIGN(dst_l, 16)?dst_l:ALIGN(dst_l, 16);
+        dst_t = IS_ALIGN(dst_t, 4)?dst_t:ALIGN(dst_t, 4);
+        dst_w = IS_ALIGN(dst_w, 16)?dst_w:(ALIGN(dst_w, 16)-16);
+        dst_h = IS_ALIGN(dst_h, 4)?dst_h:(ALIGN(dst_h, 4)-4);
     }
 #endif
     if(is_yuv)
