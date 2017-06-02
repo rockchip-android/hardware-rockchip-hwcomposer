@@ -1081,6 +1081,13 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
 {
     int hwc_en; 
     int static cnt = 0;
+    unsigned int lpersent = 0;
+    unsigned int tpersent = 0;
+    unsigned int rpersent = 0;
+    unsigned int bpersent = 0;
+
+    char new_valuep[PROPERTY_VALUE_MAX];
+    
     ctx->videoCnt = 0;
     ctx->Is_video = false;
     ctx->Is_Lvideo = false;
@@ -1096,6 +1103,15 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
             ALOGW("boot cnt =%d ",cnt);
         return -1;
     }
+    property_get("persist.sys.overscan.main", new_valuep, "false");
+
+    sscanf(new_valuep,"overscan %d,%d,%d,%d",&lpersent,&tpersent,&rpersent,&bpersent);
+
+    if(lpersent != 100 || tpersent != 100 )  
+        ctx->Is_OverscanEn = true;
+    else
+        ctx->Is_OverscanEn = false;
+
     for (unsigned int i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -1203,6 +1219,15 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     return 0;
 }
 
+int is_need_skip_this_policy(void*ctx)
+{
+    hwcContext * context = (hwcContext *)ctx;
+    if(context->IsRk3128 && context->Is_OverscanEn && context->mScreenChanged)
+    {
+        return 1;
+    }
+    return 0;
+}
 int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 {
     int scale_cnt = 0;
@@ -1216,8 +1241,9 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
+    if(is_need_skip_this_policy(ctx))
+        return -1;
     forceSkip = context->IsRk3126;
-
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
         forceSkip = true;
 
@@ -1345,7 +1371,7 @@ int try_hwc_rga_policy(void * ctx,hwc_display_contents_1_t *list)
     }
     if(context->hasPlaneAlpha)
     {
-	if(is_out_log())
+	    if(is_out_log())
             ALOGD("Hwc rga policy out,line=%d",__LINE__);
         return -1;
     }
@@ -1427,7 +1453,8 @@ int try_hwc_rga_vop_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
-
+    if(is_need_skip_this_policy(ctx))
+        return -1;
     if(context->engine_fd <= 0)
     {
         if(is_out_log())
@@ -1543,7 +1570,9 @@ int try_hwc_rga_trfm_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int i ;
     hwcContext * context = (hwcContext *)ctx;
     int yuv_cnt = 0;
-    
+
+    if(is_need_skip_this_policy(ctx))
+        return -1;
    // RGA_POLICY_MAX_SIZE
 #if ONLY_USE_ONE_VOP
     if(getHdmiMode() == 1)
@@ -1688,6 +1717,8 @@ int try_hwc_rga_trfm_gpu_vop_policy(void * ctx,hwc_display_contents_1_t *list)
     }
 #endif
 
+    if(is_need_skip_this_policy(ctx))
+        return -1;
     if(context->engine_fd <= 0)
     {
         if(is_out_log())
@@ -1912,6 +1943,8 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
     unsigned int i ;
 
     hwcContext * context = (hwcContext *)ctx;
+    if(is_need_skip_this_policy(ctx))
+        return -1;
 #ifdef USE_X86
     if(getHdmiMode() == 1)
     {
@@ -2278,6 +2311,8 @@ int try_hwc_gpu_nodraw_vop_policy(void * ctx,hwc_display_contents_1_t *list)
 
     forceSkip = context->IsRk3126;
 
+    if(is_need_skip_this_policy(ctx))
+        return -1;
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
         forceSkip = true;
 
@@ -3587,7 +3622,7 @@ int hwc_vop_config(hwcContext * context, hwc_display_contents_1_t *list)
 
    // if(!context->fb_blanked)
     {
-	if (context->IsRk3328)
+	if (context->IsRk3328 || context->IsRk3126 || context->IsRk3128)
 	    hotplug_reset_dstpos(&fb_info, 5);
         else if(context->IsRk322x && context->IsRkBox)
             hotplug_reset_dstpos(&fb_info,2);

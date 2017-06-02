@@ -81,7 +81,11 @@
 #define VOP_WIN_NUM       2
 #define RGA_USE_FENCE     0
 #define VIDEO_USE_PPROT   0
-#define HOTPLUG_MODE      1
+#ifdef RK312X_BOX
+    #define HOTPLUG_MODE      0
+#else
+    #define HOTPLUG_MODE      1
+#endif
 #define ONLY_USE_ONE_VOP  1
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
@@ -426,6 +430,7 @@ FenceMangrRga;
         int      isStereo;
         int      Is_debug;
     	int           iommuEn;
+    	bool     Is_OverscanEn;
         alloc_device_t  *mAllocDev;
         int     *video_ui;
         int rga_fence_relfd[RGA_REL_FENCE_NUM];
