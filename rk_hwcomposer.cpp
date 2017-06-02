@@ -1222,9 +1222,16 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
 int is_need_skip_this_policy(void*ctx)
 {
     hwcContext * context = (hwcContext *)ctx;
+    bool IsBox = false;
     if(context->IsRk3128 && context->Is_OverscanEn && context->mScreenChanged)
     {
-        return 1;
+        #ifdef RK312X_BOX
+        IsBox = true;
+        #endif
+        if(IsBox)
+            return 1;
+        else
+            return 0;
     }
     return 0;
 }
