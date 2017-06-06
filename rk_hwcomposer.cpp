@@ -812,7 +812,7 @@ int hwc_reset_fb_info(struct rk_fb_win_cfg_data *fb_info, hwcContext * context)
     int scale = 1;
     int ionFd, phy_addr;
     int xact, yact, xsize, ysize, yvir, format;
-    int relxres, relyres, vsync_priod;
+    int relxres, relyres, fps;
 
     if (!context && context->Is_noi)
         return -EINVAL;
@@ -829,18 +829,18 @@ int hwc_reset_fb_info(struct rk_fb_win_cfg_data *fb_info, hwcContext * context)
             ionFd = fb_info->win_par[i].area_par[j].ion_fd;
             phy_addr = fb_info->win_par[i].area_par[j].phy_addr;
             hfactor = (float)ysize / (float)yact;
-            vsync_priod = context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period;
+            fps = 1e9 / context->dpyAttr[HWC_DISPLAY_PRIMARY].vsync_period;
             relxres = context->dpyAttr[HWC_DISPLAY_PRIMARY].relxres;
             relyres = context->dpyAttr[HWC_DISPLAY_PRIMARY].relyres;
 
             interleaveForVop = ionFd || phy_addr;
-            interleaveForVop = interleaveForVop && is_vop_yuv(format);
-            interleaveForVop = interleaveForVop && (xact > MaxIForVop || yact > MaxIForVop);
-            interleaveForVop = interleaveForVop && (hfactor <= 0.95);
-            interleaveForVop = interleaveForVop &&  vsync_priod >= 50 && relxres >= 3840;
+            interleaveForVop = interleaveForVop && is_vop_yuv(format);            
+            interleaveForVop = interleaveForVop && (xact >= MaxIForVop || yact >= MaxIForVop);            
+            interleaveForVop = interleaveForVop && (hfactor <= 0.95);            
+            interleaveForVop = interleaveForVop &&  fps >= 50 && relxres >= 3840;
 
             if (is_out_log())
-                ALOGD("[%d,%d]=>[%d,%d][%d,%d,%d]", xact,yact,xsize,ysize,relxres,relyres,vsync_priod);
+                ALOGD("[%d,%d]=>[%d,%d][%d,%d,%d]", xact,yact,xsize,ysize,relxres,relyres,fps);
             if (is_out_log() && (yvir % 2) && interleaveForVop)
                 ALOGW("We need interleave for vop but yvir is not align to 2");
             interleaveForVop = interleaveForVop && (yvir % 2 == 0);
