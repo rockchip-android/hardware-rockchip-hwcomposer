@@ -6050,7 +6050,7 @@ int hotplug_reset_dstpos(struct rk_fb_win_cfg_data * fb_info,int flag)
         w_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].xres;
         h_source = ctxp->dpyAttr[HWC_DISPLAY_PRIMARY].yres;
 
-        property_get("persist.sys.overscan.main", new_valuep, "false");
+        property_get("persist.sys.overscan.main", new_valuep, "overscan 100,100,100,100");
         property_get("persist.sys.overscan.aux",  new_valuee, "false");
 
         sscanf(new_valuep,"overscan %d,%d,%d,%d",&lpersent,&tpersent,&rpersent,&bpersent);
