@@ -895,6 +895,13 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 return true;
             }
 
+            int src_xoffset = layer->sourceCropf.left * getPixelWidthByAndroidFormat(format);
+            if(!IS_ALIGN(src_xoffset,16))
+            {
+                ALOGD_IF(log_level(DBG_DEBUG),"layer's x offset = %d,vop nedd address should 16 bytes alignment,go to GPU GLES at line=%d", src_xoffset,__LINE__);
+                return true;
+            }
+
 #if 1
             if(!vop_support_scale(layer))
             {

@@ -1080,7 +1080,7 @@ bool MatchPlanes(
     return true;
 }
 
-static float getPixelWidthByAndroidFormat(int format)
+float getPixelWidthByAndroidFormat(int format)
 {
        float pixelWidth = 0.0;
        switch (format) {

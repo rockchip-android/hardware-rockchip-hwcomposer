@@ -106,6 +106,7 @@ int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_cont
 #if 0
 int hwc_control_3dmode(int fd_3d, int value, int flag);
 #endif
+float getPixelWidthByAndroidFormat(int format);
 int hwc_get_handle_width(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 int hwc_get_handle_height(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 int hwc_get_handle_format(const gralloc_module_t *gralloc, buffer_handle_t hnd);
