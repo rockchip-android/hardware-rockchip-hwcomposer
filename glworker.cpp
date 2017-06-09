@@ -37,6 +37,7 @@
 #include "drmdisplaycomposition.h"
 
 #include "glworker.h"
+#include "hwc_rockchip.h"
 
 // TODO(zachr): use hwc_drm_bo to turn buffer handles into textures
 #ifndef EGL_NATIVE_HANDLE_ANDROID_NVX
@@ -324,7 +325,10 @@ static void ConstructCommand(const DrmHwcLayer *layers,
 #if RK_VIDEO_SKIP_LINE
     if(layer.bSkipLine)
     {
-        tex_height*=2;
+        if(layer.format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+            tex_height*=SKIP_LINE_NUM_NV12_10;
+        else
+            tex_height*=SKIP_LINE_NUM_NV12;
     }
 #endif
 

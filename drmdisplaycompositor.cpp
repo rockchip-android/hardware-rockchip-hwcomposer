@@ -39,7 +39,7 @@
 #include "glworker.h"
 #include "hwc_util.h"
 #include "hwc_debug.h"
-
+#include "hwc_rockchip.h"
 
 #define DRM_QUEUE_USLEEP 10
 #define DRM_DISPLAY_COMPOSITOR_MAX_QUEUE_DEPTH 1
@@ -1162,6 +1162,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if USE_AFBC_LAYER
     bool is_afbc = false;
 #endif
+    int format = 0;
     if (comp_plane.type() != DrmCompositionPlane::Type::kDisable) {
       if (source_layers.size() > 1) {
         ALOGE("Can't handle more than one source layer sz=%zu type=%d",
@@ -1249,6 +1250,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         ALOGD_IF(log_level(DBG_VERBOSE),"fbdc layer %s,plane id=%d",layer.name.c_str(),afbc_plane_id);
     }
 #endif
+    format = layer.format;
 
 #if RK_RGA
       is_rotate_by_rga = layer.is_rotate_by_rga;
@@ -1305,7 +1307,16 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     src_w = (int)(source_crop.right - source_crop.left);
 #if RK_VIDEO_SKIP_LINE
     if(bSkipLine)
-        src_h = (int)(source_crop.bottom - source_crop.top)/2;
+    {
+        if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+        {
+            src_h = (int)(source_crop.bottom - source_crop.top)/SKIP_LINE_NUM_NV12_10;
+        }
+        else
+        {
+            src_h = (int)(source_crop.bottom - source_crop.top)/SKIP_LINE_NUM_NV12;
+        }
+    }
     else
 #endif
         src_h = (int)(source_crop.bottom - source_crop.top);

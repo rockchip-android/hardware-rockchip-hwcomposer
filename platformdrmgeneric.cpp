@@ -135,8 +135,16 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
 #if RK_VIDEO_SKIP_LINE
   if(bSkipLine)
   {
-      bo->pitches[0] = byte_stride*2;
-      bo->height = height/2;
+    if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+    {
+      bo->pitches[0] = byte_stride*SKIP_LINE_NUM_NV12_10;
+      bo->height = height/SKIP_LINE_NUM_NV12_10;
+    }
+    else
+    {
+      bo->pitches[0] = byte_stride*SKIP_LINE_NUM_NV12;
+      bo->height = height/SKIP_LINE_NUM_NV12;
+    }
   }
   else
 #endif
@@ -171,6 +179,11 @@ int DrmGenericImporter::ImportBuffer(buffer_handle_t handle, hwc_drm_bo_t *bo
   ret = drmModeAddFB2(drm_->fd(), bo->width, bo->height, bo->format,
                       bo->gem_handles, bo->pitches, bo->offsets, &bo->fb_id, 0);
 #endif
+
+    ALOGD_IF(log_level(DBG_DEBUG), "ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",
+        drm_->fd(), bo->width, bo->height, format,bo->format,
+        gem_handle, bo->pitches[0], bo->fb_id);
+
   if (ret) {
     ALOGE("could not create drm fb %d", ret);
     ALOGE("ImportBuffer fd=%d,w=%d,h=%d,format=0x%x,bo->format=0x%x,gem_handle=%d,bo->pitches[0]=%d,fb_id=%d",

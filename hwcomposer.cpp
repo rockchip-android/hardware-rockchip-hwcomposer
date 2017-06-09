@@ -525,6 +525,8 @@ void DrmHwcLayer::dump_drm_layer(int index, std::ostringstream *out) const {
          << " blending[a=" << (int)alpha
          << "]=" << BlendingToString(blending) << " source_crop";
     source_crop.Dump(out);
+    *out << " handle parameter";
+    *out << "[w/h/s]=" << width << "/" << height << "/" << stride;
     *out << " display_frame";
     display_frame.Dump(out);
 
@@ -850,9 +852,9 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
             return true;
         }
 
-        if((layer->transform & HWC_TRANSFORM_FLIP_H) || (layer->transform & HWC_TRANSFORM_FLIP_V) )
+        if(layer->transform != HWC_TRANSFORM_ROT_270 && layer->transform & HWC_TRANSFORM_ROT_90)
         {
-            if(layer->transform & HWC_TRANSFORM_ROT_90)
+            if((layer->transform & HWC_TRANSFORM_FLIP_H) || (layer->transform & HWC_TRANSFORM_FLIP_V) )
             {
                 ALOGD_IF(log_level(DBG_DEBUG),"layer's transform=0x%x,go to GPU GLES at line=%d", layer->transform, __LINE__);
                 return true;

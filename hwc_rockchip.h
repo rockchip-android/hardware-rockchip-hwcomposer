@@ -17,6 +17,11 @@ namespace android {
 #define WRITE_3D_MODE 			(1)
 #endif
 
+#if RK_VIDEO_SKIP_LINE
+#define SKIP_LINE_NUM_NV12_10		(4)
+#define SKIP_LINE_NUM_NV12		(2)
+#endif
+
 typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
 typedef LayerMap::iterator LayerMapIter;
 struct hwc_context_t;
