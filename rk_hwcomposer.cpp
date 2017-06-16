@@ -2546,8 +2546,9 @@ static int hwc_prepare_primary(hwc_composer_device_1 *dev, hwc_display_contents_
     {
         return 0; 
     }
-    
-    LOGV("%s(%d):>>> prepare_primary %d layers <<<",
+
+    if(is_out_log())        
+        LOGD("%s(%d):>>> prepare_primary %d layers <<<",
          __FUNCTION__,
          __LINE__,
          list->numHwLayers);
@@ -2644,8 +2645,8 @@ static int hwc_prepare_external(hwc_composer_device_1 *dev, hwc_display_contents
     {
         return 0;
     }
-
-    LOGV("%s(%d):>>> prepare_primary %d layers <<<",
+    if(is_out_log())        
+        LOGD("%s(%d):>>> prepare_external %d layers <<<",
          __FUNCTION__,
          __LINE__,
          list->numHwLayers);
@@ -2786,6 +2787,8 @@ hwc_prepare(
     int ret = 0;
 
     /* Check device handle. */
+    if(is_out_log())    
+        ALOGD("-----------hwc_prepare_start,numDisplays=%d -----------------",numDisplays);
 
     for (size_t i = 0; i < numDisplays; i++) {
         hwc_display_contents_1_t *list = displays[i];
@@ -2842,7 +2845,28 @@ int hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
             }
 
         case HWC_DISPLAY_EXTERNAL:
-			gcontextAnchor[HWC_DISPLAY_EXTERNAL]->fb_blanked = blank;
+            {
+                int fb_blank = blank ? FB_BLANK_POWERDOWN : FB_BLANK_UNBLANK;
+                context = gcontextAnchor[HWC_DISPLAY_EXTERNAL];
+
+                int err = ioctl(context->fbFd, FBIOBLANK, fb_blank);
+                ALOGV("call fb blank =%d",fb_blank);
+                if (err < 0)
+                {
+                    if (errno == EBUSY)
+                        ALOGD("%sblank ioctl failed (display already %sblanked)",
+                              blank ? "" : "un", blank ? "" : "un");
+                    else
+                        ALOGE("%sblank ioctl failed: %s", blank ? "" : "un",
+                              strerror(errno));
+                    return -errno;
+                }
+                else
+                {
+                    context->fb_blanked = blank;
+                }
+                break;
+            }        
             #if FORCE_REFRESH
             if(0 == blank)
             {
@@ -4279,6 +4303,10 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
 #endif
 
 
+    if(is_out_log())        
+        LOGD("%s(%d):>>> hwc_set_primary  <<<",
+         __FUNCTION__,
+         __LINE__);
     /* Check device handle. */
     if (context == NULL
             || &context->device.common != (hw_device_t *) dev
@@ -4343,10 +4371,6 @@ static int hwc_set_primary(hwc_composer_device_1 *dev, hwc_display_contents_1_t 
     //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
     //LOGD("hwc_syncs_set use time=%ld ms",  usec1); 
     
-    LOGV("%s(%d):>>> Set start %d layers <<<",
-         __FUNCTION__,
-         __LINE__,
-         list->numHwLayers);
 
     hwc_policy_set(context,list);
 #if hwcUseTime
@@ -4368,6 +4392,10 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
     long usec1 = 0;
 #endif
 
+    if(is_out_log())        
+        LOGD("%s(%d):>>> hwc_set_external  <<<",
+         __FUNCTION__,
+         __LINE__ );
 
     /* Check device handle. */
     if (context == NULL || list == NULL)
@@ -4416,10 +4444,6 @@ static int hwc_set_external(hwc_composer_device_1_t *dev, hwc_display_contents_1
     //usec1 = 1000 * (tpend2.tv_sec - tpend1.tv_sec) + (tpend2.tv_usec - tpend1.tv_usec) / 1000;
     //LOGD("hwc_syncs_set use time=%ld ms",  usec1);
 
-    LOGV("%s(%d):>>> Set start %d layers <<<",
-         __FUNCTION__,
-         __LINE__,
-         list->numHwLayers);
 
 #if ONLY_USE_ONE_VOP
     if(context->mHtg.HtgOn && gcontextAnchor[1] && gcontextAnchor[1]->fb_blanked)
