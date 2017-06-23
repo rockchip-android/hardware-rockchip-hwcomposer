@@ -87,6 +87,7 @@
     #define HOTPLUG_MODE      1
 #endif
 #define ONLY_USE_ONE_VOP  1
+#define FORCE_REFRESH     1
 #define VIDEO_WIN1_UI_DISABLE     1
 #define VIRTUAL_UI_RESOLUTION     0
 #elif defined(TARGET_BOARD_PLATFORM_RK322X)
