@@ -1223,7 +1223,7 @@ int is_need_skip_this_policy(void*ctx)
 {
     hwcContext * context = (hwcContext *)ctx;
     bool IsBox = false;
-    if(context->IsRk3128 && context->Is_OverscanEn && context->mScreenChanged)
+    if(context->IsRk3128 && (context->Is_OverscanEn || context->mScreenChanged))
     {
         #ifdef RK312X_BOX
         IsBox = true;
