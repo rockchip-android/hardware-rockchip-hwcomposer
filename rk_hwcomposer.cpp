@@ -1330,11 +1330,16 @@ int try_hwc_vop_policy(void * ctx,hwc_display_contents_1_t *list)
             if(/*context->vop_mbshake && */context->Is_video || (context->special_app && i == 1 &&
                 list->numHwLayers == 3) || forceUiDetect)
             {
-                int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height); 
-                if(ret) // ui need display
-                {
-                    return -1;
-                }  
+               if(!strstr(layer->LayerName,"cursor") && !strstr(layer->LayerName,"Sprite"))
+               {
+                       int ret = DetectValidData(context,(int *)handle->base,handle->width,handle->height);
+                       if(ret) // ui need display
+                       {
+                               if(is_out_log())
+                                       ALOGD("line=%d,layer=%s is invalid data",layer->LayerName,__LINE__);
+                               return -1;
+                       }
+               }
             }
             #endif
 
