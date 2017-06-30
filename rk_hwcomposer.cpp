@@ -1965,6 +1965,10 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
         return -1;
     }
 #endif
+#ifdef RK312X_BOX
+    if(context->IsRk3128 && context->Is_OverscanEn )
+        return 1;
+#endif
     forceSkip = context->IsRk3126;
 
     if(context->IsRk3188 && ONLY_USE_ONE_VOP == 1)
