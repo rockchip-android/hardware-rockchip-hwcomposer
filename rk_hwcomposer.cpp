@@ -447,6 +447,8 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
     srcRects.bottom = SrcRect->bottom \
                       - (int) ((DstRect->bottom - dstRects.bottom) * vfactor);
 
+#ifdef TARGET_BOARD_PLATFORM_RK3328
+#else
     if((srcRects.right - srcRects.left ) <= 16
         || (srcRects.bottom - srcRects.top) <= 16)
     {
@@ -454,6 +456,7 @@ static int LayerZoneCheck(hwc_layer_1_t * Layer,hwcContext * Context)
 			ALOGW("source is too small ,LCDC can not support");
         return -1;
     }
+#endif
 
     hfactor = (float)(Layer->sourceCrop.right - Layer->sourceCrop.left)
           / (Layer->displayFrame.right - Layer->displayFrame.left);
@@ -1091,6 +1094,7 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
     ctx->videoCnt = 0;
     ctx->Is_video = false;
     ctx->Is_Lvideo = false;
+    ctx->Is_4Kvideo = false;
     ctx->Is_Secure = false;
     ctx->special_app = false;
     ctx->hasPlaneAlpha = false;
@@ -1135,6 +1139,8 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 ctx->Is_video = true; 
                 if(handle->width > 1440 || handle->height > 1440)
                     ctx->Is_Lvideo = true;;
+                if(handle->width >= 3840 || handle->height >= 2160)
+                    ctx->Is_4Kvideo = true;;
                 if(handle->usage & GRALLOC_USAGE_PROTECTED )
                     ctx->Is_Secure = true;
             }
@@ -1143,6 +1149,8 @@ int try_prepare_first(hwcContext * ctx,hwc_display_contents_1_t *list)
                 ctx->Is_video = true;
                 if(handle->width > 1440 || handle->height > 1440)
                     ctx->Is_Lvideo = true;;
+                if(handle->width >= 3840 || handle->height >= 2160)
+                    ctx->Is_4Kvideo = true;;
                 if(handle->usage & GRALLOC_USAGE_PROTECTED)
                     ctx->Is_Secure = true;
             }
@@ -1223,7 +1231,7 @@ int is_need_skip_this_policy(void*ctx)
 {
     hwcContext * context = (hwcContext *)ctx;
     bool IsBox = false;
-    if(context->IsRk3128 && (context->Is_OverscanEn || context->mScreenChanged))
+    if(context->IsRk3128 && context->Is_OverscanEn && context->mScreenChanged)
     {
         #ifdef RK312X_BOX
         IsBox = true;
@@ -1967,7 +1975,7 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
 #endif
 #ifdef RK312X_BOX
     if(context->IsRk3128 && context->Is_OverscanEn )
-        return 1;
+        return -1;
 #endif
     forceSkip = context->IsRk3126;
 
@@ -1979,7 +1987,14 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
             ALOGD("line=%d,num=%d",__LINE__,list->numHwLayers - 1);
         return -1;
     }
-
+    //ALOGD("Is_4Kvideo=%d,Is_Lvideo=%d",context->Is_4Kvideo,context->Is_Lvideo);
+    //vop_gpu not suppot 4Kvideo because device's BW is not enough
+    if(context->Is_4Kvideo && context->IsRk3328 )
+    {
+        if(is_out_log())
+            ALOGD("line=%d,Is_4Kvideo=%d,vop_gpu not suppot 4Kvideo",__LINE__,context->Is_4Kvideo);
+        return -1;
+    }
     hwc_layer_1_t * layer = &list->hwLayers[0];
     struct private_handle_t * handle = (struct private_handle_t *)layer->handle;
     if ((layer->flags & HWC_SKIP_LAYER) 
@@ -1993,7 +2008,6 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
                     layer->flags,handle,layer->transform,list->numHwLayers,__LINE__);
         return -1;  
     }
-
     for (i = 0; i < (list->numHwLayers - 1); i++)
     {
         hwc_layer_1_t * layer = &list->hwLayers[i];
@@ -2004,7 +2018,6 @@ int try_hwc_vop_gpu_policy(void * ctx,hwc_display_contents_1_t *list)
                 ALOGD("vop_gpu skip,flag=%x,hanlde=%x",layer->flags);
             return -1;
         }
-
         if(i == 0)
         {
             if((context->vop_mbshake || context->Is_video)&& !(handle->usage & GRALLOC_USAGE_PROTECTED) &&
