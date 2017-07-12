@@ -781,6 +781,7 @@ static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
 static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t *display_content, int display_id)
 {
     int num_layers = display_content->numHwLayers;
+    hwc_drm_display_t *hd = &ctx->displays[display_id];
 
     //force go into GPU
     /*
@@ -825,7 +826,6 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     int transform_normal = 0;
     int ret = 0;
     int format = 0;
-    int usage = 0;
 #if USE_AFBC_LAYER
     uint64_t internal_format = 0;
     int iFbdcCnt = 0;
@@ -882,16 +882,9 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 return true;
             }
 
-            ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
-                                   layer->handle, &usage);
-            if (ret) {
-              ALOGE("Failed to get usage for buffer %p (%d)", layer->handle, ret);
-              return ret;
-            }
-
-            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10 && (usage & HDRUSAGE))
+            if(hd->isHdr)
             {
-                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video usage=0x%x,go to GPU GLES at line=%d", usage, __LINE__);
+                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d",  __LINE__);
                 return true;
             }
 
@@ -971,6 +964,7 @@ static HDMI_STAT detect_hdmi_status(int display)
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
+  int ret = -1;
 
     init_log_level();
     hwc_dump_fps();
@@ -1078,6 +1072,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     std::pair<int, int> skip_layer_indices(-1, -1);
 
     int format = 0;
+    int usage = 0;
+    bool isHdr = false;
     hd->is10bitVideo = false;
     hd->isVideo = false;
     for (int j = 0; j < num_layers-1; j++) {
@@ -1098,9 +1094,40 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
            {
                 hd->is10bitVideo = true;
                 hd->isVideo = true;
-                break;
+                ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
+                                       layer->handle, &usage);
+                if (ret) {
+                  ALOGE("Failed to get usage for buffer %p (%d)", layer->handle, ret);
+                  return ret;
+                }
+                if(usage & HDRUSAGE)
+                {
+                    isHdr = true;
+                    break;
+                }
+                //break;
            }
         }
+    }
+
+    //Switch hdr mode
+    if(hd->isHdr != isHdr)
+    {
+        hd->isHdr = isHdr;
+#if RK_HDR_PERF_MODE
+        if(hd->isHdr)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"Enter hdr performance mode");
+            ctl_little_cpu(0);
+            ctl_cpu_performance(1, 1);
+        }
+        else
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"Exit hdr performance mode");
+            ctl_cpu_performance(0, 1);
+            ctl_little_cpu(1);
+        }
+#endif
     }
 
 #if 1
@@ -1132,7 +1159,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     video_ui_optimize(ctx->gralloc, display_contents[i], &ctx->displays[i]);
 #endif
 
-    int ret = -1;
     bool bHasFPS_3D_UI = false;
     int index = 0;
     for (int j = 0; j < num_layers; j++) {
@@ -1929,6 +1955,7 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hd->h_scale = 1.0;
     hd->active = true;
     hd->last_hdmi_status = HDMI_ON;
+    hd->isHdr = false;
 
   return 0;
 }

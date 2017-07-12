@@ -2,6 +2,84 @@
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+
+static void sysfs_write(const char *path,const char *s)
+{
+    char buf[80];
+    int len;
+    int fd = open(path, O_WRONLY);
+
+    ALOGV("%s: [%s: %s]", __FUNCTION__, path, s);
+    if (fd < 0) {
+        strerror_r(errno, buf, sizeof(buf));
+        ALOGE("%s: [%s: %s]", __FUNCTION__, path, s);
+        ALOGE("Error opening %s: %s\n", path, buf);
+        return;
+    }
+
+    len = write(fd, s, strlen(s));
+    if (len < 0) {
+        strerror_r(errno, buf, sizeof(buf));
+        ALOGE("%s: [%s: %s]", __FUNCTION__, path, s);
+        ALOGE("Error writing to %s: %s\n", path, buf);
+    }
+
+    close(fd);
+}
+
+/*
+ * Control cpu performance mode.
+ * Parameters:
+ *  on:
+ *      1: open performance
+ *      0: close performance
+ *  type:
+ *      1: big cpu
+ *      0: little cpu
+ */
+void ctl_cpu_performance(int on, int type)
+{
+    if((on != 0 && on != 1) ||
+        (type != 0 && type != 1))
+    {
+        ALOGE("%s: invalid parameters,on=%d,type=%d", __FUNCTION__, on, type);
+        return;
+    }
+
+    if(type)
+    {
+        sysfs_write(CPU_CLUST1_GOV_PATH, on ? "performance" : "interactive");
+    }
+    else
+    {
+        sysfs_write(CPU_CLUST0_GOV_PATH, on ? "performance" : "interactive");
+    }
+}
+
+/*
+ * Control little cpu.
+ * Parameters:
+ *  on:
+ *      1: Enable little cpu
+ *      0: Disable little cpu
+ */
+void ctl_little_cpu(int on)
+{
+    if(on != 0 && on != 1)
+    {
+        ALOGE("%s: invalid parameters,on=%d", __FUNCTION__, on);
+        return;
+    }
+
+    sysfs_write("/sys/devices/system/cpu/cpu0/online", on ? "1" : "0");
+    sysfs_write("/sys/devices/system/cpu/cpu1/online", on ? "1" : "0");
+    sysfs_write("/sys/devices/system/cpu/cpu2/online", on ? "1" : "0");
+    sysfs_write("/sys/devices/system/cpu/cpu3/online", on ? "1" : "0");
+}
 
 int hwc_get_int_property(const char* pcProperty,const char* default_value)
 {

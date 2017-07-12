@@ -72,6 +72,7 @@ typedef struct hwc_drm_display {
   bool is10bitVideo;
   MixMode mixMode;
   bool isVideo;
+  bool isHdr;
   int framebuffer_width;
   int framebuffer_height;
   int rel_xres;
