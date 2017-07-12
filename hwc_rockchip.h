@@ -89,6 +89,7 @@ typedef struct hwc_drm_display {
   bool is_interlaced;
   Mode3D stereo_mode;
   HDMI_STAT last_hdmi_status;
+  int display_timeline;
 } hwc_drm_display_t;
 
 int hwc_init_version();

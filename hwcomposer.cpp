@@ -151,6 +151,15 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   bool interlaced, interlaced_3d;
   float vrefresh;
   char val,val_3d;
+  uint32_t timeline;
+
+  timeline = property_get_int32("sys.display.timeline", 0);
+  /*
+   * force update propetry when timeline is zero or not exist.
+   */
+  if (timeline && timeline == hd->display_timeline)
+    return 0;
+  hd->display_timeline = timeline;
 
   if (display == HWC_DISPLAY_PRIMARY)
   {
@@ -220,7 +229,6 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
 
   return -ENOENT;
 }
-
 
 // map of display:hwc_drm_display_t
 typedef std::map<int, hwc_drm_display_t> DisplayMap;
