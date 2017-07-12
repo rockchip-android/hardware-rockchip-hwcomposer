@@ -42,6 +42,8 @@
 #define MaxRgaBuffers                   (3)
 #define RGA_MAX_WIDTH                   (4096)
 #define RGA_MAX_HEIGHT                  (2304)
+#define VOP_BW_PATH			"/sys/class/devfreq/dmc/vop_bandwidth"
+
 
 namespace android {
 
@@ -205,6 +207,7 @@ class DrmDisplayCompositor {
 
   // mutable since we need to acquire in HaveQueuedComposites
   mutable pthread_mutex_t lock_;
+  int vop_bw_fd_;
 
   // State tracking progress since our last Dump(). These are mutable since
   // we need to reset them on every Dump() call.

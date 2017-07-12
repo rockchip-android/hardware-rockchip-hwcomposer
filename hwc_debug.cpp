@@ -45,7 +45,6 @@ void init_rk_debug()
   init_log_level();
 }
 
-
 /**
  * @brief Dump Layer data.
  *

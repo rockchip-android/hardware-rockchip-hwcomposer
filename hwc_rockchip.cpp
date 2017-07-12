@@ -1082,7 +1082,7 @@ bool MatchPlanes(
 
 float getPixelWidthByAndroidFormat(int format)
 {
-       float pixelWidth = 0.0;
+       float pixelWidth = 4.0;
        switch (format) {
                case HAL_PIXEL_FORMAT_RGBA_8888:
                case HAL_PIXEL_FORMAT_RGBX_8888:
@@ -1120,7 +1120,6 @@ float getPixelWidthByAndroidFormat(int format)
                        break;
 
                default:
-                       pixelWidth = 0.0;
                        ALOGE("format 0x%x not support",format);
                        break;
        }

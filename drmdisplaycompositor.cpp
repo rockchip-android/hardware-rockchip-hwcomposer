@@ -305,6 +305,7 @@ DrmDisplayCompositor::DrmDisplayCompositor()
       mUseRga_(false),
 #endif
       squash_framebuffer_index_(0),
+      vop_bw_fd_(-1),
       dump_frames_composited_(0),
       dump_last_timestamp_ns_(0) {
   struct timespec ts;
@@ -347,6 +348,9 @@ DrmDisplayCompositor::~DrmDisplayCompositor() {
 
   pthread_mutex_destroy(&lock_);
   pthread_cond_destroy(&composite_queue_cond_);
+
+  if(vop_bw_fd_ > 0)
+    close(vop_bw_fd_);
 }
 
 int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
@@ -373,6 +377,15 @@ int DrmDisplayCompositor::Init(DrmResources *drm, int display) {
   }
 
   pthread_cond_init(&composite_queue_cond_, NULL);
+
+
+  vop_bw_fd_ = open(VOP_BW_PATH, O_WRONLY);
+  if(vop_bw_fd_ < 0)
+  {
+    char buf[80];
+    strerror_r(errno, buf, sizeof(buf));
+    ALOGE("vop_bw: Error opening %s: %s\n", VOP_BW_PATH, buf);
+  }
 
   initialized_ = true;
   return 0;
@@ -1033,6 +1046,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 
   int ret = 0;
   uint32_t afbc_plane_id = 0;
+  uint32_t plane_size = 0;
+  uint32_t vop_bandwidth = 0, total_bandwidth = 0;
 
   std::vector<DrmHwcLayer> &layers = display_comp->layers();
   std::vector<DrmCompositionPlane> &comp_planes =
@@ -1301,6 +1316,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 
     int dst_l,dst_t,dst_w,dst_h;
     int src_l,src_t,src_w,src_h;
+    float hfactor;
+    int scale_factor;
+    float src_bpp;
 
     src_l = (int)source_crop.left;
     src_t = (int)source_crop.top;
@@ -1387,6 +1405,16 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       break;
     }
 
+    hfactor = (float)src_w/dst_w;
+    scale_factor = hfactor > 1.0 ? 2:1;
+    src_bpp = getPixelWidthByAndroidFormat(format);
+    vop_bandwidth = src_w * src_h * src_bpp * scale_factor;
+    total_bandwidth += vop_bandwidth;
+    ALOGD_IF(log_level(DBG_VERBOSE),"vop_bw: plane=%d,w=%d,h=%d,bpp=%f,scale_factor=%d,vop_bandwidth=%d bytes",
+                (plane ? plane->id() : -1),src_w,src_h,src_bpp,scale_factor,vop_bandwidth);
+
+    plane_size++;
+
     size_t index=0;
     std::ostringstream out_log;
 
@@ -1404,6 +1432,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #if USE_AFBC_LAYER
             << ", is_afbc=" << is_afbc
 #endif
+            << ", vop_bandwidth=" << vop_bandwidth
             ;
     index++;
 
@@ -1442,6 +1471,23 @@ out:
 
   if (!ret) {
     uint32_t flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
+    char vop_bw_str[50];
+    int w_len = 0;
+    char buf[80];
+
+    total_bandwidth = total_bandwidth /(1024.0 * 1024.0) * 60;
+    sprintf(vop_bw_str,"%d,%d", plane_size, total_bandwidth);
+    ALOGD_IF(log_level(DBG_VERBOSE),"vop_bw: plane_size=%d, total_bandwidth=%d M, vop_bw_str=%s", plane_size, total_bandwidth, vop_bw_str);
+    if(vop_bw_fd_ > 0)
+    {
+        w_len = write(vop_bw_fd_, vop_bw_str, strlen(vop_bw_str));
+        if(w_len < 0)
+        {
+            strerror_r(errno, buf, sizeof(buf));
+            ALOGE("vop_bw: Error writing to fd=%d: %s\n", vop_bw_fd_, buf);
+        }
+    }
+
     if (test_only)
       flags |= DRM_MODE_ATOMIC_TEST_ONLY;
 
