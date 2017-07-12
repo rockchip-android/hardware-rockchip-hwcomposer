@@ -50,9 +50,28 @@ int hwc_init_version()
 }
 
 #if USE_AFBC_LAYER
+
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+int HALPixelFormatGetCompression(int iFormat)
+{
+	/* Extension format. Return only the compression bits. */
+	if (iFormat >= 0x100 && iFormat <= 0x1FF)
+		return (iFormat & 0x70) >> 4;
+
+	/* Upstream formats are not compressible unless they are redefined as
+	 * extension formats (e.g. RGB_565, BGRA_8888).
+	 */
+	return HAL_FB_COMPRESSION_NONE;
+}
+#endif
+
 bool isAfbcInternalFormat(uint64_t internal_format)
 {
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+    return (HALPixelFormatGetCompression(internal_format)==HAL_FB_COMPRESSION_NONE)?false:true;
+#else
     return (internal_format & GRALLOC_ARM_INTFMT_AFBC);
+#endif
 }
 #endif
 
@@ -491,6 +510,8 @@ bool vop_support_format(uint32_t hal_format) {
     case HAL_PIXEL_FORMAT_RGB_565:
     case HAL_PIXEL_FORMAT_YCrCb_NV12:
     case HAL_PIXEL_FORMAT_YCrCb_NV12_10:
+    case FBDC_BGRA_8888:
+    case FBDC_RGBA_8888:
         return true;
     default:
       return false;

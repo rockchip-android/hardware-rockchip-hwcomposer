@@ -9,7 +9,9 @@
 
 
 namespace android {
-
+//G6110_SUPPORT_FBDC
+#define FBDC_BGRA_8888                  0x125 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_BGRA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
+#define FBDC_RGBA_8888                  0x121 //HALPixelFormatSetCompression(HAL_PIXEL_FORMAT_RGBA_8888,HAL_FB_COMPRESSION_DIRECT_16x4)
 
 #define MOST_WIN_ZONES                  4
 #if RK_STEREO

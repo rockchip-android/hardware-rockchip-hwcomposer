@@ -48,9 +48,14 @@ namespace android {
 #define UN_USED(arg)     (arg=arg)
 
 #if USE_AFBC_LAYER
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+#define HAL_FB_COMPRESSION_NONE                0
+#else
 #define GRALLOC_ARM_INTFMT_EXTENSION_BIT_START          32
 /* This format will use AFBC */
 #define	    GRALLOC_ARM_INTFMT_AFBC                     (1ULL << (GRALLOC_ARM_INTFMT_EXTENSION_BIT_START+0))
+#endif
+
 #define SKIP_BOOT                                       (1)
 #define MAGIC_USAGE_FOR_AFBC_LAYER                      (0x88)
 #endif

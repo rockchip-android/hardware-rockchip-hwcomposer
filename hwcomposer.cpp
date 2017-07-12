@@ -925,7 +925,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 return false;
             }
 
-            if(internal_format & GRALLOC_ARM_INTFMT_AFBC)
+            if(isAfbcInternalFormat(internal_format))
                 iFbdcCnt++;
 #endif
         }
