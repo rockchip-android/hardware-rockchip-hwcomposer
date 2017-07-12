@@ -34,6 +34,10 @@ class DrmMode {
   bool equal(uint32_t width, uint32_t height, uint32_t vrefresh, bool interlaced) const;
   bool equal(uint32_t width, uint32_t height, uint32_t vrefresh,
                      uint32_t flag, uint32_t clk, bool interlaced) const;
+  bool equal(uint32_t width, uint32_t height, float vrefresh,
+             uint32_t hsync_start, uint32_t hsync_end, uint32_t htotal,
+             uint32_t vsync_start, uint32_t vsync_end, uint32_t vtotal,
+             uint32_t flag) const;
   void ToDrmModeModeInfo(drm_mode_modeinfo *m) const;
 
   uint32_t id() const;

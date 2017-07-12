@@ -144,9 +144,12 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
 {
   char resolution[PROPERTY_VALUE_MAX];
   char resolution_3d[PROPERTY_VALUE_MAX];
-  uint32_t width, height, vrefresh;
+  uint32_t width, height, flags;
+  uint32_t hsync_start, hsync_end, htotal;
+  uint32_t vsync_start, vsync_end, vtotal;
   uint32_t width_3d, height_3d, vrefresh_3d, flag_3d, clk_3d;
   bool interlaced, interlaced_3d;
+  float vrefresh;
   char val,val_3d;
 
   if (display == HWC_DISPLAY_PRIMARY)
@@ -184,15 +187,14 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
  }
  else
  {
-      sscanf(resolution, "%dx%d%c%d", &width, &height, &val, &vrefresh);
-      if (val == 'i')
-        interlaced = true;
-      else
-        interlaced = false;
+      sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &width, &height,
+             &vrefresh, &hsync_start, &hsync_end, &htotal, &vsync_start,
+             &vsync_end, &vtotal, &flags);
 
       if (width != 0 && height != 0) {
         for (const DrmMode &conn_mode : c->modes()) {
-          if (conn_mode.equal(width, height, vrefresh, interlaced)) {
+          if (conn_mode.equal(width, height, vrefresh, hsync_start, hsync_end,
+                              htotal, vsync_start, vsync_end, vtotal, flags)) {
             c->set_best_mode(conn_mode);
             return 0;
           }

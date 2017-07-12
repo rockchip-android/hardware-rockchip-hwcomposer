@@ -18,6 +18,7 @@
 #include "drmresources.h"
 
 #include <stdint.h>
+#include <math.h>
 #include <string>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -82,6 +83,25 @@ bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
     return true;
   return false;
 }
+
+bool DrmMode::equal(uint32_t width, uint32_t height, float vrefresh,
+                    uint32_t hsync_start, uint32_t hsync_end, uint32_t htotal,
+                    uint32_t vsync_start, uint32_t vsync_end, uint32_t vtotal,
+                    uint32_t flags) const
+{
+  float v_refresh = clock_ / (float)(v_total_ * h_total_) * 1000.0f;
+
+  if (fabs(v_refresh - vrefresh) > 0.01f)
+    return false;
+
+  if (h_display_ == width && v_display_ == height &&
+      hsync_start == h_sync_start_ && hsync_end == h_sync_end_ &&
+      vsync_start == v_sync_start_ && vsync_end == v_sync_end_ &&
+      htotal == h_total_ && vtotal == v_total_ && flags == flags_)
+    return true;
+  return false;
+}
+
 
 bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
                      uint32_t flag, uint32_t clk, bool interlaced) const
