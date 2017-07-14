@@ -38,6 +38,7 @@
 #include <inttypes.h>
 #include <iostream>
 #include <sstream>
+#include <assert.h>
 
 //you can define it in external/libdrm/include/drm/drm.h
 #define DRM_CLIENT_CAP_SHARE_PLANES     4
