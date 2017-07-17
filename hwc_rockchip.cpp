@@ -1,6 +1,9 @@
 #define LOG_TAG "hwc_rk"
 
 #include <inttypes.h>
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+#include <hardware/img_gralloc_public.h>
+#endif
 #include "hwc_rockchip.h"
 #include "hwc_util.h"
 
@@ -1677,14 +1680,22 @@ void video_ui_optimize(const gralloc_module_t *gralloc, hwc_display_contents_1_t
                         int iHeight = hwc_get_handle_height(gralloc,second_layer->handle);
 #endif
                         unsigned int *cpu_addr;
+
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+                        IMG_native_handle_t * pvHandle = (IMG_native_handle_t *)second_layer->handle;
+                        cpu_addr= (unsigned int *)pvHandle->pvBase;
+#else
                         gralloc->lock(gralloc, second_layer->handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
                                 0, 0, iWidth, iHeight, (void **)&cpu_addr);
+#endif
                         ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
                         if(!ret){
                             hd->bHideUi = true;
                             ALOGD_IF(log_level(DBG_VERBOSE), "@video UI close,iWidth=%d,iHeight=%d",iWidth,iHeight);
                         }
+#ifndef TARGET_BOARD_PLATFORM_RK3368
                         gralloc->unlock(gralloc, second_layer->handle);
+#endif
                     }
 
                     if(hd->bHideUi)
