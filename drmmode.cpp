@@ -75,6 +75,17 @@ bool DrmMode::operator==(const DrmMode &m) const {
          v_scan_ == m.v_scan() && flags_ == m.flags() && type_ == m.type();
 }
 
+bool DrmMode::equal(const DrmMode &m) const {
+  if (clock_ == m.clock() && h_display_ == m.h_display()&&
+      h_sync_start_ == m.h_sync_start() && h_sync_end_ == m.h_sync_end() &&
+      h_total_ == m.h_total()&&
+      v_display_ == m.v_display() && v_sync_start_ == m.v_sync_start() &&
+      v_sync_end_ == m.v_sync_end() && v_total_ == m.v_total()
+      && flags_ == m.flags())
+        return true;
+  return false;
+}
+
 bool DrmMode::equal(uint32_t width, uint32_t height, uint32_t vrefresh,
                     bool interlaced) const
 {
@@ -90,6 +101,7 @@ bool DrmMode::equal(uint32_t width, uint32_t height, float vrefresh,
                     uint32_t flags) const
 {
   float v_refresh = clock_ / (float)(v_total_ * h_total_) * 1000.0f;
+  uint32_t flags_temp;
 
   if (fabs(v_refresh - vrefresh) > 0.01f)
     return false;
@@ -99,6 +111,17 @@ bool DrmMode::equal(uint32_t width, uint32_t height, float vrefresh,
       vsync_start == v_sync_start_ && vsync_end == v_sync_end_ &&
       htotal == h_total_ && vtotal == v_total_ && flags == flags_)
     return true;
+
+  if (h_display_ == width && v_display_ == height &&
+      hsync_start == h_sync_start_ && hsync_end == h_sync_end_ &&
+      vsync_start == v_sync_start_ && vsync_end == v_sync_end_ &&
+      htotal == h_total_ && vtotal == v_total_ ) {
+        flags_temp = DRM_MODE_FLAG_PHSYNC|DRM_MODE_FLAG_NHSYNC|DRM_MODE_FLAG_PVSYNC|
+                         DRM_MODE_FLAG_NVSYNC|DRM_MODE_FLAG_INTERLACE|
+                         DRM_MODE_FLAG_420_MASK;
+        if((flags & flags_temp) == (flags_ & flags_temp))
+          return true;
+      }
   return false;
 }
 

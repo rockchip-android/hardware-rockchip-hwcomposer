@@ -152,6 +152,8 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   float vrefresh;
   char val,val_3d;
   uint32_t timeline;
+  uint32_t MaxResolution = 0,temp;
+  uint32_t flags_temp;
 
   timeline = property_get_int32("sys.display.timeline", 0);
   /*
@@ -190,11 +192,11 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
                    width_3d,height_3d,val_3d,vrefresh_3d,flag_3d,clk_3d);
             c->set_best_mode(conn_mode);
             return 0;
-          }
         }
       }
+    }
  }
- else
+ else if (strcmp(resolution,"Auto") != 0)
  {
       sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &width, &height,
              &vrefresh, &hsync_start, &hsync_end, &htotal, &vsync_start,
@@ -207,20 +209,25 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
             c->set_best_mode(conn_mode);
             return 0;
           }
-        }
       }
+    }
  }
 
   for (const DrmMode &conn_mode : c->modes()) {
     if (conn_mode.type() & DRM_MODE_TYPE_PREFERRED) {
       c->set_best_mode(conn_mode);
       return 0;
+    } else {
+      temp = conn_mode.h_display()*conn_mode.v_display();
+      if(MaxResolution <= temp)
+        MaxResolution = temp;
     }
   }
-
   for (const DrmMode &conn_mode : c->modes()) {
+    if(MaxResolution == conn_mode.h_display()*conn_mode.v_display()) {
      c->set_best_mode(conn_mode);
      return 0;
+    }
   }
 
   ALOGE("Error: Should not get here display=%d %s %d\n", display, __FUNCTION__, __LINE__);

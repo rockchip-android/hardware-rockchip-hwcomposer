@@ -73,6 +73,7 @@ class DrmResources {
     return sort_planes_;
   }
 
+  bool mode_verify(const DrmMode &mode);
   void DisplayChanged(void);
   void SetPrimaryDisplay(DrmConnector *c);
   void SetExtendDisplay(DrmConnector *c);
@@ -116,6 +117,7 @@ class DrmResources {
 #endif
 
  private:
+  void init_white_modes(void);
   int TryEncoderForDisplay(int display, DrmEncoder *enc);
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
                   DrmProperty *property);
@@ -140,6 +142,7 @@ class DrmResources {
   DrmCompositor compositor_;
   DrmEventListener event_listener_;
   const gralloc_module_t *gralloc_;
+  std::vector<DrmMode> white_modes_;
 };
 }
 

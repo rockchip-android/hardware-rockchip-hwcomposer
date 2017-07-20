@@ -29,8 +29,12 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	librga
 
+LOCAL_STATIC_LIBRARIES := \
+	libtinyxml2
+
 LOCAL_C_INCLUDES := \
         hardware/rockchip/libgralloc \
+	external/tinyxml2 \
 	external/libdrm \
 	external/libdrm/include/drm \
 	system/core/include/utils \

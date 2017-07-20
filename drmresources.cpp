@@ -33,6 +33,7 @@
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <drm_fourcc.h>
+#include <tinyxml2.h>
 
 #include <inttypes.h>
 
@@ -61,10 +62,63 @@ bool SortByZpos(const PlaneGroup* planeGroup1,const PlaneGroup* planeGroup2)
     return planeGroup1->zpos < planeGroup2->zpos;
 }
 
+void DrmResources::init_white_modes(void)
+{
+  tinyxml2::XMLDocument doc;
+
+  doc.LoadFile("/system/usr/share/resolution_white.xml");
+
+  tinyxml2::XMLElement* root=doc.RootElement();
+  if (!root)
+    return;
+
+  tinyxml2::XMLElement* resolution =root->FirstChildElement("resolution");
+
+  while (resolution) {
+    drmModeModeInfo m;
+
+  #define PARSE(x) \
+    tinyxml2::XMLElement* _##x = resolution->FirstChildElement(#x); \
+    if (!_##x) { \
+      ALOGE("------> failed to parse %s\n", #x); \
+      resolution = resolution->NextSiblingElement(); \
+      continue; \
+    } \
+    m.x = atoi(_##x->GetText())
+    PARSE(clock);
+    PARSE(hdisplay);
+    PARSE(hsync_start);
+    PARSE(hsync_end);
+    PARSE(hskew);
+    PARSE(vdisplay);
+    PARSE(vsync_start);
+    PARSE(vsync_end);
+    PARSE(vscan);
+    PARSE(vrefresh);
+    PARSE(flags);
+
+    DrmMode mode(&m);
+    white_modes_.push_back(mode);
+    resolution = resolution->NextSiblingElement();
+  }
+}
+
+bool DrmResources::mode_verify(const DrmMode &m) {
+  if (!white_modes_.size())
+    return true;
+
+  for (const DrmMode &mode : white_modes_) {
+    if(mode.h_display() == m.h_display() && mode.v_display() == m.v_display())
+      return true;
+  }
+  return false;
+}
+
 int DrmResources::Init() {
   char path[PROPERTY_VALUE_MAX];
   property_get("hwc.drm.device", path, "/dev/dri/card0");
 
+  init_white_modes();
   /* TODO: Use drmOpenControl here instead */
   fd_.Set(open(path, O_RDWR));
   if (fd() < 0) {
