@@ -102,8 +102,14 @@ bool DrmMode::equal(uint32_t width, uint32_t height, float vrefresh,
 {
   float v_refresh = clock_ / (float)(v_total_ * h_total_) * 1000.0f;
   uint32_t flags_temp;
+  if (flags_ & DRM_MODE_FLAG_INTERLACE)
+    v_refresh *= 2;
+  if (flags_ & DRM_MODE_FLAG_DBLSCAN)
+    v_refresh /= 2;
+  if (v_scan_ > 1)
+    v_refresh /= v_scan_ ;
 
-  if (fabs(v_refresh - vrefresh) > 0.01f)
+  if (fabs(v_refresh - vrefresh) > 1.0f)
     return false;
 
   if (h_display_ == width && v_display_ == height &&
