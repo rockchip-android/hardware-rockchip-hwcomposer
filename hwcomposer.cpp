@@ -289,18 +289,20 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   /*
    * force update propetry when timeline is zero or not exist.
    */
-  if (timeline && timeline == hd->display_timeline)
+  if (timeline && timeline == hd->display_timeline &&
+      hd->hotplug_timeline == hd->ctx->drm.timeline())
     return 0;
   hd->display_timeline = timeline;
+  hd->hotplug_timeline = hd->ctx->drm.timeline();
 
   if (display == HWC_DISPLAY_PRIMARY)
   {
-    property_get("persist.sys.resolution.main", resolution, "0x0p0");
+    property_get("persist.sys.resolution.main", resolution, "Auto");
     property_get("sys.3d_resolution.main", resolution_3d, "0x0p0-0:0");
   }
   else
   {
-    property_get("persist.sys.resolution.aux", resolution, "0x0p0");
+    property_get("persist.sys.resolution.aux", resolution, "Auto");
     property_get("sys.3d_resolution.aux", resolution_3d, "0x0p0-0:0");
   }
 

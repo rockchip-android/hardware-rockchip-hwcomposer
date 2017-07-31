@@ -726,7 +726,13 @@ int DrmResources::UpdateDisplayRoute(void)
 
   drmModeAtomicFree(pset);
 
+  hotplug_timeline++;
+
   return 0;
+}
+
+int DrmResources::timeline(void) {
+  return hotplug_timeline;
 }
 
 int DrmResources::CreatePropertyBlob(void *data, size_t length,

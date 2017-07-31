@@ -96,6 +96,7 @@ class DrmResources {
   int SetDpmsMode(int display, uint64_t mode);
   int UpdateDisplayRoute(void);
   void ClearDisplay(void);
+  int timeline(void);
 
   int CreatePropertyBlob(void *data, size_t length, uint32_t *blob_id);
   int DestroyPropertyBlob(uint32_t blob_id);
@@ -132,6 +133,7 @@ class DrmResources {
   bool enable_changed_;
   DrmConnector *primary_;
   DrmConnector *extend_;
+  int hotplug_timeline;
 
   std::vector<std::unique_ptr<DrmConnector>> connectors_;
   std::vector<std::unique_ptr<DrmEncoder>> encoders_;
