@@ -69,6 +69,7 @@ void DrmResources::init_white_modes(void)
   doc.LoadFile("/system/usr/share/resolution_white.xml");
 
   tinyxml2::XMLElement* root=doc.RootElement();
+  /* usr tingxml2 to parse resolution.xml */
   if (!root)
     return;
 
@@ -98,6 +99,7 @@ void DrmResources::init_white_modes(void)
     PARSE(flags);
 
     DrmMode mode(&m);
+    /* add modes in "resolution.xml" to white list */
     white_modes_.push_back(mode);
     resolution = resolution->NextSiblingElement();
   }

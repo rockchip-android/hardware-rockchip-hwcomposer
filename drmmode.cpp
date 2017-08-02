@@ -109,6 +109,7 @@ bool DrmMode::equal(uint32_t width, uint32_t height, float vrefresh,
   if (v_scan_ > 1)
     v_refresh /= v_scan_ ;
 
+  /* vrefresh within 1 HZ */
   if (fabs(v_refresh - vrefresh) > 1.0f)
     return false;
 

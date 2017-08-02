@@ -297,6 +297,7 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
 
   if (display == HWC_DISPLAY_PRIMARY)
   {
+    /* if resolution is null,set to "Auto" */
     property_get("persist.sys.resolution.main", resolution, "Auto");
     property_get("sys.3d_resolution.main", resolution_3d, "0x0p0-0:0");
   }

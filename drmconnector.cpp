@@ -78,6 +78,7 @@ const DrmMode &DrmConnector::best_mode() const {
   return best_mode_;
 }
 
+/* update mode infomation */
 int DrmConnector::UpdateModes() {
   int fd = drm_->fd();
 
