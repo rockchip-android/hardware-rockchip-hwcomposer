@@ -62,6 +62,7 @@ namespace android {
 static int hwc_set_active_config(struct hwc_composer_device_1 *dev, int display,
                                  int index);
 
+static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnector *c);
 
 #if SKIP_BOOT
 static unsigned int g_boot_cnt = 0;
@@ -135,107 +136,6 @@ struct CheckedOutputFd {
   std::string description_;
   DummySwSyncTimeline &timeline_;
 };
-
-/**
- * sys.3d_resolution.main 1920x1080p60-114693:148500
- * width x height p|i refresh-flag:clock
- */
-static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnector *c)
-{
-  char resolution[PROPERTY_VALUE_MAX];
-  char resolution_3d[PROPERTY_VALUE_MAX];
-  uint32_t width, height, flags;
-  uint32_t hsync_start, hsync_end, htotal;
-  uint32_t vsync_start, vsync_end, vtotal;
-  uint32_t width_3d, height_3d, vrefresh_3d, flag_3d, clk_3d;
-  bool interlaced, interlaced_3d;
-  float vrefresh;
-  char val,val_3d;
-  uint32_t timeline;
-  uint32_t MaxResolution = 0,temp;
-  uint32_t flags_temp;
-
-  timeline = property_get_int32("sys.display.timeline", 0);
-  /*
-   * force update propetry when timeline is zero or not exist.
-   */
-  if (timeline && timeline == hd->display_timeline)
-    return 0;
-  hd->display_timeline = timeline;
-
-  if (display == HWC_DISPLAY_PRIMARY)
-  {
-    property_get("persist.sys.resolution.main", resolution, "0x0p0");
-    property_get("sys.3d_resolution.main", resolution_3d, "0x0p0-0:0");
-  }
-  else
-  {
-    property_get("persist.sys.resolution.aux", resolution, "0x0p0");
-    property_get("sys.3d_resolution.aux", resolution_3d, "0x0p0-0:0");
-  }
-
- if(hd->is_3d && strcmp(resolution_3d,"0x0p0-0:0"))
- {
-      ALOGD_IF(log_level(DBG_DEBUG), "Enter 3d resolution=%s",resolution_3d);
-      sscanf(resolution_3d, "%dx%d%c%d-%d:%d", &width_3d, &height_3d, &val_3d,
-            &vrefresh_3d, &flag_3d, &clk_3d);
-
-      if (val_3d == 'i')
-        interlaced_3d = true;
-      else
-        interlaced_3d = false;
-
-      if (width_3d != 0 && height_3d != 0) {
-        for (const DrmMode &conn_mode : c->modes()) {
-          if (conn_mode.equal(width_3d, height_3d, vrefresh_3d,  flag_3d, clk_3d, interlaced_3d)) {
-             ALOGD_IF(log_level(DBG_DEBUG), "Match 3D parameters: w=%d,h=%d,val=%c,vrefresh_3d=%d,flag=%d,clk=%d",
-                   width_3d,height_3d,val_3d,vrefresh_3d,flag_3d,clk_3d);
-            c->set_best_mode(conn_mode);
-            return 0;
-        }
-      }
-    }
- }
- else if (strcmp(resolution,"Auto") != 0)
- {
-      sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &width, &height,
-             &vrefresh, &hsync_start, &hsync_end, &htotal, &vsync_start,
-             &vsync_end, &vtotal, &flags);
-
-      if (width != 0 && height != 0) {
-        for (const DrmMode &conn_mode : c->modes()) {
-          if (conn_mode.equal(width, height, vrefresh, hsync_start, hsync_end,
-                              htotal, vsync_start, vsync_end, vtotal, flags)) {
-            c->set_best_mode(conn_mode);
-            return 0;
-          }
-      }
-    }
- }
-
-  for (const DrmMode &conn_mode : c->modes()) {
-    if (conn_mode.type() & DRM_MODE_TYPE_PREFERRED) {
-      c->set_best_mode(conn_mode);
-      return 0;
-    } else {
-      temp = conn_mode.h_display()*conn_mode.v_display();
-      if(MaxResolution <= temp)
-        MaxResolution = temp;
-    }
-  }
-  for (const DrmMode &conn_mode : c->modes()) {
-    if(MaxResolution == conn_mode.h_display()*conn_mode.v_display()) {
-     c->set_best_mode(conn_mode);
-     return 0;
-    }
-  }
-
-  ALOGE("Error: Should not get here display=%d %s %d\n", display, __FUNCTION__, __LINE__);
-  DrmMode mode;
-  c->set_best_mode(mode);
-
-  return -ENOENT;
-}
 
 // map of display:hwc_drm_display_t
 typedef std::map<int, hwc_drm_display_t> DisplayMap;
@@ -365,6 +265,108 @@ struct hwc_context_t {
     std::vector<DrmCompositionDisplayPlane> comp_plane_group;
     std::vector<DrmHwcDisplayContents> layer_contents;
 };
+
+/**
+ * sys.3d_resolution.main 1920x1080p60-114693:148500
+ * width x height p|i refresh-flag:clock
+ */
+static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnector *c)
+{
+  char resolution[PROPERTY_VALUE_MAX];
+  char resolution_3d[PROPERTY_VALUE_MAX];
+  uint32_t width, height, flags;
+  uint32_t hsync_start, hsync_end, htotal;
+  uint32_t vsync_start, vsync_end, vtotal;
+  uint32_t width_3d, height_3d, vrefresh_3d, flag_3d, clk_3d;
+  bool interlaced, interlaced_3d;
+  float vrefresh;
+  char val,val_3d;
+  uint32_t timeline;
+  uint32_t MaxResolution = 0,temp;
+  uint32_t flags_temp;
+
+  timeline = property_get_int32("sys.display.timeline", 0);
+  /*
+   * force update propetry when timeline is zero or not exist.
+   */
+  if (timeline && timeline == hd->display_timeline)
+    return 0;
+  hd->display_timeline = timeline;
+
+  if (display == HWC_DISPLAY_PRIMARY)
+  {
+    property_get("persist.sys.resolution.main", resolution, "0x0p0");
+    property_get("sys.3d_resolution.main", resolution_3d, "0x0p0-0:0");
+  }
+  else
+  {
+    property_get("persist.sys.resolution.aux", resolution, "0x0p0");
+    property_get("sys.3d_resolution.aux", resolution_3d, "0x0p0-0:0");
+  }
+
+  if(hd->is_3d && strcmp(resolution_3d,"0x0p0-0:0"))
+  {
+    ALOGD_IF(log_level(DBG_DEBUG), "Enter 3d resolution=%s",resolution_3d);
+    sscanf(resolution_3d, "%dx%d%c%d-%d:%d", &width_3d, &height_3d, &val_3d,
+          &vrefresh_3d, &flag_3d, &clk_3d);
+
+    if (val_3d == 'i')
+      interlaced_3d = true;
+    else
+      interlaced_3d = false;
+
+    if (width_3d != 0 && height_3d != 0) {
+      for (const DrmMode &conn_mode : c->modes()) {
+        if (conn_mode.equal(width_3d, height_3d, vrefresh_3d,  flag_3d, clk_3d, interlaced_3d)) {
+          ALOGD_IF(log_level(DBG_DEBUG), "Match 3D parameters: w=%d,h=%d,val=%c,vrefresh_3d=%d,flag=%d,clk=%d",
+                width_3d,height_3d,val_3d,vrefresh_3d,flag_3d,clk_3d);
+          c->set_best_mode(conn_mode);
+          return 0;
+        }
+      }
+    }
+  }
+  else if (strcmp(resolution,"Auto") != 0)
+  {
+    sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &width, &height,
+            &vrefresh, &hsync_start, &hsync_end, &htotal, &vsync_start,
+            &vsync_end, &vtotal, &flags);
+
+    if (width != 0 && height != 0) {
+      for (const DrmMode &conn_mode : c->modes()) {
+        if (conn_mode.equal(width, height, vrefresh, hsync_start, hsync_end,
+                            htotal, vsync_start, vsync_end, vtotal, flags)) {
+          c->set_best_mode(conn_mode);
+          return 0;
+        }
+      }
+    }
+  }
+
+  for (const DrmMode &conn_mode : c->modes()) {
+    if (conn_mode.type() & DRM_MODE_TYPE_PREFERRED) {
+      c->set_best_mode(conn_mode);
+      return 0;
+    }
+    else {
+      temp = conn_mode.h_display()*conn_mode.v_display();
+      if(MaxResolution <= temp)
+        MaxResolution = temp;
+    }
+  }
+  for (const DrmMode &conn_mode : c->modes()) {
+    if(MaxResolution == conn_mode.h_display()*conn_mode.v_display()) {
+      c->set_best_mode(conn_mode);
+      return 0;
+    }
+  }
+
+  ALOGE("Error: Should not get here display=%d %s %d\n", display, __FUNCTION__, __LINE__);
+  DrmMode mode;
+  c->set_best_mode(mode);
+
+  return -ENOENT;
+}
 
 static native_handle_t *dup_buffer_handle(buffer_handle_t handle) {
   native_handle_t *new_handle =
