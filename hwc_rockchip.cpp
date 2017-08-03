@@ -1084,14 +1084,27 @@ bool MatchPlanes(
         (*iter)->bUse=false;
         for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
             iter_plane != (*iter)->planes.end(); ++iter_plane) {
-            if(is_interlaced && (*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() > 2)
+
+            if(is_interlaced)
             {
-                (*iter_plane)->set_use(true);
-                ALOGD_IF(log_level(DBG_DEBUG), "MatchPlanes in interlaced mode, close plane id=%d",(*iter_plane)->id());
-                continue;
+                if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() > 2)
+                {
+                    (*iter_plane)->set_use(true);
+                    ALOGD_IF(log_level(DBG_DEBUG), "MatchPlanes in interlaced mode, close plane id=%d",(*iter_plane)->id());
+                    continue;
+                }
+                if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() == 1)  //only init the special crtc's plane
+                    (*iter_plane)->set_use(false);
+                else
+                    (*iter_plane)->set_use(true);
             }
-            if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() == 1)  //only init the special crtc's plane
-                (*iter_plane)->set_use(false);
+            else
+            {
+                if((*iter_plane)->GetCrtcSupported(*crtc))  //only init the special crtc's plane
+                    (*iter_plane)->set_use(false);
+                else
+                    (*iter_plane)->set_use(true);
+            }
         }
     }
 
