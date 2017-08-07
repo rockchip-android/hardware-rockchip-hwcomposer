@@ -1460,11 +1460,12 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     if(bAllMatch)
         goto AllMatch;
 
-    if((int)layers.size() < iPlaneSize || iPlaneSize < 4)
+    if( layers.size() < 2 || iPlaneSize < 4)
     {
         ALOGD_IF(log_level(DBG_DEBUG), "%s:line=%d fail match iPlaneSize=%d, layer size=%d",__FUNCTION__,__LINE__,iPlaneSize,(int)layers.size());
         goto FailMatch;
     }
+
 
     /*************************mix up*************************
      Video ovelay
@@ -1481,7 +1482,10 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     {
         if(hd->mixMode != HWC_MIX_UP)
             hd->mixMode = HWC_MIX_UP;
-        layer_indices.first = 3;
+        if((int)layers.size() < 4)
+            layer_indices.first = layers.size() - 2;
+        else
+            layer_indices.first = 3;
         layer_indices.second = layers.size() - 1;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up for video (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
         bAllMatch = try_mix_policy(drm, crtc,hd->is_interlaced,  layers, tmp_layers, iPlaneSize, composition_planes,
@@ -1523,7 +1527,10 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     {
         if(hd->mixMode != HWC_MIX_UP)
             hd->mixMode = HWC_MIX_UP;
-        layer_indices.first = 3;
+        if((int)layers.size() < 4)
+            layer_indices.first = layers.size() - 2;
+        else
+            layer_indices.first = 3;
         layer_indices.second = layers.size() - 1;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
         bAllMatch = try_mix_policy(drm, crtc, hd->is_interlaced, layers, tmp_layers, iPlaneSize, composition_planes,
