@@ -125,10 +125,10 @@ bool vop_support_format(uint32_t hal_format);
 bool vop_support_scale(hwc_layer_1_t *layer);
 bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask);
 bool match_process(DrmResources* drm, DrmCrtc *crtc, bool is_interlaced,
-                        std::vector<DrmHwcLayer>& layers, int iPlaneSize,
+                        std::vector<DrmHwcLayer>& layers, int iPlaneSize, int fbSize,
                         std::vector<DrmCompositionPlane>& composition_planes);
 bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
-                std::vector<DrmHwcLayer>& layers, int iPlaneSize,
+                std::vector<DrmHwcLayer>& layers, int iPlaneSize, int fbSize,
                 std::vector<DrmCompositionPlane>& composition_planes);
 #if RK_VIDEO_UI_OPT
 void video_ui_optimize(const gralloc_module_t *gralloc, hwc_display_contents_1_t *display_content, hwc_drm_display_t *hd);
