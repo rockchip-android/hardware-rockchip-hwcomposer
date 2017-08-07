@@ -1045,9 +1045,15 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         iter != plane_groups.end(); ++iter)
     {
         if(hd->is_interlaced && (*iter)->planes.size() > 2)
+        {
+            (*iter)->b_reserved = true;
             continue;
+        }
         if(GetCrtcSupported(*crtc, (*iter)->possible_crtcs))
+        {
+            (*iter)->b_reserved = false;
             hd->iPlaneSize++;
+        }
     }
 
 #if SKIP_BOOT

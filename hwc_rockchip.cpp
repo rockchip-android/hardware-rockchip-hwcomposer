@@ -870,7 +870,8 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                DrmCrtc *crtc,
                                DrmResources *drm,
                                std::vector<DrmCompositionPlane>& composition_planes,
-                               bool bMulArea)
+                               bool bMulArea,
+                               bool is_interlaced)
 {
     uint32_t combine_layer_count = 0;
     uint32_t layer_size = layer_vector.size();
@@ -886,7 +887,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
        ALOGD_IF(log_level(DBG_DEBUG),"line=%d,last zpos=%" PRIu64 ",group(%" PRIu64 ") zpos=%d,group bUse=%d,crtc=0x%x,possible_crtcs=0x%x",
                     __LINE__, *zpos, (*iter)->share_id, (*iter)->zpos, (*iter)->bUse, (1<<crtc->pipe()), (*iter)->possible_crtcs);
         //find the match zpos plane group
-        if(!(*iter)->bUse)
+        if(!(*iter)->bUse && !(*iter)->b_reserved)
         {
             ALOGD_IF(log_level(DBG_DEBUG),"line=%d,layer_size=%d,planes size=%zu",__LINE__,layer_size,(*iter)->planes.size());
 
@@ -974,7 +975,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                     bNeed = true;
                             }
 
-                            if(!bNeed && !bMulArea)
+                            if(!bNeed && !bMulArea && !is_interlaced)
                             {
                                 if(!(*iter_layer)->is_yuv && b_yuv)
                                 {
@@ -1084,27 +1085,8 @@ bool MatchPlanes(
         (*iter)->bUse=false;
         for(std::vector<DrmPlane *> ::const_iterator iter_plane=(*iter)->planes.begin();
             iter_plane != (*iter)->planes.end(); ++iter_plane) {
-
-            if(is_interlaced)
-            {
-                if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() > 2)
-                {
-                    (*iter_plane)->set_use(true);
-                    ALOGD_IF(log_level(DBG_DEBUG), "MatchPlanes in interlaced mode, close plane id=%d",(*iter_plane)->id());
-                    continue;
-                }
-                if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter)->planes.size() == 1)  //only init the special crtc's plane
-                    (*iter_plane)->set_use(false);
-                else
-                    (*iter_plane)->set_use(true);
-            }
-            else
-            {
-                if((*iter_plane)->GetCrtcSupported(*crtc))  //only init the special crtc's plane
-                    (*iter_plane)->set_use(false);
-                else
-                    (*iter_plane)->set_use(true);
-            }
+            if((*iter_plane)->GetCrtcSupported(*crtc))  //only init the special crtc's plane
+                (*iter_plane)->set_use(false);
         }
     }
 
@@ -1113,7 +1095,7 @@ bool MatchPlanes(
 
     for (LayerMap::iterator iter = layer_map.begin();
         iter != layer_map.end(); ++iter) {
-        bMatch = MatchPlane(iter->second, &last_zpos, crtc, drm, composition_planes, bMulArea);
+        bMatch = MatchPlane(iter->second, &last_zpos, crtc, drm, composition_planes, bMulArea, is_interlaced);
         if(!bMatch)
         {
             ALOGD_IF(log_level(DBG_DEBUG),"hwc_prepare: Cann't find the match plane for layer group %d",iter->first);
