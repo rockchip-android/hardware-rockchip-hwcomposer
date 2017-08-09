@@ -504,6 +504,27 @@ int hwc_get_handle_primefd(const gralloc_module_t *gralloc, buffer_handle_t hnd)
     return fd;
 }
 
+#if RK_DRM_GRALLOC
+uint32_t hwc_get_handle_phy_addr(const gralloc_module_t *gralloc, buffer_handle_t hnd)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_HADNLE_PHY_ADDR;
+    uint32_t phy_addr = 0;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &phy_addr);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+    }
+
+    return phy_addr;
+}
+#endif
+
 bool vop_support_format(uint32_t hal_format) {
   switch (hal_format) {
     case HAL_PIXEL_FORMAT_RGB_888:

@@ -121,6 +121,9 @@ int hwc_get_handle_size(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 int hwc_get_handle_attributes(const gralloc_module_t *gralloc, buffer_handle_t hnd, std::vector<int> *attrs);
 int hwc_get_handle_attibute(const gralloc_module_t *gralloc, buffer_handle_t hnd, attribute_flag_t flag);
 int hwc_get_handle_primefd(const gralloc_module_t *gralloc, buffer_handle_t hnd);
+#if RK_DRM_GRALLOC
+uint32_t hwc_get_handle_phy_addr(const gralloc_module_t *gralloc, buffer_handle_t hnd);
+#endif
 bool vop_support_format(uint32_t hal_format);
 bool vop_support_scale(hwc_layer_1_t *layer);
 bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask);
