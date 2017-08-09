@@ -973,7 +973,8 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 if(!b_alpha)
                                 {
                                     ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
-                                    ALOGV("layer alpha=0x%x,alpha id=%d",(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support alpha,layer alpha=0x%x,alpha id=%d",
+                                            (*iter_plane)->id(),(*iter_layer)->alpha,(*iter_plane)->alpha_property().id());
                                     continue;
                                 }
                                 else

@@ -860,13 +860,13 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 return true;
             }
         }
-
+#if 0
         if( (layer->blending == HWC_BLENDING_PREMULT)&& layer->planeAlpha!=0xFF )
         {
             ALOGD_IF(log_level(DBG_DEBUG),"layer's blending planeAlpha=0x%x,go to GPU GLES at line=%d", layer->planeAlpha, __LINE__);
             return true;
         }
-
+#endif
         if(layer->handle)
         {
             DumpLayer(layer->LayerName,layer->handle);
@@ -887,14 +887,17 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d",  __LINE__);
                 return true;
             }
-
-            int src_xoffset = layer->sourceCropf.left * getPixelWidthByAndroidFormat(format);
-            if(!IS_ALIGN(src_xoffset,16))
+#if 1
+            if(!strstr(layer->LayerName,"Sprite"))
             {
-                ALOGD_IF(log_level(DBG_DEBUG),"layer's x offset = %d,vop nedd address should 16 bytes alignment,go to GPU GLES at line=%d", src_xoffset,__LINE__);
-                return true;
+                int src_xoffset = layer->sourceCropf.left * getPixelWidthByAndroidFormat(format);
+                if(!IS_ALIGN(src_xoffset,16))
+                {
+                    ALOGD_IF(log_level(DBG_DEBUG),"layer's x offset = %d,vop nedd address should 16 bytes alignment,go to GPU GLES at line=%d", src_xoffset,__LINE__);
+                    return true;
+                }
             }
-
+#endif
 #if 1
             if(!vop_support_scale(layer))
             {
