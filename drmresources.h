@@ -95,6 +95,7 @@ class DrmResources {
   int SetDisplayActiveMode(int display, const DrmMode &mode);
   int SetDpmsMode(int display, uint64_t mode);
   int UpdateDisplayRoute(void);
+  int UpdatePropertys(void);
   void ClearDisplay(void);
   int timeline(void);
 
@@ -134,6 +135,7 @@ class DrmResources {
   DrmConnector *primary_;
   DrmConnector *extend_;
   int hotplug_timeline;
+  int prop_timeline_;
 
   std::vector<std::unique_ptr<DrmConnector>> connectors_;
   std::vector<std::unique_ptr<DrmEncoder>> encoders_;

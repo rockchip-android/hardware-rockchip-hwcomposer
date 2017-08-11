@@ -61,6 +61,10 @@ class DrmConnector {
 
   const DrmProperty &dpms_property() const;
   const DrmProperty &crtc_id_property() const;
+  const DrmProperty &brightness_id_property() const;
+  const DrmProperty &contrast_id_property() const;
+  const DrmProperty &saturation_id_property() const;
+  const DrmProperty &hue_id_property() const;
 
   const std::vector<DrmEncoder *> &possible_encoders() const {
     return possible_encoders_;
@@ -102,6 +106,10 @@ class DrmConnector {
 
   DrmProperty dpms_property_;
   DrmProperty crtc_id_property_;
+  DrmProperty brightness_id_property_;
+  DrmProperty contrast_id_property_;
+  DrmProperty saturation_id_property_;
+  DrmProperty hue_id_property_;
 
   std::vector<DrmEncoder *> possible_encoders_;
 

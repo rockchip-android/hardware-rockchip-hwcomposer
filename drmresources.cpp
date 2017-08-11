@@ -40,6 +40,14 @@
 //you can define it in external/libdrm/include/drm/drm.h
 #define DRM_CLIENT_CAP_SHARE_PLANES     4
 
+#define DRM_ATOMIC_ADD_PROP(object_id, prop_id, value) \
+  if (prop_id) { \
+    ret = drmModeAtomicAddProperty(pset, object_id, prop_id, value); \
+    if (ret < 0) { \
+      ALOGE("Failed to add prop[%d] to [%d]", prop_id, object_id); \
+    } \
+  }
+
 namespace android {
 
 DrmResources::DrmResources() : compositor_(this), event_listener_(this) {
@@ -501,6 +509,59 @@ void DrmResources::ClearDisplay(void)
     }
 }
 
+int DrmResources::UpdatePropertys(void)
+{
+  int timeline = property_get_int32("sys.display.timeline", 0);
+  int ret;
+  /*
+   * force update propetry when timeline is zero or not exist.
+   */
+  if (!timeline || timeline == prop_timeline_)
+    return 0;
+  prop_timeline_ = timeline;
+
+  DrmConnector *primary = GetConnectorFromType(HWC_DISPLAY_PRIMARY);
+  DrmConnector *extend = GetConnectorFromType(HWC_DISPLAY_EXTERNAL);
+
+  drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
+  if (!pset) {
+    ALOGE("Failed to allocate property set");
+    return -ENOMEM;
+  }
+
+  if (primary) {
+    DRM_ATOMIC_ADD_PROP(primary->id(), primary->brightness_id_property().id(),
+                        property_get_int32("persist.sys.brightness.main", 50))
+    DRM_ATOMIC_ADD_PROP(primary->id(), primary->contrast_id_property().id(),
+                        property_get_int32("persist.sys.contrast.main", 50))
+    DRM_ATOMIC_ADD_PROP(primary->id(), primary->saturation_id_property().id(),
+                        property_get_int32("persist.sys.saturation.main", 50))
+    DRM_ATOMIC_ADD_PROP(primary->id(), primary->hue_id_property().id(),
+                        property_get_int32("persist.sys.hue.main", 50))
+  }
+  if (extend) {
+    DRM_ATOMIC_ADD_PROP(extend->id(), extend->brightness_id_property().id(),
+                        property_get_int32("persist.sys.brightness.aux", 50))
+    DRM_ATOMIC_ADD_PROP(extend->id(), extend->contrast_id_property().id(),
+                        property_get_int32("persist.sys.contrast.aux", 50))
+    DRM_ATOMIC_ADD_PROP(extend->id(), extend->saturation_id_property().id(),
+                        property_get_int32("persist.sys.saturation.aux", 50))
+    DRM_ATOMIC_ADD_PROP(extend->id(), extend->hue_id_property().id(),
+                        property_get_int32("persist.sys.hue.aux", 50))
+  }
+
+  uint32_t flags = 0;
+  ret = drmModeAtomicCommit(fd_.get(), pset, flags, this);
+  if (ret < 0) {
+    ALOGE("Failed to commit pset ret=%d\n", ret);
+    drmModeAtomicFree(pset);
+    return ret;
+  }
+  drmModeAtomicFree(pset);
+
+  return 0;
+}
+
 int DrmResources::UpdateDisplayRoute(void)
 {
   bool mode_changed = false;
@@ -598,12 +659,6 @@ int DrmResources::UpdateDisplayRoute(void)
   if (!pset) {
     ALOGE("Failed to allocate property set");
     return -ENOMEM;
-  }
-
-#define DRM_ATOMIC_ADD_PROP(object_id, prop_id, value) \
-  ret = drmModeAtomicAddProperty(pset, object_id, prop_id, value); \
-  if (ret < 0) { \
-    ALOGE("Failed to add prop[%d] to [%d]", prop_id, object_id); \
   }
 
   int ret;

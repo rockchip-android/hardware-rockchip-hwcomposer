@@ -54,6 +54,23 @@ int DrmConnector::Init() {
     ALOGE("Could not get CRTC_ID property\n");
     return ret;
   }
+
+  ret = drm_->GetConnectorProperty(*this, "brightness", &brightness_id_property_);
+  if (ret)
+    ALOGW("Could not get brightness property\n");
+
+  ret = drm_->GetConnectorProperty(*this, "contrast", &contrast_id_property_);
+  if (ret)
+    ALOGW("Could not get contrast property\n");
+
+  ret = drm_->GetConnectorProperty(*this, "saturation", &saturation_id_property_);
+  if (ret)
+    ALOGW("Could not get saturation property\n");
+
+  ret = drm_->GetConnectorProperty(*this, "hue", &hue_id_property_);
+  if (ret)
+    ALOGW("Could not get hue property\n");
+
   return 0;
 }
 
@@ -162,6 +179,19 @@ const DrmProperty &DrmConnector::dpms_property() const {
 
 const DrmProperty &DrmConnector::crtc_id_property() const {
   return crtc_id_property_;
+}
+
+const DrmProperty &DrmConnector::brightness_id_property() const {
+  return brightness_id_property_;
+}
+const DrmProperty &DrmConnector::contrast_id_property() const {
+  return contrast_id_property_;
+}
+const DrmProperty &DrmConnector::saturation_id_property() const {
+  return saturation_id_property_;
+}
+const DrmProperty &DrmConnector::hue_id_property() const {
+  return hue_id_property_;
 }
 
 DrmEncoder *DrmConnector::encoder() const {

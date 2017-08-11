@@ -1589,6 +1589,7 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
   }
 
   ctx->drm.UpdateDisplayRoute();
+  ctx->drm.UpdatePropertys();
   ctx->drm.ClearDisplay();
   std::unique_ptr<DrmComposition> composition(
       ctx->drm.compositor()->CreateComposition(ctx->importer.get()));
