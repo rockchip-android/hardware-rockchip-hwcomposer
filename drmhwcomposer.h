@@ -33,6 +33,9 @@
 /* hdr usage */
 #define HDRUSAGE                                       0x3000000
 
+/* msleep for hotplug in event */
+#define HOTPLUG_MSLEEP			(200)
+
 struct hwc_import_context;
 
 int hwc_import_init(struct hwc_import_context **ctx);

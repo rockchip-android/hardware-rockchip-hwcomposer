@@ -218,6 +218,8 @@ class DrmHotplugHandler : public DrmEventHandler {
     procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 0);
     hd->active = true;
     procs_->hotplug(procs_, HWC_DISPLAY_EXTERNAL, 1);
+    //rk: Avoid fb handle is null which lead HDMI display nothing with GLES.
+    usleep(HOTPLUG_MSLEEP*1000);
     procs_->invalidate(procs_);
   }
 
@@ -281,7 +283,7 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   bool interlaced, interlaced_3d;
   float vrefresh;
   char val,val_3d;
-  uint32_t timeline;
+  int timeline;
   uint32_t MaxResolution = 0,temp;
   uint32_t flags_temp;
 
@@ -906,7 +908,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
 
             if(hd->isHdr)
             {
-                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d",  __LINE__);
+                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d", __LINE__);
                 return true;
             }
 #if 1
@@ -957,13 +959,14 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     }
     if(transform_nv12 > 1 || transform_normal > 0)
     {
+        ALOGD_IF(log_level(DBG_DEBUG), "too many rotate layers,go to GPU GLES at line=%d", __LINE__);
         return true;
     }
 
 #if USE_AFBC_LAYER
     if(iFbdcCnt > 1)
     {
-        ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES",iFbdcCnt);
+        ALOGD_IF(log_level(DBG_DEBUG),"iFbdcCnt=%d,go to GPU GLES line=%d",iFbdcCnt, __LINE__);
         return true;
     }
 #endif
