@@ -730,6 +730,15 @@ int DrmResources::UpdateDisplayRoute(void)
       }
     }
   }
+  if (primary && primary->encoder() && primary->encoder()->crtc())
+    property_set("sys.hwc.device.main", connector_type_str(primary->get_type()));
+  else
+    property_set("sys.hwc.device.main", "");
+
+  if (extend && extend->encoder() && extend->encoder()->crtc())
+    property_set("sys.hwc.device.aux", connector_type_str(extend->get_type()));
+  else
+    property_set("sys.hwc.device.aux", "");
 
   drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
   if (!pset) {
