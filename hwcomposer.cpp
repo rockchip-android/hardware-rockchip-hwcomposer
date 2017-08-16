@@ -150,6 +150,7 @@ class DrmHotplugHandler : public DrmEventHandler {
   void HandleEvent(uint64_t timestamp_us) {
     int ret;
     DrmConnector *extend = NULL;
+    DrmConnector *primary = NULL;
 
     for (auto &conn : drm_->connectors()) {
       drmModeConnection old_state = conn->state();
@@ -165,8 +166,10 @@ class DrmHotplugHandler : public DrmEventHandler {
             conn->id());
 
       if (cur_state == DRM_MODE_CONNECTED) {
-        if (conn->display())
+        if (conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT)
           extend = conn.get();
+        else if (conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT)
+          primary = conn.get();
       }
     }
 
@@ -175,16 +178,47 @@ class DrmHotplugHandler : public DrmEventHandler {
      */
     drm_->DisplayChanged();
 
-    DrmConnector *primary = drm_->GetConnectorFromType(HWC_DISPLAY_PRIMARY);
+    DrmConnector *old_primary = drm_->GetConnectorFromType(HWC_DISPLAY_PRIMARY);
+    primary = primary ? primary : old_primary;
+    if (!primary || primary->state() != DRM_MODE_CONNECTED) {
+      primary = NULL;
+      for (auto &conn : drm_->connectors()) {
+        if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
+          continue;
+        if (conn->state() == DRM_MODE_CONNECTED) {
+          primary = conn.get();
+          break;
+        }
+      }
+    }
+
     if (!primary) {
       ALOGE("%s %d Failed to find primary display\n", __FUNCTION__, __LINE__);
       return;
     }
+    if (primary != old_primary) {
+      hwc_drm_display_t *hd = &(*displays_)[primary->display()];
+      hwc_drm_display_t *old_hd = &(*displays_)[old_primary->display()];
+      update_display_bestmode(hd, HWC_DISPLAY_PRIMARY, primary);
+      DrmMode mode = primary->best_mode();
+
+      hd->framebuffer_width = old_hd->framebuffer_width;
+      hd->framebuffer_height = old_hd->framebuffer_height;
+      hd->rel_xres = mode.h_display();
+      hd->rel_yres = mode.v_display();
+      hd->v_total = mode.v_total();
+      procs_->invalidate(procs_);
+
+      drm_->SetPrimaryDisplay(primary);
+    }
+
     DrmConnector *old_extend = drm_->GetConnectorFromType(HWC_DISPLAY_EXTERNAL);
     extend = extend ? extend : old_extend;
     if (!extend || extend->state() != DRM_MODE_CONNECTED) {
       extend = NULL;
       for (auto &conn : drm_->connectors()) {
+        if (!(conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT))
+          continue;
         if (conn->id() == primary->id())
           continue;
         if (conn->state() == DRM_MODE_CONNECTED) {

@@ -86,6 +86,10 @@ void DrmConnector::set_display(int display) {
   display_ = display;
 }
 
+void DrmConnector::set_display_possible(int possible_displays) {
+  possible_displays_ = possible_displays;
+}
+
 bool DrmConnector::built_in() const {
   return type_ == DRM_MODE_CONNECTOR_LVDS || type_ == DRM_MODE_CONNECTOR_eDP ||
          type_ == DRM_MODE_CONNECTOR_DSI ||

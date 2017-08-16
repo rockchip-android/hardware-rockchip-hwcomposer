@@ -36,6 +36,8 @@
 #include <tinyxml2.h>
 
 #include <inttypes.h>
+#include <iostream>
+#include <sstream>
 
 //you can define it in external/libdrm/include/drm/drm.h
 #define DRM_CLIENT_CAP_SHARE_PLANES     4
@@ -122,6 +124,55 @@ bool DrmResources::mode_verify(const DrmMode &m) {
       return true;
   }
   return false;
+}
+
+void DrmResources::ConfigurePossibleDisplays()
+{
+  char primary_name[PROPERTY_VALUE_MAX];
+  char extend_name[PROPERTY_VALUE_MAX];
+  int primary_length, extend_length;
+  int default_display_possible = 0;
+  std::string conn_name;
+
+  primary_length = property_get("sys.hwc.device.primary", primary_name, NULL);
+  extend_length = property_get("sys.hwc.device.extend", extend_name, NULL);
+
+  if (!primary_length)
+    default_display_possible |= HWC_DISPLAY_PRIMARY_BIT;
+  if (!extend_length)
+    default_display_possible |= HWC_DISPLAY_EXTERNAL_BIT;
+
+  for (auto &conn : connectors_) {
+    /*
+     * build_in connector default only support on primary display
+     */
+    if (conn->built_in())
+      conn->set_display_possible(default_display_possible & HWC_DISPLAY_PRIMARY_BIT);
+    else
+      conn->set_display_possible(default_display_possible & HWC_DISPLAY_EXTERNAL_BIT);
+  }
+
+  if (primary_length) {
+    std::stringstream ss(primary_name);
+
+    while(getline(ss, conn_name, ',')) {
+      for (auto &conn : connectors_) {
+        if (!strcmp(connector_type_str(conn->get_type()), conn_name.c_str()))
+          conn->set_display_possible(HWC_DISPLAY_PRIMARY_BIT);
+      }
+    }
+  }
+
+  if (extend_length) {
+    std::stringstream ss(extend_name);
+
+    while(getline(ss, conn_name, ',')) {
+      for (auto &conn : connectors_) {
+        if (!strcmp(connector_type_str(conn->get_type()), conn_name.c_str()))
+          conn->set_display_possible(conn->possible_displays() | HWC_DISPLAY_EXTERNAL_BIT);
+      }
+    }
+  }
 }
 
 int DrmResources::Init() {
@@ -295,29 +346,54 @@ int DrmResources::Init() {
     }
     conn->UpdateModes();
 
-    if (conn->built_in() && !found_primary) {
-      conn->set_display(0);
-      found_primary = true;
-      SetPrimaryDisplay(conn.get());
-    } else {
-      conn->set_display(display_num);
-      ++display_num;
-    }
+    conn->set_display(display_num);
+    display_num++;
 
     connectors_.emplace_back(std::move(conn));
   }
 
-  if (!found_primary) {
-     display_num = 0;
-     for (auto &conn : connectors_) {
-       conn->set_display(display_num);
-       display_num++;
-     }
-  }
+  ConfigurePossibleDisplays();
   for (auto &conn : connectors_) {
-    if (conn->display() == 0)
+    if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
+      continue;
+    if (conn->built_in())
+      continue;
+    if (conn->state() != DRM_MODE_CONNECTED)
+      continue;
+    found_primary = true;
+    SetPrimaryDisplay(conn.get());
+  }
+
+  if (!found_primary) {
+    for (auto &conn : connectors_) {
+      if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
+        continue;
+      if (conn->state() != DRM_MODE_CONNECTED)
+        continue;
+      found_primary = true;
       SetPrimaryDisplay(conn.get());
-    else if (conn->state() == DRM_MODE_CONNECTED)
+    }
+  }
+
+  if (!found_primary) {
+    for (auto &conn : connectors_) {
+      if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
+        continue;
+      found_primary = true;
+      SetPrimaryDisplay(conn.get());
+    }
+  }
+
+  if (!found_primary) {
+    ALOGE("failed to find primary display\n");
+    return -ENODEV;
+  }
+
+  for (auto &conn : connectors_) {
+      if (!(conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT))
+        continue;
+      if (conn->state() != DRM_MODE_CONNECTED)
+        continue;
       SetExtendDisplay(conn.get());
   }
 

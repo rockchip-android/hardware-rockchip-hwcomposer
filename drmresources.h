@@ -120,6 +120,7 @@ class DrmResources {
 
  private:
   void init_white_modes(void);
+  void ConfigurePossibleDisplays();
   int TryEncoderForDisplay(int display, DrmEncoder *enc);
   int GetProperty(uint32_t obj_id, uint32_t obj_type, const char *prop_name,
                   DrmProperty *property);
