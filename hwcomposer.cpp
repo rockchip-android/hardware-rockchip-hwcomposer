@@ -252,6 +252,7 @@ struct hwc_context_t {
 
   int fb_fd;
   int fb_blanked;
+  int hdmi_status_fd;
 #if RK_INVALID_REFRESH
     bool                isGLESComp;
     bool                mOneWinOpt;
@@ -974,15 +975,12 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
     return false;
 }
 
-static HDMI_STAT detect_hdmi_status(int display)
+static HDMI_STAT detect_hdmi_status(void)
 {
     char status[PROPERTY_VALUE_MAX];
 
-    if(display == HWC_DISPLAY_PRIMARY)
-        property_get("sys.hdmi_status.main", status, "on");
-    else
-        property_get("sys.hdmi_status.aux", status, "on");
-    ALOGD_IF(log_level(DBG_VERBOSE),"detect_hdmi_status display=%d status=%s", display, status);
+    property_get("sys.hdmi_status.aux", status, "on");
+    ALOGD_IF(log_level(DBG_VERBOSE),"detect_hdmi_status status=%s", status);
     if(!strcmp(status, "off"))
         return HDMI_OFF;
     else
@@ -993,6 +991,8 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
   int ret = -1;
+  static HDMI_STAT last_hdmi_status = HDMI_ON;
+  char acStatus[10];
 
     init_log_level();
     hwc_dump_fps();
@@ -1001,7 +1001,23 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     ctx->layer_contents.reserve(num_displays);
     ctx->comp_plane_group.clear();
 
-  ctx->drm.UpdateDisplayRoute();
+    ctx->drm.UpdateDisplayRoute();
+
+    HDMI_STAT hdmi_status = detect_hdmi_status();
+    if(ctx->hdmi_status_fd > 0 && hdmi_status != last_hdmi_status)
+    {
+        if(hdmi_status == HDMI_ON)
+            strcpy(acStatus,"detect");
+        else
+            strcpy(acStatus,"off");
+        ret = write(ctx->hdmi_status_fd,acStatus,strlen(acStatus)+1);
+        if(ret < 0)
+        {
+            ALOGE("set hdmi status to %s falied",acStatus);
+        }
+        last_hdmi_status = hdmi_status;
+        ALOGD_IF(log_level(DBG_VERBOSE),"set hdmi status to %s",acStatus);
+    }
 
   for (int i = 0; i < (int)num_displays; ++i) {
     bool use_framebuffer_target = false;
@@ -1028,29 +1044,6 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       continue;
     }
     hwc_drm_display_t *hd = &ctx->displays[connector->display()];
-
-    if(ctx->fb_blanked != FB_BLANK_POWERDOWN)
-    {
-        HDMI_STAT hdmi_status = detect_hdmi_status(i);
-        if(hdmi_status != hd->last_hdmi_status)
-        {
-            switch (hdmi_status)
-            {
-                case HDMI_OFF:
-                    connector->force_disconnect(true);
-                    ctx->drm.DisplayChanged();
-                    break;
-                case HDMI_ON:
-                    connector->force_disconnect(false);
-                    ctx->drm.DisplayChanged();
-                    break;
-                default:
-                    break;
-            }
-            hd->last_hdmi_status = hdmi_status;
-        }
-    }
-
     DrmCrtc *crtc = ctx->drm.GetCrtcFromConnector(connector);
     if (connector->state() != DRM_MODE_CONNECTED || !crtc) {
       hwc_list_nodraw(display_contents[i]);
@@ -2190,6 +2183,13 @@ static int hwc_device_open(const struct hw_module_t *module, const char *name,
     {
          ALOGE("Open fb0 fail in %s",__FUNCTION__);
          return -1;
+    }
+
+    ctx->hdmi_status_fd = open(HDMI_STATUS_PATH, O_RDWR, 0);
+    if(ctx->hdmi_status_fd < 0)
+    {
+         ALOGE("Open hdmi_status_fd fail in %s",__FUNCTION__);
+         //return -1;
     }
 
   hwc_init_version();

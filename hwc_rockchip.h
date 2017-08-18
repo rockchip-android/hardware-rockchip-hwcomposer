@@ -50,6 +50,7 @@ typedef enum tagMixMode
 
 enum HDMI_STAT
 {
+    HDMI_INVALID,
     HDMI_ON,
     HDMI_OFF
 };
