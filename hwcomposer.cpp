@@ -368,14 +368,30 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   }
   else if (strcmp(resolution,"Auto") != 0)
   {
-    sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x", &width, &height,
-            &vrefresh, &hsync_start, &hsync_end, &htotal, &vsync_start,
-            &vsync_end, &vtotal, &flags);
-
-    if (width != 0 && height != 0) {
+    int len = sscanf(resolution, "%dx%d@%f-%d-%d-%d-%d-%d-%d-%x",
+                     &width, &height, &vrefresh, &hsync_start,
+                     &hsync_end, &htotal, &vsync_start,&vsync_end,
+                     &vtotal, &flags);
+    if (len == 10 && width != 0 && height != 0) {
       for (const DrmMode &conn_mode : c->modes()) {
         if (conn_mode.equal(width, height, vrefresh, hsync_start, hsync_end,
                             htotal, vsync_start, vsync_end, vtotal, flags)) {
+          c->set_best_mode(conn_mode);
+          return 0;
+        }
+      }
+    }
+
+    uint32_t ivrefresh;
+    len = sscanf(resolution, "%dx%d%c%d", &width, &height, &val, &ivrefresh);
+
+    if (val == 'i')
+      interlaced = true;
+    else
+      interlaced = false;
+    if (len == 4 && width != 0 && height != 0) {
+      for (const DrmMode &conn_mode : c->modes()) {
+        if (conn_mode.equal(width, height, ivrefresh, interlaced)) {
           c->set_best_mode(conn_mode);
           return 0;
         }
