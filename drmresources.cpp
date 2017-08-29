@@ -587,14 +587,13 @@ void DrmResources::ClearDisplay(void)
 
 int DrmResources::UpdatePropertys(void)
 {
-  int timeline = property_get_int32("sys.display.timeline", 0);
+  int timeline = property_get_int32("sys.display.timeline", -1);
   int ret;
   /*
    * force update propetry when timeline is zero or not exist.
    */
-  if (!timeline || timeline == prop_timeline_)
+  if (timeline && timeline == prop_timeline_)
     return 0;
-  prop_timeline_ = timeline;
 
   DrmConnector *primary = GetConnectorFromType(HWC_DISPLAY_PRIMARY);
   DrmConnector *extend = GetConnectorFromType(HWC_DISPLAY_EXTERNAL);
@@ -634,6 +633,7 @@ int DrmResources::UpdatePropertys(void)
     return ret;
   }
   drmModeAtomicFree(pset);
+  prop_timeline_ = timeline;
 
   return 0;
 }

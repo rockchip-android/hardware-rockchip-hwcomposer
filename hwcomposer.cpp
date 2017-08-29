@@ -322,7 +322,7 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
   uint32_t MaxResolution = 0,temp;
   uint32_t flags_temp;
 
-  timeline = property_get_int32("sys.display.timeline", 0);
+  timeline = property_get_int32("sys.display.timeline", -1);
   /*
    * force update propetry when timeline is zero or not exist.
    */
