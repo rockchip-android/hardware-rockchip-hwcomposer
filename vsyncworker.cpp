@@ -207,7 +207,8 @@ void VSyncWorker::Routine() {
    * the hook. However, in practice, procs_ is only updated once, so it's not
    * worth the overhead.
    */
-  if (procs && procs->vsync)
+   //zxl:In VtsHalGraphicsComposerV2_1TargetTest, sometimes procs->vsync will invalid.
+  if (procs && ((unsigned long)procs->vsync > 0x10))
     procs->vsync(procs, display, timestamp);
   last_timestamp_ = timestamp;
   PRINT_TIME_END("vsync");

@@ -40,10 +40,21 @@ int DrmEventListener::Init() {
     return uevent_fd_.get();
   }
 
+#if 0
+    // reuse address.
+    int on=1;
+    if((setsockopt(uevent_fd_.get(),SOL_SOCKET,SO_REUSEADDR,&on,sizeof(on)))<0)
+    {
+        ALOGE("setsockopt failed");
+    }
+#endif
+
+
   struct sockaddr_nl addr;
   memset(&addr, 0, sizeof(addr));
   addr.nl_family = AF_NETLINK;
-  addr.nl_pid = getpid();
+  //zxl: It will lead VtsHalGraphicsComposerV2_1TargetTest crash with "Address already in use"(-98)
+  //addr.nl_pid = getpid();
   addr.nl_groups = 0xFFFFFFFF;
 
   int ret = bind(uevent_fd_.get(), (struct sockaddr *)&addr, sizeof(addr));

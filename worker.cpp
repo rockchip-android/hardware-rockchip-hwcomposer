@@ -39,7 +39,8 @@ Worker::~Worker() {
   if (!initialized_)
     return;
 
-  pthread_kill(thread_, SIGTERM);
+  //zxl: It will lead VtsHalGraphicsComposerV2_1TargetTest Terminated.
+  //pthread_kill(thread_, SIGTERM);
   pthread_cond_destroy(&cond_);
   pthread_mutex_destroy(&lock_);
 }
@@ -98,11 +99,16 @@ int Worker::ExitLocked() {
   if (signal_ret)
     ALOGE("Failed to signal thread %s with exit %d", name_.c_str(), signal_ret);
 
+//zxl: It will lead VtsHalGraphicsComposerV2_1TargetTest be stucked.
+#if 0
   int join_ret = pthread_join(thread_, NULL);
   if (join_ret && join_ret != ESRCH)
     ALOGE("Failed to join thread %s in exit %d", name_.c_str(), join_ret);
 
   return signal_ret | join_ret;
+#else
+    return signal_ret;
+#endif
 }
 
 int Worker::Signal() {
