@@ -866,7 +866,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
         others: DISPLAY_PRIMARY & DISPLAY_EXTERNAL both go into overlay.
     */
     int iMode = hwc_get_int_property("sys.hwc.compose_policy","0");
-    if( iMode <= 0 || (iMode == 1 && display_id == 1) || (iMode == 2 && display_id == 0) )
+    if( iMode <= 0 || (iMode == 1 && display_id == 2) || (iMode == 2 && display_id == 1) )
         return true;
 
     iMode = hwc_get_int_property("sys.hwc","1");
@@ -1234,10 +1234,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 
     if(!use_framebuffer_target)
-        use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], i);
+        use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], connector->display());
 
 #if RK_VIDEO_UI_OPT
-    video_ui_optimize(ctx->gralloc, display_contents[i], &ctx->displays[i]);
+    video_ui_optimize(ctx->gralloc, display_contents[i], &ctx->displays[connector->display()]);
 #endif
 
     bool bHasFPS_3D_UI = false;
@@ -1334,7 +1334,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         hd->mixMode = HWC_DEFAULT;
         if(crtc && layer_content.layers.size()>0)
         {
-            bAllMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[i],layer_content.layers,
+            bAllMatch = mix_policy(&ctx->drm, crtc, &ctx->displays[connector->display()],layer_content.layers,
                                     hd->iPlaneSize, fbSize, comp_plane.composition_planes);
         }
         if(!bAllMatch)
