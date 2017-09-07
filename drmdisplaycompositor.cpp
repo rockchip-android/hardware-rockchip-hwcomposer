@@ -1584,6 +1584,7 @@ void DrmDisplayCompositor::ApplyFrame(
 int DrmDisplayCompositor::Composite() {
   ATRACE_CALL();
 
+#if USE_GL_WORKER
   if (!pre_compositor_) {
     pre_compositor_.reset(new GLWorkerCompositor());
     int ret = pre_compositor_->Init();
@@ -1592,6 +1593,7 @@ int DrmDisplayCompositor::Composite() {
       return ret;
     }
   }
+#endif
 
   int ret = pthread_mutex_lock(&lock_);
   if (ret) {
