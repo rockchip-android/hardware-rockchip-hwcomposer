@@ -1206,9 +1206,9 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #endif
         {
             for (int i = 0; i < kAcquireWaitTries; ++i) {
-              int fence_timeout = kAcquireWaitTimeoutMs * (1 << i);
+              int fence_timeout = kAcquireWaitTimeoutMs;
               total_fence_timeout += fence_timeout;
-              ret = sync_wait(acquire_fence, -1);
+              ret = sync_wait(acquire_fence, fence_timeout);
               if (ret)
                 ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
                       acquire_fence, i, ret, total_fence_timeout);
