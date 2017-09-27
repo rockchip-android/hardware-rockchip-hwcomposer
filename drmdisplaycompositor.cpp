@@ -1205,20 +1205,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
         if(!(layer.gralloc_buffer_usage & 0x08000000))
 #endif
         {
-            for (int i = 0; i < kAcquireWaitTries; ++i) {
-              int fence_timeout = kAcquireWaitTimeoutMs;
-              total_fence_timeout += fence_timeout;
-              ret = sync_wait(acquire_fence, fence_timeout);
-              if (ret)
-                ALOGW("Acquire fence %d wait %d failed (%d). Total time %d",
-                      acquire_fence, i, ret, total_fence_timeout);
-              else
-                break;  //rk: wait successfully
-            }
-            if (ret) {
-              ALOGE("Failed to wait for acquire %d/%d", acquire_fence, ret);
-              break;
-            }
+          ret = sync_wait(acquire_fence, 1000);
+          if (ret) {
+            ALOGE("Failed to wait for acquire %d/%d 1000ms", acquire_fence, ret);
+            break;
+          }
         }
         layer.acquire_fence.Close();
       }
