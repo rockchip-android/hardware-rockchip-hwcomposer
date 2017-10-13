@@ -694,17 +694,20 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
         v_scale_mul = (float) (source_crop.bottom - source_crop.top)
 	                    / (display_frame.bottom - display_frame.top);
     }
+    if(sf_handle)
+    {
 #if RK_DRM_GRALLOC
-    width = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_WIDTH);
-    height = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_HEIGHT);
-    stride = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_STRIDE);
-    format = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_FORMAT);
+        width = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_WIDTH);
+        height = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_HEIGHT);
+        stride = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_STRIDE);
+        format = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_FORMAT);
 #else
-    width = hwc_get_handle_width(ctx->gralloc,sf_layer->handle);
-    height = hwc_get_handle_height(ctx->gralloc,sf_layer->handle);
-    stride = hwc_get_handle_stride(ctx->gralloc,sf_layer->handle);
-    format = hwc_get_handle_format(ctx->gralloc,sf_layer->handle);
+        width = hwc_get_handle_width(ctx->gralloc,sf_layer->handle);
+        height = hwc_get_handle_height(ctx->gralloc,sf_layer->handle);
+        stride = hwc_get_handle_stride(ctx->gralloc,sf_layer->handle);
+        format = hwc_get_handle_format(ctx->gralloc,sf_layer->handle);
 #endif
+    }
     if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         is_yuv = true;
     else
@@ -796,20 +799,6 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     return ret;
 #endif
 
-  ret = handle.CopyBufferHandle(sf_layer->handle, gralloc);
-  if (ret)
-    return ret;
-
-#if 0
-  gralloc_buffer_usage= drm_handle->usage;
-#else
-  ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
-                         handle.get(), &gralloc_buffer_usage);
-  if (ret) {
-    ALOGE("Failed to get usage for buffer %p (%d)", handle.get(), ret);
-    return ret;
-  }
-#endif
 
 #if USE_AFBC_LAYER
     ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
@@ -826,13 +815,24 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
   return 0;
 }
 
-int DrmHwcLayer::ImportBuffer(hwc_layer_1_t *sf_layer, Importer *importer)
+int DrmHwcLayer::ImportBuffer(struct hwc_context_t *ctx, hwc_layer_1_t *sf_layer, Importer *importer)
 {
-  int ret = buffer.ImportBuffer(sf_layer->handle, importer
+   int ret = buffer.ImportBuffer(sf_layer->handle, importer
 #if RK_VIDEO_SKIP_LINE
   , bSkipLine
 #endif
   );
+
+  ret = handle.CopyBufferHandle(sf_layer->handle, ctx->gralloc);
+  if (ret)
+    return ret;
+
+  ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
+                         handle.get(), &gralloc_buffer_usage);
+  if (ret) {
+    ALOGE("Failed to get usage for buffer %p (%d)", handle.get(), ret);
+    return ret;
+  }
 
   return ret;
 }
@@ -1244,7 +1244,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int index = 0;
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
-      if(sf_layer->handle == NULL)
+      if(sf_layer->compositionType != HWC_FRAMEBUFFER_TARGET && sf_layer->handle == NULL)
         continue;
       if(sf_layer->compositionType == HWC_NODRAW)
         continue;
@@ -1628,8 +1628,15 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         (dc->flags & HWC_GEOMETRY_CHANGED) == HWC_GEOMETRY_CHANGED;
     for (size_t j=0; j< display_contents.layers.size(); j++) {
       DrmHwcLayer &layer = display_contents.layers[j];
+      if(!layer.sf_handle)
+        layer.sf_handle = layer.raw_sf_layer->handle;
+      if(!layer.sf_handle)
+      {
+        ALOGE("sf_handle is null,maybe fb target is null");
+        return -EINVAL;
+      }
       if(!layer.bClone_)
-        layer.ImportBuffer(layer.raw_sf_layer, ctx->importer.get());
+        layer.ImportBuffer(ctx, layer.raw_sf_layer, ctx->importer.get());
       map.layers.emplace_back(std::move(layer));
     }
   }
