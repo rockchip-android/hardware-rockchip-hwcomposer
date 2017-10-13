@@ -54,7 +54,7 @@
 
 #include "hwc_util.h"
 #include "hwc_rockchip.h"
-
+#include <android/configuration.h>
 #define UM_PER_INCH 25400
 
 namespace android {
@@ -697,15 +697,15 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     if(sf_handle)
     {
 #if RK_DRM_GRALLOC
-        width = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_WIDTH);
-        height = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_HEIGHT);
-        stride = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_STRIDE);
-        format = hwc_get_handle_attibute(ctx->gralloc,sf_layer->handle,ATT_FORMAT);
+        width = hwc_get_handle_attibute(gralloc,sf_layer->handle,ATT_WIDTH);
+        height = hwc_get_handle_attibute(gralloc,sf_layer->handle,ATT_HEIGHT);
+        stride = hwc_get_handle_attibute(gralloc,sf_layer->handle,ATT_STRIDE);
+        format = hwc_get_handle_attibute(gralloc,sf_layer->handle,ATT_FORMAT);
 #else
-        width = hwc_get_handle_width(ctx->gralloc,sf_layer->handle);
-        height = hwc_get_handle_height(ctx->gralloc,sf_layer->handle);
-        stride = hwc_get_handle_stride(ctx->gralloc,sf_layer->handle);
-        format = hwc_get_handle_format(ctx->gralloc,sf_layer->handle);
+        width = hwc_get_handle_width(gralloc,sf_layer->handle);
+        height = hwc_get_handle_height(gralloc,sf_layer->handle);
+        stride = hwc_get_handle_stride(gralloc,sf_layer->handle);
+        format = hwc_get_handle_format(gralloc,sf_layer->handle);
 #endif
     }
     if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
@@ -1628,8 +1628,21 @@ static int hwc_set(hwc_composer_device_1_t *dev, size_t num_displays,
         (dc->flags & HWC_GEOMETRY_CHANGED) == HWC_GEOMETRY_CHANGED;
     for (size_t j=0; j< display_contents.layers.size(); j++) {
       DrmHwcLayer &layer = display_contents.layers[j];
-      if(!layer.sf_handle)
+      if(!layer.sf_handle && layer.raw_sf_layer->handle)
+      {
         layer.sf_handle = layer.raw_sf_layer->handle;
+#if RK_DRM_GRALLOC
+        layer.width = hwc_get_handle_attibute(ctx->gralloc,layer.sf_handle,ATT_WIDTH);
+        layer.height = hwc_get_handle_attibute(ctx->gralloc,layer.sf_handle,ATT_HEIGHT);
+        layer.stride = hwc_get_handle_attibute(ctx->gralloc,layer.sf_handle,ATT_STRIDE);
+        layer.format = hwc_get_handle_attibute(ctx->gralloc,layer.sf_handle,ATT_FORMAT);
+#else
+        layer.width = hwc_get_handle_width(ctx->gralloc,layer.sf_handle);
+        layer.height = hwc_get_handle_height(ctx->gralloc,layer.sf_handle);
+        layer.stride = hwc_get_handle_stride(ctx->gralloc,layer.sf_handle);
+        layer.format = hwc_get_handle_format(ctx->gralloc,layer.sf_handle);
+#endif
+      }
       if(!layer.sf_handle)
       {
         ALOGE("sf_handle is null,maybe fb target is null");
@@ -1898,6 +1911,19 @@ static int hwc_get_display_configs(struct hwc_composer_device_1 *dev,
   return 0;
 }
 
+static float getDefaultDensity(uint32_t width, uint32_t height) {
+    // Default density is based on TVs: 1080p displays get XHIGH density,
+    // lower-resolution displays get TV density. Maybe eventually we'll need
+    // to update it for 4K displays, though hopefully those just report
+    // accurate DPI information to begin with. This is also used for virtual
+    // displays and even primary displays with older hwcomposers, so be
+    // careful about orientation.
+
+    uint32_t h = width < height ? width : height;
+    if (h >= 1080) return ACONFIGURATION_DENSITY_XHIGH;
+    else           return ACONFIGURATION_DENSITY_TV;
+}
+
 static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
                                       int display, uint32_t config,
                                       const uint32_t *attributes,
@@ -1931,12 +1957,12 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1 *dev,
         break;
       case HWC_DISPLAY_DPI_X:
         /* Dots per 1000 inches */
-        values[i] = mm_width ? (w * UM_PER_INCH) / mm_width : 0;
+        values[i] = mm_width ? (w * UM_PER_INCH) / mm_width : getDefaultDensity(w,h)*1000;
         break;
       case HWC_DISPLAY_DPI_Y:
         /* Dots per 1000 inches */
         values[i] =
-            mm_height ? (h * UM_PER_INCH) / mm_height : 0;
+            mm_height ? (h * UM_PER_INCH) / mm_height : getDefaultDensity(w,h)*1000;
         break;
     }
   }
