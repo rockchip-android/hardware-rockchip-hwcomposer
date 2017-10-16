@@ -1125,6 +1125,33 @@ void DrmResources::dump_blob(uint32_t blob_id, std::ostringstream *out) {
 	drmModeFreePropertyBlob(blob);
 }
 
+bool DrmResources::is_hdr_panel_support_st2084(drmModePropertyPtr prop) {
+	uint32_t i;
+	struct hdr_static_metadata* blob_data;
+	drmModePropertyBlobPtr blob;
+	bool bSupport = false;
+
+    if (drm_property_type_is(prop, DRM_MODE_PROP_BLOB))
+    {
+        ALOGE("%s:line=%d,is not blob",__FUNCTION__,__LINE__);
+        return false;
+    }
+
+	blob = drmModeGetPropertyBlob(fd(), prop->blob_ids[0]);
+	if (!blob) {
+		ALOGE("%s:line=%d, blob is null",__FUNCTION__,__LINE__);
+		return false;
+	}
+
+	blob_data = (struct hdr_static_metadata*)blob->data;
+
+	bSupport = blob_data->eotf & (1 << SMPTE_ST2084);
+
+	drmModeFreePropertyBlob(blob);
+
+	return bSupport;
+}
+
 void DrmResources::dump_prop(drmModePropertyPtr prop,
 		      uint32_t prop_id, uint64_t value, std::ostringstream *out) {
 	int i;

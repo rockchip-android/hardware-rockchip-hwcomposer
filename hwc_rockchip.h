@@ -24,6 +24,64 @@ namespace android {
 #define SKIP_LINE_NUM_NV12		(2)
 #endif
 
+/* see also http://vektor.theorem.ca/graphics/ycbcr/ */
+enum v4l2_colorspace {
+        /*
+         * Default colorspace, i.e. let the driver figure it out.
+         * Can only be used with video capture.
+         */
+        V4L2_COLORSPACE_DEFAULT       = 0,
+
+        /* SMPTE 170M: used for broadcast NTSC/PAL SDTV */
+        V4L2_COLORSPACE_SMPTE170M     = 1,
+
+        /* Obsolete pre-1998 SMPTE 240M HDTV standard, superseded by Rec 709 */
+        V4L2_COLORSPACE_SMPTE240M     = 2,
+
+        /* Rec.709: used for HDTV */
+        V4L2_COLORSPACE_REC709        = 3,
+
+        /*
+         * Deprecated, do not use. No driver will ever return this. This was
+         * based on a misunderstanding of the bt878 datasheet.
+         */
+        V4L2_COLORSPACE_BT878         = 4,
+
+        /*
+         * NTSC 1953 colorspace. This only makes sense when dealing with
+         * really, really old NTSC recordings. Superseded by SMPTE 170M.
+         */
+        V4L2_COLORSPACE_470_SYSTEM_M  = 5,
+
+        /*
+         * EBU Tech 3213 PAL/SECAM colorspace. This only makes sense when
+         * dealing with really old PAL/SECAM recordings. Superseded by
+         * SMPTE 170M.
+         */
+        V4L2_COLORSPACE_470_SYSTEM_BG = 6,
+
+        /*
+         * Effectively shorthand for V4L2_COLORSPACE_SRGB, V4L2_YCBCR_ENC_601
+         * and V4L2_QUANTIZATION_FULL_RANGE. To be used for (Motion-)JPEG.
+         */
+        V4L2_COLORSPACE_JPEG          = 7,
+
+        /* For RGB colorspaces such as produces by most webcams. */
+        V4L2_COLORSPACE_SRGB          = 8,
+
+        /* AdobeRGB colorspace */
+        V4L2_COLORSPACE_ADOBERGB      = 9,
+
+        /* BT.2020 colorspace, used for UHDTV. */
+        V4L2_COLORSPACE_BT2020        = 10,
+
+        /* Raw colorspace: for RAW unprocessed images */
+        V4L2_COLORSPACE_RAW           = 11,
+
+        /* DCI-P3 colorspace, used by cinema projectors */
+        V4L2_COLORSPACE_DCI_P3        = 12,
+};
+
 typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
 typedef LayerMap::iterator LayerMapIter;
 struct hwc_context_t;
@@ -77,6 +135,8 @@ typedef struct hwc_drm_display {
   MixMode mixMode;
   bool isVideo;
   bool isHdr;
+  struct hdr_static_metadata last_hdr_metadata;
+  int colorimetry;
   int framebuffer_width;
   int framebuffer_height;
   int rel_xres;
@@ -136,6 +196,8 @@ int hwc_get_handle_primefd(const gralloc_module_t *gralloc, buffer_handle_t hnd)
 #if RK_DRM_GRALLOC
 uint32_t hwc_get_handle_phy_addr(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 #endif
+uint32_t hwc_get_layer_colorspace(hwc_layer_1_t *layer);
+uint32_t colorspace_convert_to_linux(uint32_t colorspace);
 bool vop_support_format(uint32_t hal_format);
 bool vop_support_scale(hwc_layer_1_t *layer);
 bool GetCrtcSupported(const DrmCrtc &crtc, uint32_t possible_crtc_mask);

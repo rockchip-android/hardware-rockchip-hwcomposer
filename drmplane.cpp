@@ -126,6 +126,14 @@ int DrmPlane::Init() {
   if (ret)
     ALOGI("Could not get alpha property");
 
+  ret = drm_->GetPlaneProperty(*this, "EOTF", &eotf_property_);
+  if (ret)
+    ALOGI("Could not get eotf property");
+
+  ret = drm_->GetPlaneProperty(*this, "COLOR_SPACE", &colorspace_property_);
+  if (ret)
+    ALOGI("Could not get colorspace property");
+
   ret = drm_->GetPlaneProperty(*this, "ZPOS", &zpos_property_);
   if (ret)
     ALOGE("Could not get ZPOS property");
@@ -143,16 +151,24 @@ int DrmPlane::Init() {
     b_yuv_ = false;
 
 
-    uint64_t feature=0, rotate=0;
+    uint64_t feature=0, rotate=0, hdr2sdr=0, sdr2hdr=0;
 
     feature_property_.set_feature("scale");
     feature_property_.value(&feature);
     b_scale_ = (feature ==1)?true:false;
 
 
-    rotation_property().set_feature("rotate");
-    rotation_property().value(&rotate);
+    rotation_property_.set_feature("rotate");
+    rotation_property_.value(&rotate);
     b_rotate_ = rotate;
+
+    eotf_property_.set_feature("hdr2sdr");
+    eotf_property_.value(&hdr2sdr);
+    b_hdr2sdr_ = hdr2sdr;
+
+    eotf_property_.set_feature("sdr2hdr");
+    eotf_property_.value(&sdr2hdr);
+    b_sdr2hdr_ = sdr2hdr;
 
   return 0;
 }
@@ -213,6 +229,14 @@ const DrmProperty &DrmPlane::rotation_property() const {
   return rotation_property_;
 }
 
+const DrmProperty &DrmPlane::eotf_property() const {
+  return eotf_property_;
+}
+
+const DrmProperty &DrmPlane::colorspace_property() const {
+  return colorspace_property_;
+}
+
 const DrmProperty &DrmPlane::alpha_property() const {
   return alpha_property_;
 }
@@ -221,8 +245,16 @@ bool DrmPlane::get_scale(){
     return b_scale_;
 }
 
-uint64_t DrmPlane::get_rotate(){
+bool DrmPlane::get_rotate(){
     return b_rotate_;
+}
+
+bool DrmPlane::get_hdr2sdr(){
+    return b_hdr2sdr_;
+}
+
+bool DrmPlane::get_sdr2hdr(){
+    return b_sdr2hdr_;
 }
 
 bool DrmPlane::get_yuv(){

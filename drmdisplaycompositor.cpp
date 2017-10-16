@@ -1167,6 +1167,8 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
 #endif
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
+    uint16_t eotf = TRADITIONAL_GAMMA_SDR;
+    uint32_t colorspace = V4L2_COLORSPACE_SRGB;
 #if RK_RGA
     bool is_rotate_by_rga = false;
 #endif
@@ -1238,6 +1240,11 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       if (layer.blending == DrmHwcBlending::kPreMult)
         alpha = layer.alpha;
 
+      if(is_yuv)
+      {
+        eotf = layer.eotf;
+        colorspace = layer.colorspace;
+      }
 
 #if RK_DEBUG_CHECK_CRC
     void* cpu_addr;
@@ -1389,7 +1396,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
     ret |= drmModeAtomicAddProperty(
                pset, plane->id(), plane->src_h_property().id(),
                src_h << 16) < 0;
-    ret = drmModeAtomicAddProperty(pset, plane->id(),
+    ret |= drmModeAtomicAddProperty(pset, plane->id(),
                                    plane->zpos_property().id(), zpos) < 0;
     if (ret) {
       ALOGE("Failed to add plane %d to set", plane->id());
@@ -1442,6 +1449,7 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       }
       out_log << " rotation=" << RotatingToString(rotation);
     }
+
     if (plane->alpha_property().id()) {
       ret = drmModeAtomicAddProperty(pset, plane->id(),
                                      plane->alpha_property().id(),
@@ -1453,6 +1461,31 @@ int DrmDisplayCompositor::CommitFrame(DrmDisplayComposition *display_comp,
       }
       out_log << " alpha=" << std::hex <<  alpha;
     }
+
+    if(plane->get_hdr2sdr()) {
+      ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->eotf_property().id(),
+                                     eotf) < 0;
+      if (ret) {
+        ALOGE("Failed to add eotf property %d to plane %d",
+              plane->eotf_property().id(), plane->id());
+        break;
+      }
+      out_log << " eotf=" << std::hex <<  eotf;
+    }
+
+    if(plane->colorspace_property().id()) {
+      ret = drmModeAtomicAddProperty(pset, plane->id(),
+                                     plane->colorspace_property().id(),
+                                     colorspace) < 0;
+      if (ret) {
+        ALOGE("Failed to add colorspace property %d to plane %d",
+              plane->colorspace_property().id(), plane->id());
+        break;
+      }
+      out_log << " colorspace=" << std::hex <<  colorspace;
+    }
+
     out_log << "\n";
     ALOGD_IF(log_level(DBG_VERBOSE),"%s",out_log.str().c_str());
     out_log.clear();

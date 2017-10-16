@@ -117,7 +117,7 @@ class DrmResources {
 	return rkRga.RkRgaIsReady();
   }
 #endif
-
+  bool is_hdr_panel_support_st2084(drmModePropertyPtr prop);
  private:
   void init_white_modes(void);
   void ConfigurePossibleDisplays();

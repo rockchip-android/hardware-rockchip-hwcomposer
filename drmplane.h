@@ -74,11 +74,15 @@ class DrmPlane {
   const DrmProperty &src_w_property() const;
   const DrmProperty &src_h_property() const;
   const DrmProperty &rotation_property() const;
+  const DrmProperty &eotf_property() const;
+  const DrmProperty &colorspace_property() const;
   const DrmProperty &alpha_property() const;
   bool is_use();
   void set_use(bool b_use);
   bool get_scale();
-  uint64_t get_rotate();
+  bool get_rotate();
+  bool get_hdr2sdr();
+  bool get_sdr2hdr();
   bool get_yuv();
   void set_yuv(bool b_yuv);
   const DrmProperty &zpos_property() const;
@@ -114,6 +118,8 @@ class DrmPlane {
   DrmProperty src_h_property_;
   DrmProperty rotation_property_;
   DrmProperty alpha_property_;
+  DrmProperty eotf_property_;
+  DrmProperty colorspace_property_;
 
   DrmProperty zpos_property_;
   DrmProperty share_id_property_;
@@ -123,6 +129,8 @@ class DrmPlane {
   bool b_yuv_;
   bool b_scale_;
   bool b_rotate_;
+  bool b_hdr2sdr_;
+  bool b_sdr2hdr_;
 
   drmModePlanePtr plane_;
 };

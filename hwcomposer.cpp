@@ -729,6 +729,29 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     else
         is_yuv = false;
 
+    if(is_yuv)
+    {
+        uint32_t android_colorspace = hwc_get_layer_colorspace(sf_layer);
+        colorspace = colorspace_convert_to_linux(android_colorspace);
+        if(colorspace == 0)
+        {
+            colorspace = V4L2_COLORSPACE_SRGB;
+        }
+
+        if((android_colorspace & HAL_DATASPACE_TRANSFER_ST2084) == HAL_DATASPACE_TRANSFER_ST2084)
+            eotf = SMPTE_ST2084;
+        else
+        {
+            //ALOGE("Unknow etof %d",eotf);
+            eotf = TRADITIONAL_GAMMA_SDR;
+        }
+    }
+    else
+    {
+        colorspace = V4L2_COLORSPACE_SRGB;
+        eotf = TRADITIONAL_GAMMA_SDR;
+    }
+
 #if RK_VIDEO_SKIP_LINE
     if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
     {
@@ -1087,6 +1110,92 @@ static HDMI_STAT detect_hdmi_status(void)
         return HDMI_ON;
 }
 
+/**
+ * @brief set hdr_metadata and colorimetry.
+ *
+ * @param hdr_metadata  [IN] hdr metadata
+ * @param android_colorspace [IN] colorspace
+ * @return
+ *          true: set successfully.
+ *          false: set fail.
+ */
+static bool set_hdmi_hdr_meta(struct hwc_context_t *ctx, DrmConnector *connector,
+                                struct hdr_static_metadata* hdr_metadata, hwc_drm_display_t *hd,
+                                uint32_t android_colorspace)
+{
+    uint32_t blob_id = 0;
+    int ret = -1;
+    int colorimetry = 0;
+    if(!ctx || !connector || !hdr_metadata)
+    {
+        ALOGE("%s:line=%d parameter is null", __FUNCTION__, __LINE__);
+        return false;
+    }
+
+    if(connector->hdr_metadata_property().id())
+    {
+        ALOGD_IF(log_level(DBG_VERBOSE),"%s: android_colorspace = 0x%x", __FUNCTION__, android_colorspace);
+        drmModeAtomicReqPtr pset = drmModeAtomicAlloc();
+        if (!pset) {
+            ALOGE("%s:line=%d Failed to allocate property set", __FUNCTION__, __LINE__);
+            return false;
+        }
+        if(!memcmp(&hd->last_hdr_metadata, hdr_metadata, sizeof(struct hdr_static_metadata)))
+        {
+            ALOGD_IF(log_level(DBG_VERBOSE),"%s: no need to update metadata", __FUNCTION__);
+        }
+        else
+        {
+            ALOGD_IF(log_level(DBG_VERBOSE),"%s: hdr_metadata eotf=0x%x, hd->last_hdr_metadata=0x%x", __FUNCTION__,
+                                            hdr_metadata->eotf, hd->last_hdr_metadata.eotf);
+            ctx->drm.CreatePropertyBlob(hdr_metadata, sizeof(hdr_metadata), &blob_id);
+            ret = drmModeAtomicAddProperty(pset, connector->id(), connector->hdr_metadata_property().id(), blob_id);
+            if (ret < 0) {
+              ALOGE("%s:line=%d Failed to add prop[%d] to [%d]", __FUNCTION__, __LINE__, connector->hdr_metadata_property().id(), connector->id());
+            }
+        }
+
+        if(connector->hdmi_output_colorimetry_property().id())
+        {
+            if((android_colorspace & HAL_DATASPACE_STANDARD_BT2020) == HAL_DATASPACE_STANDARD_BT2020)
+            {
+                colorimetry = COLOR_METRY_ITU_2020;
+            }
+
+            if(hd->colorimetry != colorimetry)
+            {
+                ALOGD_IF(log_level(DBG_VERBOSE),"%s: change bt2020 %d", __FUNCTION__, colorimetry);
+                ret = drmModeAtomicAddProperty(pset, connector->id(), connector->hdmi_output_colorimetry_property().id(), colorimetry);
+                if (ret < 0) {
+                  ALOGE("%s:line=%d Failed to add prop[%d] to [%d]", __FUNCTION__, __LINE__, connector->hdmi_output_colorimetry_property().id(), connector->id());
+                }
+            }
+        }
+
+        drmModeAtomicCommit(ctx->drm.fd(), pset, DRM_MODE_ATOMIC_ALLOW_MODESET, &ctx->drm);
+        if (ret < 0) {
+            ALOGE("%s:line=%d Failed to commit pset ret=%d\n", __FUNCTION__, __LINE__, ret);
+            drmModeAtomicFree(pset);
+            return false;
+        }
+        else
+        {
+            memcpy(&hd->last_hdr_metadata, hdr_metadata, sizeof(struct hdr_static_metadata));
+            hd->colorimetry = colorimetry;
+        }
+        if (blob_id)
+            ctx->drm.DestroyPropertyBlob(blob_id);
+
+        drmModeAtomicFree(pset);
+        return true;
+    }
+    else
+    {
+        ALOGD_IF(log_level(DBG_VERBOSE),"%s: hdmi don't support hdr metadata", __FUNCTION__);
+        return false;
+    }
+}
+
 static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                        hwc_display_contents_1_t **display_contents) {
   struct hwc_context_t *ctx = (struct hwc_context_t *)&dev->common;
@@ -1217,12 +1326,14 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 #else
             format = hwc_get_handle_format(ctx->gralloc,layer->handle);
 #endif
+
            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12)
            {
                 hd->isVideo = true;
            }
-           if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
-           {
+
+            if(format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+            {
                 hd->is10bitVideo = true;
                 hd->isVideo = true;
                 ret = ctx->gralloc->perform(ctx->gralloc, GRALLOC_MODULE_PERFORM_GET_USAGE,
@@ -1234,10 +1345,27 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                 if(usage & HDRUSAGE)
                 {
                     isHdr = true;
+                    if(hd->isHdr != isHdr)
+                    {
+                        uint32_t android_colorspace = hwc_get_layer_colorspace(layer);
+                        struct hdr_static_metadata hdr_metadata;
+
+                        memset(&hdr_metadata, 0, sizeof(hdr_metadata));
+                        if((android_colorspace & HAL_DATASPACE_TRANSFER_ST2084) == HAL_DATASPACE_TRANSFER_ST2084)
+                        {
+                            hdr_metadata.eotf = SMPTE_ST2084;
+                        }
+                        else
+                        {
+                            //ALOGE("Unknow etof %d",eotf);
+                            hdr_metadata.eotf = TRADITIONAL_GAMMA_SDR;
+                        }
+
+                        set_hdmi_hdr_meta(ctx, connector, &hdr_metadata, hd, android_colorspace);
+                    }
                     break;
                 }
-                //break;
-           }
+            }
         }
     }
 
@@ -1259,6 +1387,16 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             ctl_little_cpu(1);
         }
 #endif
+
+        if(!hd->isHdr)
+        {
+            uint32_t android_colorspace = 0;
+            struct hdr_static_metadata hdr_metadata;
+
+            ALOGD_IF(log_level(DBG_VERBOSE),"disable hdmi hdr meta");
+            memset(&hdr_metadata, 0, sizeof(hdr_metadata));
+            set_hdmi_hdr_meta(ctx, connector, &hdr_metadata, hd, android_colorspace);
+        }
     }
 
 #if 1
@@ -2168,6 +2306,8 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hd->active = true;
     hd->last_hdmi_status = HDMI_ON;
     hd->isHdr = false;
+    memset(&hd->last_hdr_metadata, 0, sizeof(hd->last_hdr_metadata));
+    hd->colorimetry = 0;
 
   return 0;
 }

@@ -1,6 +1,9 @@
 #define LOG_TAG "hwc_rk"
 
 #include <inttypes.h>
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+#include <hardware/img_gralloc_public.h>
+#endif
 #include "hwc_rockchip.h"
 #include "hwc_util.h"
 
@@ -783,6 +786,56 @@ uint32_t hwc_get_handle_phy_addr(const gralloc_module_t *gralloc, buffer_handle_
 }
 #endif
 
+uint32_t hwc_get_layer_colorspace(hwc_layer_1_t *layer)
+{
+    uint32_t colorspace = (layer->reserved[0]) | (layer->reserved[1] << 8) |
+                            (layer->reserved[2] <<  16) | (layer->reserved[3] << 24);
+
+     ALOGD_IF(log_level(DBG_VERBOSE),"%s: reserved[0]=0x%x,reserved[1]=0x%x,reserved[2]=0x%x,reserved[3]=0x%x",__FUNCTION__,
+            layer->reserved[0],layer->reserved[1],
+            layer->reserved[2],layer->reserved[3]);
+
+    return colorspace;
+}
+
+/*
+    颜色空间	            Linux标准定义	        Android标准定义
+    SRGB full range	    V4L2_COLORSPACE_SRGB	    HAL_DATASPACE_TRANSFER_SRGB
+    Bt601 full range	V4L2_COLORSPACE_JPEG	    HAL_DATASPACE_V0_JFIF
+    Bt601 limit range	V4L2_COLORSPACE_SMPTE170M	HAL_DATASPACE_BT601_525/HAL_DATASPACE_V0_BT601_625
+    Bt709 limit range	V4L2_COLORSPACE_REC709	    HAL_DATASPACE_V0_BT709
+    Bt2020 limit range	V4L2_COLORSPACE_BT2020	    HAL_DATASPACE_STANDARD_BT2020
+*/
+#define CONTAIN_VALUE(value) ((colorspace & value) == value)
+uint32_t colorspace_convert_to_linux(uint32_t colorspace)
+{
+    if(CONTAIN_VALUE(HAL_DATASPACE_TRANSFER_SRGB))
+    {
+        return V4L2_COLORSPACE_SRGB;
+    }
+    else if(CONTAIN_VALUE(HAL_DATASPACE_V0_JFIF))
+    {
+        return V4L2_COLORSPACE_JPEG;
+    }
+    else if(CONTAIN_VALUE(HAL_DATASPACE_BT601_525) || CONTAIN_VALUE(HAL_DATASPACE_V0_BT601_625))
+    {
+        return V4L2_COLORSPACE_SMPTE170M;
+    }
+    else if(CONTAIN_VALUE(HAL_DATASPACE_V0_BT709))
+    {
+        return V4L2_COLORSPACE_REC709;
+    }
+    else if(CONTAIN_VALUE(HAL_DATASPACE_STANDARD_BT2020))
+    {
+        return V4L2_COLORSPACE_BT2020;
+    }
+    else
+    {
+        //ALOGE("Unknow colorspace 0x%x",colorspace);
+        return 0;
+    }
+}
+
 bool vop_support_format(uint32_t hal_format) {
   switch (hal_format) {
     case HAL_PIXEL_FORMAT_RGB_888:
@@ -1143,6 +1196,24 @@ static std::vector<DrmPlane *> rkGetNoAlphaUsablePlanes(DrmCrtc *crtc) {
   return usable_planes;
 }
 
+static std::vector<DrmPlane *> rkGetNoEotfUsablePlanes(DrmCrtc *crtc) {
+    DrmResources* drm = crtc->getDrmReoources();
+    std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
+    std::vector<DrmPlane *> usable_planes;
+    //loop plane groups.
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups.begin();
+       iter != plane_groups.end(); ++iter) {
+            if(!(*iter)->bUse)
+                //only count the first plane in plane group.
+                std::copy_if((*iter)->planes.begin(), (*iter)->planes.begin()+1,
+                       std::back_inserter(usable_planes),
+                       [=](DrmPlane *plane) {
+                       return !plane->is_use() && plane->GetCrtcSupported(*crtc) && !plane->get_hdr2sdr(); }
+                       );
+  }
+  return usable_planes;
+}
+
 //According to zpos and combine layer count,find the suitable plane.
 static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                uint64_t* zpos,
@@ -1155,11 +1226,12 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 {
     uint32_t combine_layer_count = 0;
     uint32_t layer_size = layer_vector.size();
-    bool b_yuv=false,b_scale=false,b_alpha=false;
+    bool b_yuv=false,b_scale=false,b_alpha=false,b_hdr2sdr=true;
     std::vector<PlaneGroup *> ::const_iterator iter;
     std::vector<PlaneGroup *>& plane_groups = drm->GetPlaneGroups();
     uint64_t rotation = 0;
     uint64_t alpha = 0xFF;
+    uint16_t eotf = TRADITIONAL_GAMMA_SDR;
 
 #ifndef TARGET_BOARD_PLATFORM_RK3288
     UN_USED(fbSize);
@@ -1259,6 +1331,22 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                 else
                                     bNeed = true;
                             }
+
+                            eotf = (*iter_layer)->eotf;
+                            b_hdr2sdr = (*iter_plane)->get_hdr2sdr();
+                            if(eotf != TRADITIONAL_GAMMA_SDR)
+                            {
+                                if(!b_hdr2sdr)
+                                {
+                                    ALOGV("layer name=%s,plane id=%d",(*iter_layer)->name.c_str(),(*iter_plane)->id());
+                                    ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) cann't support etof,layer eotf=%d,hdr2sdr=%d",
+                                            (*iter_plane)->id(),(*iter_layer)->eotf,(*iter_plane)->get_hdr2sdr());
+                                    continue;
+                                }
+                                else
+                                    bNeed = true;
+                            }
+
 #ifdef TARGET_BOARD_PLATFORM_RK3288
                             int src_w,src_h;
 
@@ -1314,6 +1402,16 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
                                     if(no_alpha_planes.size() > 0)
                                     {
                                         ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use alpha feature",(*iter_plane)->id());
+                                        continue;
+                                    }
+                                }
+
+                                if(eotf == TRADITIONAL_GAMMA_SDR && b_hdr2sdr)
+                                {
+                                    std::vector<DrmPlane *> no_eotf_planes = rkGetNoEotfUsablePlanes(crtc);
+                                    if(no_eotf_planes.size() > 0)
+                                    {
+                                        ALOGD_IF(log_level(DBG_DEBUG),"Plane(%d) don't need use eotf feature",(*iter_plane)->id());
                                         continue;
                                     }
                                 }
@@ -2001,14 +2099,22 @@ void video_ui_optimize(const gralloc_module_t *gralloc, hwc_display_contents_1_t
                         int iHeight = hwc_get_handle_height(gralloc,second_layer->handle);
 #endif
                         unsigned int *cpu_addr;
+
+#ifdef TARGET_BOARD_PLATFORM_RK3368
+                        IMG_native_handle_t * pvHandle = (IMG_native_handle_t *)second_layer->handle;
+                        cpu_addr= (unsigned int *)pvHandle->pvBase;
+#else
                         gralloc->lock(gralloc, second_layer->handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
                                 0, 0, iWidth, iHeight, (void **)&cpu_addr);
+#endif
                         ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
                         if(!ret){
                             hd->bHideUi = true;
                             ALOGD_IF(log_level(DBG_VERBOSE), "@video UI close,iWidth=%d,iHeight=%d",iWidth,iHeight);
                         }
+#ifndef TARGET_BOARD_PLATFORM_RK3368
                         gralloc->unlock(gralloc, second_layer->handle);
+#endif
                     }
 
                     if(hd->bHideUi)

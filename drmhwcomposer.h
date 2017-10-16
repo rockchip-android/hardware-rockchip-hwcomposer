@@ -229,6 +229,8 @@ struct DrmHwcLayer {
   int bpp;
   int group_id;
   int share_id;
+  uint32_t colorspace;
+  uint16_t eotf;
   std::string name;
   size_t index;
   hwc_layer_1_t *mlayer;
