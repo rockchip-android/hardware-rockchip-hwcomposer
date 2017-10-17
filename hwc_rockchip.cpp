@@ -1060,7 +1060,7 @@ static bool MatchPlane(std::vector<DrmHwcLayer*>& layer_vector,
 #if RK_RGA
                             if(!drm->isSupportRkRga()
 #if USE_AFBC_LAYER
-                               || isAfbcInternalFormat((*iter_layer)->internal_format)
+                               || (*iter_layer)->is_afbc
 #endif
                                )
 #endif

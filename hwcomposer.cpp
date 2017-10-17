@@ -801,15 +801,32 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
 
 
 #if USE_AFBC_LAYER
-    ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
-                         handle.get(), &internal_format);
-    if (ret) {
-        ALOGE("Failed to get internal_format for buffer %p (%d)", handle.get(), ret);
-        return ret;
+    if(sf_handle)
+    {
+        ret = gralloc->perform(gralloc, GRALLOC_MODULE_PERFORM_GET_INTERNAL_FORMAT,
+                             sf_handle, &internal_format);
+        if (ret) {
+            ALOGE("Failed to get internal_format for buffer %p (%d)", sf_handle, ret);
+            return ret;
+        }
+
+        if(isAfbcInternalFormat(internal_format))
+            is_afbc = true;
     }
 
-    if(isAfbcInternalFormat(internal_format))
-        is_afbc = true;
+    if(bFbTarget_ && !sf_handle)
+    {
+        static int iFbdcSupport = -1;
+
+        if(iFbdcSupport == -1)
+        {
+            char fbdc_value[PROPERTY_VALUE_MAX];
+            property_get("sys.gmali.fbdc_target", fbdc_value, "0");
+            iFbdcSupport = atoi(fbdc_value);
+            if(iFbdcSupport > 0)
+                is_afbc = true;
+        }
+    }
 #endif
 
   return 0;
