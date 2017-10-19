@@ -67,6 +67,7 @@ typedef struct _threadPamaters
 
 typedef struct hwc_drm_display {
   struct hwc_context_t *ctx;
+  const gralloc_module_t *gralloc;
   int display;
 #if RK_VIDEO_UI_OPT
   int iUiFd;

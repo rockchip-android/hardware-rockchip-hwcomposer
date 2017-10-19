@@ -125,7 +125,84 @@ int hwc_static_screen_opt_set(bool isGLESComp)
 }
 #endif
 
-#if 1
+#ifdef USE_HWC2
+int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_content, int display)
+{
+    bool is_3d = false;
+    int force3d = 0;
+    unsigned int numlayer = display_content->numHwLayers;
+    int needStereo = 0;
+
+    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+        if(display_content->hwLayers[j].handle)
+        {
+            needStereo = hwc_get_handle_alreadyStereo(hd->gralloc, display_content->hwLayers[j].handle);
+            if(needStereo > 0)
+            {
+                break;
+            }
+        }
+    }
+
+    if(!needStereo)
+    {
+        force3d = hwc_get_int_property("sys.hwc.force3d.primary","0");
+
+        if(1==force3d || 2==force3d){
+            if(display == 0 || display == 1)
+                needStereo = force3d;
+        }
+    }
+
+    if(needStereo)
+    {
+        is_3d = true;
+        if(needStereo == 1)
+            hd->stereo_mode = H_3D;
+        else if (needStereo == 2)
+            hd->stereo_mode = V_3D;
+        else if (needStereo == 8)
+            hd->stereo_mode = FPS_3D;
+        else
+            ALOGD_IF(log_level(DBG_VERBOSE),"It is unknow 3d mode needStereo=%d",needStereo);
+    }
+
+    for (unsigned int j = 0; j <(numlayer - 1); j++) {
+        if(display_content->hwLayers[j].handle)
+        {
+            int ret = hwc_set_handle_displayStereo(hd->gralloc, display_content->hwLayers[j].handle, needStereo);
+            if(ret < 0)
+            {
+                ALOGE("%s:hwc_set_handle_displayStereo fail", __FUNCTION__);
+                break;
+            }
+        }
+    }
+
+    if (needStereo & 0x8000) {
+        for (unsigned int j = 0; j <(numlayer - 1); j++) {
+            if(display_content->hwLayers[j].handle)
+            {
+                int ret = hwc_set_handle_displayStereo(hd->gralloc, display_content->hwLayers[j].handle, needStereo & (~0x8000));
+                if(ret < 0)
+                {
+                    ALOGE("%s:hwc_set_handle_displayStereo fail", __FUNCTION__);
+                    break;
+                }
+
+                ret = hwc_set_handle_alreadyStereo(hd->gralloc, display_content->hwLayers[j].handle, 0);
+                if(ret < 0)
+                {
+                    ALOGE("%s:hwc_set_handle_alreadyStereo fail", __FUNCTION__);
+                    break;
+                }
+            }
+        }
+    }
+    return is_3d;
+}
+
+#else
 int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_content, int display)
 {
     bool is_3d = false;

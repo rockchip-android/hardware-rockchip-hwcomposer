@@ -619,7 +619,23 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
   UN_USED(importer);
 
   bClone_ = bClone;
-  stereo = sf_layer->alreadyStereo;
+
+    int32_t alreadyStereo = 0;
+#ifdef USE_HWC2
+    if(sf_layer->handle)
+    {
+        alreadyStereo = hwc_get_handle_alreadyStereo(ctx->gralloc, sf_layer->handle);
+        if(alreadyStereo < 0)
+        {
+            ALOGE("hwc_get_handle_alreadyStereo fail");
+            alreadyStereo = 0;
+        }
+    }
+#else
+    alreadyStereo = sf_layer->alreadyStereo;
+#endif
+  stereo = alreadyStereo;
+
   if(sf_layer->compositionType == HWC_FRAMEBUFFER_TARGET)
    bFbTarget_ = true;
   else
@@ -740,10 +756,20 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     bpp = android::bytesPerPixel(format);
     size = (source_crop.right - source_crop.left) * (source_crop.bottom - source_crop.top) * bpp;
     is_large = (mode.h_display()*mode.v_display()*4*3/4 > size)? true:false;
-    name = sf_layer->LayerName;
+
+    char layername[100];
+#ifdef USE_HWC2
+    if(sf_handle)
+    {
+            hwc_get_handle_layername(gralloc, sf_handle, layername, 100);
+    }
+#else
+    strcpy(layername, sf_layer->LayerName);
+#endif
+    name = layername;
     mlayer = sf_layer;
 
-    ALOGV("\t layerName=%s,sourceCropf(%f,%f,%f,%f)",sf_layer->LayerName,
+    ALOGV("\t layerName=%s,sourceCropf(%f,%f,%f,%f)",layername,
     source_crop.left,source_crop.top,source_crop.right,source_crop.bottom);
     ALOGV("h_scale_mul=%f,v_scale_mul=%f,is_scale=%d,is_large=%d",h_scale_mul,v_scale_mul,is_scale,is_large);
 
@@ -961,7 +987,14 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
 #endif
         if(layer->handle)
         {
-            DumpLayer(layer->LayerName,layer->handle);
+            char layername[100];
+
+#ifdef USE_HWC2
+            hwc_get_handle_layername(ctx->gralloc, layer->handle, layername, 100);
+#else
+            strcpy(layername, layer->LayerName);
+#endif
+            DumpLayer(layername,layer->handle);
 
 #if RK_DRM_GRALLOC
             format = hwc_get_handle_attibute(ctx->gralloc,layer->handle,ATT_FORMAT);
@@ -980,7 +1013,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
                 return true;
             }
 #if 1
-            if(!strstr(layer->LayerName,"Sprite"))
+            if(!strstr(layername,"Sprite"))
             {
                 int src_xoffset = layer->sourceCropf.left * getPixelWidthByAndroidFormat(format);
                 if(!IS_ALIGN(src_xoffset,16))
@@ -1238,7 +1271,21 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     {
         for(int j=num_layers-1; j>=0; j--) {
             hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
-            if(layer->alreadyStereo == FPS_3D) {
+            int32_t alreadyStereo = 0;
+#ifdef USE_HWC2
+            if(layer->handle)
+            {
+                alreadyStereo = hwc_get_handle_alreadyStereo(ctx->gralloc, layer->handle);
+                if(alreadyStereo < 0)
+                {
+                    ALOGE("hwc_get_handle_alreadyStereo fail");
+                    alreadyStereo = 0;
+                }
+            }
+#else
+            alreadyStereo = layer->alreadyStereo;
+#endif
+            if(alreadyStereo == FPS_3D) {
                 iLastFps = j;
                 break;
             }
@@ -1268,7 +1315,26 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
         if(hd->stereo_mode == FPS_3D && iLastFps < num_layers-1)
         {
-            if(j>iLastFps  && sf_layer->alreadyStereo != FPS_3D && sf_layer->displayStereo)
+            int32_t alreadyStereo = 0, displayStereo = 0;
+#ifdef USE_HWC2
+            alreadyStereo = hwc_get_handle_alreadyStereo(ctx->gralloc, sf_layer->handle);
+            if(alreadyStereo < 0)
+            {
+                ALOGE("hwc_get_handle_alreadyStereo fail");
+                alreadyStereo = 0;
+            }
+
+            displayStereo = hwc_get_handle_displayStereo(ctx->gralloc, sf_layer->handle);
+            if(displayStereo < 0)
+            {
+                ALOGE("hwc_get_handle_alreadyStereo fail");
+                displayStereo = 0;
+            }
+#else
+            alreadyStereo = sf_layer->alreadyStereo;
+            displayStereo = sf_layer->displayStereo;
+#endif
+            if(j>iLastFps  && alreadyStereo!= FPS_3D && displayStereo)
             {
                 bHasFPS_3D_UI = true;
             }
@@ -1419,13 +1485,26 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
 
     for (int j = 0; j < num_layers; ++j) {
         hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+        char layername[100];
 
-        if(layer->compositionType==HWC_FRAMEBUFFER)
-            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_FRAMEBUFFER",layer->LayerName);
-        else if(layer->compositionType==HWC_OVERLAY)
-            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OVERLAY",layer->LayerName);
+#ifdef USE_HWC2
+        if(layer->handle == NULL)
+        {
+            strcpy(layername,"");
+        }
         else
-            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OTHER",layer->LayerName);
+        {
+            hwc_get_handle_layername(ctx->gralloc, layer->handle, layername, 100);
+        }
+#else
+        strcpy(layername, layer->LayerName);
+#endif
+        if(layer->compositionType==HWC_FRAMEBUFFER)
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_FRAMEBUFFER",layername);
+        else if(layer->compositionType==HWC_OVERLAY)
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OVERLAY",layername);
+        else
+            ALOGD_IF(log_level(DBG_DEBUG),"%s: HWC_OTHER",layername);
     }
   }
 
@@ -2074,6 +2153,7 @@ static int hwc_set_initial_config(struct hwc_context_t *ctx, int display) {
 static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hwc_drm_display_t *hd = &ctx->displays[display];
     hd->ctx = ctx;
+    hd->gralloc = ctx->gralloc;
 #if RK_VIDEO_UI_OPT
     hd->iUiFd = -1;
     hd->bHideUi = false;
