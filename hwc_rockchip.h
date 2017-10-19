@@ -114,6 +114,14 @@ int detect_3d_mode(hwc_drm_display_t *hd, hwc_display_contents_1_t *display_cont
 int hwc_control_3dmode(int fd_3d, int value, int flag);
 #endif
 float getPixelWidthByAndroidFormat(int format);
+
+int hwc_get_handle_displayStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd);
+int hwc_set_handle_displayStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd, int32_t displayStereo);
+int hwc_get_handle_alreadyStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd);
+int hwc_set_handle_alreadyStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd, int32_t alreadyStereo);
+int hwc_get_handle_layername(const gralloc_module_t *gralloc, buffer_handle_t hnd, char* layername, unsigned long len);
+int hwc_set_handle_layername(const gralloc_module_t *gralloc, buffer_handle_t hnd, const char* layername);
+
 int hwc_get_handle_width(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 int hwc_get_handle_height(const gralloc_module_t *gralloc, buffer_handle_t hnd);
 int hwc_get_handle_format(const gralloc_module_t *gralloc, buffer_handle_t hnd);

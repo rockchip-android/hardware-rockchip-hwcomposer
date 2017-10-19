@@ -281,6 +281,189 @@ int hwc_control_3dmode(int fd_3d, int value, int flag)
 
 #endif
 
+int hwc_get_handle_displayStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+    }
+
+    return rk_ashmem.displayStereo;
+}
+
+int hwc_set_handle_displayStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd, int32_t displayStereo)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        goto exit;
+    }
+
+    if(displayStereo != rk_ashmem.displayStereo)
+    {
+        op = GRALLOC_MODULE_PERFORM_SET_RK_ASHMEM;
+        rk_ashmem.displayStereo = displayStereo;
+
+        if(gralloc && gralloc->perform)
+            ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+        else
+            ret = -EINVAL;
+
+        if(ret != 0)
+        {
+            ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        }
+    }
+
+exit:
+    return ret;
+}
+
+int hwc_get_handle_alreadyStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+    }
+
+    return rk_ashmem.alreadyStereo;
+}
+
+int hwc_set_handle_alreadyStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd, int32_t alreadyStereo)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        goto exit;
+    }
+
+    if(alreadyStereo != rk_ashmem.alreadyStereo )
+    {
+        op = GRALLOC_MODULE_PERFORM_SET_RK_ASHMEM;
+        rk_ashmem.alreadyStereo = alreadyStereo;
+
+        if(gralloc && gralloc->perform)
+            ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+        else
+            ret = -EINVAL;
+
+        if(ret != 0)
+        {
+            ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        }
+    }
+
+exit:
+    return ret;
+}
+
+int hwc_get_handle_layername(const gralloc_module_t *gralloc, buffer_handle_t hnd, char* layername, unsigned long len)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+    unsigned long str_size;
+
+    if(!layername)
+        return -EINVAL;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        goto exit;
+    }
+
+    str_size = strlen(rk_ashmem.LayerName)+1;
+    str_size = str_size > len ? len:str_size;
+    memcpy(layername,rk_ashmem.LayerName,str_size);
+
+exit:
+    return ret;
+}
+
+int hwc_set_handle_layername(const gralloc_module_t *gralloc, buffer_handle_t hnd, const char* layername)
+{
+    int ret = 0;
+    int op = GRALLOC_MODULE_PERFORM_GET_RK_ASHMEM;
+    struct rk_ashmem_t rk_ashmem;
+    unsigned long str_size;
+
+    if(!layername)
+        return -EINVAL;
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+        goto exit;
+    }
+
+    op = GRALLOC_MODULE_PERFORM_SET_RK_ASHMEM;
+
+    str_size = strlen(layername)+1;
+    str_size = str_size > sizeof(rk_ashmem.LayerName) ? sizeof(rk_ashmem.LayerName):str_size;
+    memcpy(rk_ashmem.LayerName,layername,str_size);
+
+    if(gralloc && gralloc->perform)
+        ret = gralloc->perform(gralloc, op, hnd, &rk_ashmem);
+    else
+        ret = -EINVAL;
+
+    if(ret != 0)
+    {
+        ALOGE("%s:cann't get value from gralloc", __FUNCTION__);
+    }
+
+exit:
+    return ret;
+}
+
+
 int hwc_get_handle_width(const gralloc_module_t *gralloc, buffer_handle_t hnd)
 {
     int ret = 0;
