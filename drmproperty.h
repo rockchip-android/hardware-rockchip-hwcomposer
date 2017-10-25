@@ -49,7 +49,7 @@ class DrmProperty {
 
   void set_feature(const char* pcFeature)const;
 
-  drmModePropertyPtr get_raw_property() { return p_; }
+  drmModePropertyPtr get_raw_property()const { return p_; }
 
  private:
   class DrmPropertyEnum {

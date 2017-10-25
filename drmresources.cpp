@@ -1125,19 +1125,20 @@ void DrmResources::dump_blob(uint32_t blob_id, std::ostringstream *out) {
 	drmModeFreePropertyBlob(blob);
 }
 
-bool DrmResources::is_hdr_panel_support_st2084(drmModePropertyPtr prop) {
+bool DrmResources::is_hdr_panel_support_st2084(DrmConnector *conn) const {
 	uint32_t i;
 	struct hdr_static_metadata* blob_data;
 	drmModePropertyBlobPtr blob;
 	bool bSupport = false;
+    drmModePropertyPtr hdr_panel_prop = conn->hdr_panel_property().get_raw_property();
 
-    if (drm_property_type_is(prop, DRM_MODE_PROP_BLOB))
+    if (drm_property_type_is(hdr_panel_prop, DRM_MODE_PROP_BLOB))
     {
         ALOGE("%s:line=%d,is not blob",__FUNCTION__,__LINE__);
         return false;
     }
 
-	blob = drmModeGetPropertyBlob(fd(), prop->blob_ids[0]);
+	blob = drmModeGetPropertyBlob(fd(), hdr_panel_prop->blob_ids[0]);
 	if (!blob) {
 		ALOGE("%s:line=%d, blob is null",__FUNCTION__,__LINE__);
 		return false;
@@ -1150,6 +1151,31 @@ bool DrmResources::is_hdr_panel_support_st2084(drmModePropertyPtr prop) {
 	drmModeFreePropertyBlob(blob);
 
 	return bSupport;
+}
+
+bool DrmResources::is_hdmi_support_hdr(DrmConnector *conn) const
+{
+    return conn->hdr_metadata_property().id() && is_hdr_panel_support_st2084(conn);
+}
+
+bool DrmResources::is_plane_support_hdr2sdr(DrmCrtc *crtc) const
+{
+    bool bHdr2sdr = false;
+    for (std::vector<PlaneGroup *> ::const_iterator iter = plane_groups_.begin();
+           iter != plane_groups_.end(); ++iter)
+    {
+           for(std::vector<DrmPlane*> ::const_iterator iter_plane = (*iter)->planes.begin();
+           iter_plane != (*iter)->planes.end(); ++iter_plane)
+        {
+            if((*iter_plane)->GetCrtcSupported(*crtc) && (*iter_plane)->get_hdr2sdr())
+            {
+                bHdr2sdr = true;
+                break;
+            }
+        }
+    }
+
+    return bHdr2sdr;
 }
 
 void DrmResources::dump_prop(drmModePropertyPtr prop,

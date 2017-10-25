@@ -919,10 +919,21 @@ static bool hwc_skip_layer(const std::pair<int, int> &indices, int i) {
   return indices.first >= 0 && i >= indices.first && i <= indices.second;
 }
 
-static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t *display_content, int display_id)
+static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector, hwc_display_contents_1_t *display_content, int display_id)
 {
     int num_layers = display_content->numHwLayers;
     hwc_drm_display_t *hd = &ctx->displays[display_id];
+    DrmCrtc *crtc = NULL;
+    if (!connector) {
+      ALOGE("Failed to get connector for display %d line=%d", display_id, __LINE__);
+    }
+    else
+    {
+        crtc = ctx->drm.GetCrtcFromConnector(connector);
+        if (connector->state() != DRM_MODE_CONNECTED || !crtc) {
+          ALOGE("Failed to get crtc for display %d line=%d", display_id, __LINE__);
+        }
+    }
 
     //force go into GPU
     /*
@@ -1032,8 +1043,12 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, hwc_display_contents_1_t
 
             if(hd->isHdr)
             {
-                ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d", __LINE__);
-                return true;
+                if(connector && !ctx->drm.is_hdmi_support_hdr(connector)
+                    && crtc && !ctx->drm.is_plane_support_hdr2sdr(crtc))
+                {
+                    ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d", __LINE__);
+                    return true;
+                }
             }
 #if 1
             if(!strstr(layername,"Sprite"))
@@ -1345,7 +1360,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                 if(usage & HDRUSAGE)
                 {
                     isHdr = true;
-                    if(hd->isHdr != isHdr)
+                    if(hd->isHdr != isHdr && ctx->drm.is_hdmi_support_hdr(connector))
                     {
                         uint32_t android_colorspace = hwc_get_layer_colorspace(layer);
                         struct hdr_static_metadata hdr_metadata;
@@ -1388,7 +1403,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
 #endif
 
-        if(!hd->isHdr)
+        if(!hd->isHdr && ctx->drm.is_hdmi_support_hdr(connector))
         {
             uint32_t android_colorspace = 0;
             struct hdr_static_metadata hdr_metadata;
@@ -1436,7 +1451,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     }
 
     if(!use_framebuffer_target)
-        use_framebuffer_target = is_use_gles_comp(ctx, display_contents[i], connector->display());
+        use_framebuffer_target = is_use_gles_comp(ctx, connector, display_contents[i], connector->display());
 
 #if RK_VIDEO_UI_OPT
     video_ui_optimize(ctx->gralloc, display_contents[i], &ctx->displays[connector->display()]);
