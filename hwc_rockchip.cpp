@@ -358,6 +358,7 @@ int hwc_control_3dmode(int fd_3d, int value, int flag)
 
 #endif
 
+#ifdef USE_HWC2
 int hwc_get_handle_displayStereo(const gralloc_module_t *gralloc, buffer_handle_t hnd)
 {
     int ret = 0;
@@ -539,7 +540,7 @@ int hwc_set_handle_layername(const gralloc_module_t *gralloc, buffer_handle_t hn
 exit:
     return ret;
 }
-
+#endif
 
 int hwc_get_handle_width(const gralloc_module_t *gralloc, buffer_handle_t hnd)
 {
