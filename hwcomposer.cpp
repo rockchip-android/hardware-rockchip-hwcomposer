@@ -724,6 +724,10 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
         format = hwc_get_handle_format(gralloc,sf_layer->handle);
 #endif
     }
+    else
+    {
+        format = HAL_PIXEL_FORMAT_RGBA_8888;
+    }
     if(format == HAL_PIXEL_FORMAT_YCrCb_NV12 || format == HAL_PIXEL_FORMAT_YCrCb_NV12_10)
         is_yuv = true;
     else
@@ -748,7 +752,7 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
     }
     else
     {
-        colorspace = V4L2_COLORSPACE_SRGB;
+        colorspace = V4L2_COLORSPACE_DEFAULT;
         eotf = TRADITIONAL_GAMMA_SDR;
     }
 
