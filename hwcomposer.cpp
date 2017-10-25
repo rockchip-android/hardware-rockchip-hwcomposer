@@ -735,7 +735,7 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
         colorspace = colorspace_convert_to_linux(android_colorspace);
         if(colorspace == 0)
         {
-            colorspace = V4L2_COLORSPACE_SRGB;
+            colorspace = V4L2_COLORSPACE_DEFAULT;
         }
 
         if((android_colorspace & HAL_DATASPACE_TRANSFER_ST2084) == HAL_DATASPACE_TRANSFER_ST2084)
@@ -1148,7 +1148,7 @@ static bool set_hdmi_hdr_meta(struct hwc_context_t *ctx, DrmConnector *connector
         {
             ALOGD_IF(log_level(DBG_VERBOSE),"%s: hdr_metadata eotf=0x%x, hd->last_hdr_metadata=0x%x", __FUNCTION__,
                                             hdr_metadata->eotf, hd->last_hdr_metadata.eotf);
-            ctx->drm.CreatePropertyBlob(hdr_metadata, sizeof(hdr_metadata), &blob_id);
+            ctx->drm.CreatePropertyBlob(hdr_metadata, sizeof(struct hdr_static_metadata), &blob_id);
             ret = drmModeAtomicAddProperty(pset, connector->id(), connector->hdr_metadata_property().id(), blob_id);
             if (ret < 0) {
               ALOGE("%s:line=%d Failed to add prop[%d] to [%d]", __FUNCTION__, __LINE__, connector->hdr_metadata_property().id(), connector->id());
