@@ -2100,11 +2100,11 @@ void video_ui_optimize(const gralloc_module_t *gralloc, hwc_display_contents_1_t
 #endif
                         unsigned int *cpu_addr;
 
-#ifdef TARGET_BOARD_PLATFORM_RK3368
+#if 0
                         IMG_native_handle_t * pvHandle = (IMG_native_handle_t *)second_layer->handle;
                         cpu_addr= (unsigned int *)pvHandle->pvBase;
 #else
-                        gralloc->lock(gralloc, second_layer->handle, GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK,
+                        gralloc->lock(gralloc, second_layer->handle, GRALLOC_USAGE_SW_READ_MASK,
                                 0, 0, iWidth, iHeight, (void **)&cpu_addr);
 #endif
                         ret = DetectValidData((int *)(cpu_addr),iWidth,iHeight);
