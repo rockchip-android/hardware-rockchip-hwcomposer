@@ -70,7 +70,8 @@ class DrmConnector {
   const DrmProperty &hdr_metadata_property() const;
   const DrmProperty &hdr_panel_property() const;
   const DrmProperty &hdmi_output_colorimetry_property() const;
-
+  const DrmProperty &hdmi_output_format_property() const;
+  const DrmProperty &hdmi_output_depth_property() const;
   const std::vector<DrmEncoder *> &possible_encoders() const {
     return possible_encoders_;
   }
@@ -118,6 +119,8 @@ class DrmConnector {
   DrmProperty hdr_metadata_property_;
   DrmProperty hdr_panel_property_;
   DrmProperty hdmi_output_colorimetry_;
+  DrmProperty hdmi_output_format_;
+  DrmProperty hdmi_output_depth_;
 
   std::vector<DrmEncoder *> possible_encoders_;
   uint32_t possible_displays_;

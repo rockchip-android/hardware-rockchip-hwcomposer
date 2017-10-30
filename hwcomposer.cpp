@@ -1129,6 +1129,166 @@ static HDMI_STAT detect_hdmi_status(void)
         return HDMI_ON;
 }
 
+static bool parse_hdmi_output_format_prop(char* strprop, drm_hdmi_output_type *format, dw_hdmi_rockchip_color_depth *depth) {
+    char color_depth[PROPERTY_VALUE_MAX];
+    char color_format[PROPERTY_VALUE_MAX];
+    if (!strcmp(strprop, "Auto")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR_HQ;
+        *depth = ROCKCHIP_DEPTH_DEFAULT;
+        return true;
+    }
+
+    if (!strcmp(strprop, "RGB-8bit")) {
+        *format = DRM_HDMI_OUTPUT_DEFAULT_RGB;
+        *depth = ROCKCHIP_HDMI_DEPTH_8;
+        return true;
+    }
+
+    if (!strcmp(strprop, "RGB-10bit")) {
+        *format = DRM_HDMI_OUTPUT_DEFAULT_RGB;
+        *depth = ROCKCHIP_HDMI_DEPTH_10;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR444-8bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR444;
+        *depth = ROCKCHIP_HDMI_DEPTH_8;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR444-10bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR444;
+        *depth = ROCKCHIP_HDMI_DEPTH_10;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR422-8bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR422;
+        *depth = ROCKCHIP_HDMI_DEPTH_8;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR422-10bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR422;
+        *depth = ROCKCHIP_HDMI_DEPTH_10;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR420-8bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR420;
+        *depth = ROCKCHIP_HDMI_DEPTH_8;
+        return true;
+    }
+
+    if (!strcmp(strprop, "YCBCR420-10bit")) {
+        *format = DRM_HDMI_OUTPUT_YCBCR420;
+        *depth = ROCKCHIP_HDMI_DEPTH_10;
+        return true;
+    }
+    ALOGE("hdmi output format is invalid. [%s]", strprop);
+    return false;
+}
+
+static bool update_hdmi_output_format(struct hwc_context_t *ctx, DrmConnector *connector, int display,
+                         hwc_drm_display_t *hd) {
+
+    int timeline = 0;
+    drm_hdmi_output_type    color_format = DRM_HDMI_OUTPUT_DEFAULT_RGB;
+    dw_hdmi_rockchip_color_depth color_depth = ROCKCHIP_HDMI_DEPTH_8;
+    int ret = 0;
+    int need_change_format = 0;
+    int need_change_depth = 0;
+    char prop_format[PROPERTY_VALUE_MAX];
+    timeline = property_get_int32("sys.display.timeline", -1);
+    drmModeAtomicReqPtr pset = NULL;
+    /*
+    * force update propetry when timeline is zero or not exist.
+    */
+    if (timeline && timeline == hd->display_timeline &&
+    hd->hotplug_timeline == hd->ctx->drm.timeline())
+        return 0;
+    //hd->display_timeline = timeline;//let update_display_bestmode function update the value.
+    //hd->hotplug_timeline = hd->ctx->drm.timeline();//let update_display_bestmode function update the value.
+    memset(prop_format, 0, sizeof(prop_format));
+    if (display == HWC_DISPLAY_PRIMARY)
+    {
+    /* if resolution is null,set to "Auto" */
+        property_get("persist.sys.color.main", prop_format, "Auto");
+    }
+    else
+    {
+        property_get("persist.sys.color.aux", prop_format, "Auto");
+    }
+    ret = parse_hdmi_output_format_prop(prop_format, &color_format, &color_depth);
+    if (ret == false) {
+        return false;
+    }
+
+    if(hd->color_format != color_format) {
+        need_change_format = 1;
+    }
+
+    if(hd->color_depth != color_depth) {
+        need_change_depth = 1;
+    }
+    if(connector->hdmi_output_format_property().id() > 0 && need_change_format > 0) {
+
+        pset = drmModeAtomicAlloc();
+        if (!pset) {
+            ALOGE("%s:line=%d Failed to allocate property set", __FUNCTION__, __LINE__);
+            return false;
+        }
+        ALOGD_IF(log_level(DBG_VERBOSE),"%s: change hdmi output format: %d", __FUNCTION__, color_format);
+        ret = drmModeAtomicAddProperty(pset, connector->id(), connector->hdmi_output_format_property().id(), color_format);
+        if (ret < 0) {
+            ALOGE("%s:line=%d Failed to add prop[%d] to [%d]", __FUNCTION__, __LINE__, connector->hdmi_output_format_property().id(), connector->id());
+        }
+
+        if (ret < 0) {
+            ALOGE("%s:line=%d Failed to commit pset ret=%d\n", __FUNCTION__, __LINE__, ret);
+            drmModeAtomicFree(pset);
+            return false;
+        }
+        else
+        {
+            hd->color_format = color_format;
+        }
+    }
+
+    if(connector->hdmi_output_depth_property().id() > 0 && need_change_depth > 0) {
+
+        if (!pset) {
+            pset = drmModeAtomicAlloc();
+        }
+        if (!pset) {
+            ALOGE("%s:line=%d Failed to allocate property set", __FUNCTION__, __LINE__);
+            return false;
+        }
+
+        ALOGD_IF(log_level(DBG_VERBOSE),"%s: change hdmi output depth: %d", __FUNCTION__, color_depth);
+        ret = drmModeAtomicAddProperty(pset, connector->id(), connector->hdmi_output_depth_property().id(), color_depth);
+        if (ret < 0) {
+            ALOGE("%s:line=%d Failed to add prop[%d] to [%d]", __FUNCTION__, __LINE__, connector->hdmi_output_depth_property().id(), connector->id());
+        }
+
+        if (ret < 0) {
+            ALOGE("%s:line=%d Failed to commit pset ret=%d\n", __FUNCTION__, __LINE__, ret);
+            drmModeAtomicFree(pset);
+            return false;
+        }
+        else
+        {
+            hd->color_depth = color_depth;
+        }
+    }
+    if (pset != NULL) {
+        drmModeAtomicCommit(ctx->drm.fd(), pset, DRM_MODE_ATOMIC_ALLOW_MODESET, &ctx->drm);
+        drmModeAtomicFree(pset);
+        pset = NULL;
+    }
+    return true;
+}
+
 /**
  * @brief set hdr_metadata and colorimetry.
  *
@@ -1277,7 +1437,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
       hwc_list_nodraw(display_contents[i]);
       continue;
     }
-
+	update_hdmi_output_format(ctx, connector, i, hd);
     update_display_bestmode(hd, i, connector);
     DrmMode mode = connector->best_mode();
     connector->set_current_mode(mode);

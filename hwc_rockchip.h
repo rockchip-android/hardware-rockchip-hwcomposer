@@ -82,6 +82,24 @@ enum v4l2_colorspace {
         V4L2_COLORSPACE_DCI_P3        = 12,
 };
 
+
+/* HDMI output pixel format */
+enum drm_hdmi_output_type {
+	DRM_HDMI_OUTPUT_DEFAULT_RGB, /* default RGB */
+	DRM_HDMI_OUTPUT_YCBCR444, /* YCBCR 444 */
+	DRM_HDMI_OUTPUT_YCBCR422, /* YCBCR 422 */
+	DRM_HDMI_OUTPUT_YCBCR420, /* YCBCR 420 */
+	DRM_HDMI_OUTPUT_YCBCR_HQ, /* Highest subsampled YUV */
+	DRM_HDMI_OUTPUT_YCBCR_LQ, /* Lowest subsampled YUV */
+	DRM_HDMI_OUTPUT_INVALID, /* Guess what ? */
+};
+
+enum dw_hdmi_rockchip_color_depth {
+	ROCKCHIP_DEPTH_DEFAULT = 0,
+	ROCKCHIP_HDMI_DEPTH_8 = 8,
+	ROCKCHIP_HDMI_DEPTH_10 = 10,
+};
+
 typedef std::map<int, std::vector<DrmHwcLayer*>> LayerMap;
 typedef LayerMap::iterator LayerMapIter;
 struct hwc_context_t;
@@ -137,6 +155,8 @@ typedef struct hwc_drm_display {
   bool isHdr;
   struct hdr_static_metadata last_hdr_metadata;
   int colorimetry;
+  int color_format;
+  int color_depth;
   int framebuffer_width;
   int framebuffer_height;
   int rel_xres;
