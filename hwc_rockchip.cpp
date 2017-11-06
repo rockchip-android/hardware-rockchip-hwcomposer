@@ -2112,7 +2112,7 @@ void video_ui_optimize(const gralloc_module_t *gralloc, hwc_display_contents_1_t
                             hd->bHideUi = true;
                             ALOGD_IF(log_level(DBG_VERBOSE), "@video UI close,iWidth=%d,iHeight=%d",iWidth,iHeight);
                         }
-#ifndef TARGET_BOARD_PLATFORM_RK3368
+#if 1
                         gralloc->unlock(gralloc, second_layer->handle);
 #endif
                     }
