@@ -386,11 +386,22 @@ int DrmResources::Init() {
   }
 
   if (!found_primary) {
+    for (auto &conn : connectors_) {
+      found_primary = true;
+      conn->set_display_possible(conn->possible_displays() | HWC_DISPLAY_PRIMARY_BIT);
+      SetPrimaryDisplay(conn.get());
+      break;
+    }
+  }
+
+  if (!found_primary) {
     ALOGE("failed to find primary display\n");
     return -ENODEV;
   }
 
   for (auto &conn : connectors_) {
+      if (GetConnectorFromType(HWC_DISPLAY_PRIMARY) == conn.get())
+        continue;
       if (!(conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT))
         continue;
       if (conn->state() != DRM_MODE_CONNECTED)
