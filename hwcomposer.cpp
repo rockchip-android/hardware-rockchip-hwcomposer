@@ -193,6 +193,14 @@ class DrmHotplugHandler : public DrmEventHandler {
     }
 
     if (!primary) {
+      for (auto &conn : drm_->connectors()) {
+        if (!(conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT))
+          continue;
+        primary = conn.get();
+      }
+    }
+
+    if (!primary) {
       ALOGE("%s %d Failed to find primary display\n", __FUNCTION__, __LINE__);
       return;
     }
