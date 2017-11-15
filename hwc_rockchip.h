@@ -180,11 +180,9 @@ int hwc_init_version();
 #if USE_AFBC_LAYER
 bool isAfbcInternalFormat(uint64_t internal_format);
 #endif
-
+#if RK_INVALID_REFRESH
 int init_thread_pamaters(threadPamaters* mThreadPamaters);
 int free_thread_pamaters(threadPamaters* mThreadPamaters);
-
-#if RK_INVALID_REFRESH
 int hwc_static_screen_opt_set(bool isGLESComp);
 #endif
 

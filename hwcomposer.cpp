@@ -67,9 +67,9 @@ static int update_display_bestmode(hwc_drm_display_t *hd, int display, DrmConnec
 #if SKIP_BOOT
 static unsigned int g_boot_cnt = 0;
 #endif
-#if RK_INVALID_REFRESH
+//#if RK_INVALID_REFRESH
 hwc_context_t* g_ctx = NULL;
-#endif
+//#endif
 
 class DummySwSyncTimeline {
  public:
@@ -295,8 +295,9 @@ struct hwc_context_t {
   int fb_fd;
   int fb_blanked;
   int hdmi_status_fd;
-#if RK_INVALID_REFRESH
+
     bool                isGLESComp;
+#if RK_INVALID_REFRESH
     bool                mOneWinOpt;
     threadPamaters      mRefresh;
 #endif

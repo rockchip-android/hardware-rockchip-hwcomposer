@@ -78,6 +78,7 @@ bool isAfbcInternalFormat(uint64_t internal_format)
 }
 #endif
 
+#if RK_INVALID_REFRESH
 int init_thread_pamaters(threadPamaters* mThreadPamaters)
 {
     if(mThreadPamaters) {
@@ -103,7 +104,6 @@ int free_thread_pamaters(threadPamaters* mThreadPamaters)
     return 0;
 }
 
-#if RK_INVALID_REFRESH
 void TimeInt2Obj(int imSecond, timeval *ptVal)
 {
     ptVal->tv_sec=imSecond/1000;
