@@ -1557,6 +1557,50 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
     }
 
+    bool force_not_invalid_refresh = false;
+    for (int j = 0; j < num_layers-1; j++) {
+        hwc_layer_1_t *layer = &display_contents[i]->hwLayers[j];
+
+        if(layer->handle)
+        {
+#if RK_DRM_GRALLOC
+            format = hwc_get_handle_attibute(ctx->gralloc,layer->handle, ATT_FORMAT);
+#else
+            format = hwc_get_handle_format(ctx->gralloc,layer->handle);
+#endif
+
+            char layername[100];
+
+#ifdef USE_HWC2
+            hwc_get_handle_layername(ctx->gralloc, layer->handle, layername, 100);
+#else
+            strcpy(layername, layer->LayerName);
+#endif
+            int src_l,src_t,src_w,src_h;
+
+            src_l = (int)layer->sourceCropf.left;
+            src_t = (int)layer->sourceCropf.top;
+            src_w = (int)(layer->sourceCropf.right - layer->sourceCropf.left);
+            src_h = (int)(layer->sourceCropf.bottom - layer->sourceCropf.top);
+            if(!force_not_invalid_refresh && src_w > src_h && src_w >= 3840
+              && format != HAL_PIXEL_FORMAT_YCrCb_NV12 && format != HAL_PIXEL_FORMAT_YCrCb_NV12_10)
+            {
+                force_not_invalid_refresh = true;
+            }
+            if(strstr(layername,"SurfaceView") && strstr(layername,"gallery"))
+            {
+                 ALOGD_IF(log_level(DBG_DEBUG),"%s:line=%d w=%d,h=%d,force_not_invalid_refresh=%d,format=0x%x",
+                        __FUNCTION__,__LINE__,src_w,src_h,force_not_invalid_refresh,format);
+            }
+         }
+    }
+
+    if(ctx->mOneWinOpt && force_not_invalid_refresh && hd->rel_xres >= 3840 && hd->rel_xres != hd->framebuffer_width)
+    {
+       ALOGD_IF(log_level(DBG_DEBUG),"disable static timer");
+       ctx->mOneWinOpt = false;
+    }
+
     //Switch hdr mode
     if(hd->isHdr != isHdr)
     {
