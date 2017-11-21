@@ -33,11 +33,13 @@ DrmProperty::DrmPropertyEnum::~DrmPropertyEnum() {
 }
 
 DrmProperty::DrmProperty(drmModePropertyPtr p, uint64_t value)
-    : id_(0), type_(DRM_PROPERTY_TYPE_INVALID), flags_(0), name_(""), p_(p) {
+    : id_(0), type_(DRM_PROPERTY_TYPE_INVALID), flags_(0), name_("") {
   Init(p, value);
 }
 
 void DrmProperty::Init(drmModePropertyPtr p, uint64_t value) {
+  id_ = 0;
+  p_ = p;
   id_ = p->prop_id;
   flags_ = p->flags;
   name_ = p->name;
