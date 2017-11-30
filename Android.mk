@@ -139,6 +139,9 @@ endif
 ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),vr)
 LOCAL_CPPFLAGS += -DRK3368_VR
 endif
+ifeq ($(strip $(PRODUCT_BUILD_MODULE)),px5car)
+LOCAL_CPPFLAGS += -DRK3368_PX5CAR
+endif
 endif
 
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3399)
