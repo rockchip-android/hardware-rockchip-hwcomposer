@@ -536,6 +536,9 @@ int DrmResources::Init() {
     return ret;
   }
 
+  prop_timeline_ = 0;
+  hotplug_timeline = 0;
+
   return 0;
 }
 

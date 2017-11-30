@@ -2564,6 +2564,8 @@ static int hwc_initialize_display(struct hwc_context_t *ctx, int display) {
     hd->isHdr = false;
     memset(&hd->last_hdr_metadata, 0, sizeof(hd->last_hdr_metadata));
     hd->colorimetry = 0;
+    hd->hotplug_timeline = 0;
+    hd->display_timeline = 0;
 
   return 0;
 }
