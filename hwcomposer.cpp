@@ -998,6 +998,18 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector,
 
     for (int j = 0; j < num_layers-1; j++) {
         hwc_layer_1_t *layer = &display_content->hwLayers[j];
+        int src_l,src_t,src_w,src_h;
+        src_l = (int)layer->sourceCropf.left;
+        src_t = (int)layer->sourceCropf.top;
+        src_w = (int)(layer->sourceCropf.right - layer->sourceCropf.left);
+        src_h = (int)(layer->sourceCropf.bottom - layer->sourceCropf.top);
+
+        if(src_w <= 0 || src_h <= 0)
+        {
+            ALOGD_IF(log_level(DBG_DEBUG),"layer src sourceCropf(%f,%f,%f,%f) is invalid,go to GPU GLES at line=%d",
+                    layer->sourceCropf.left,layer->sourceCropf.top,layer->sourceCropf.right,layer->sourceCropf.bottom, __LINE__);
+            return true;
+        }
 
         if (layer->flags & HWC_SKIP_LAYER)
         {
