@@ -92,7 +92,15 @@ int DrmConnector::Init() {
   if (ret) {
    ALOGW("Could not get hdmi_output_depth property\n");
   }
+
+  bSupportSt2084_ = drm_->is_hdr_panel_support_st2084(this);
+
   return 0;
+}
+
+bool DrmConnector::is_hdmi_support_hdr() const
+{
+    return hdr_metadata_property_.id() && bSupportSt2084_;
 }
 
 uint32_t DrmConnector::id() const {

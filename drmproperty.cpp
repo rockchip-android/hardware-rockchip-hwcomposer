@@ -39,7 +39,6 @@ DrmProperty::DrmProperty(drmModePropertyPtr p, uint64_t value)
 
 void DrmProperty::Init(drmModePropertyPtr p, uint64_t value) {
   id_ = 0;
-  p_ = p;
   id_ = p->prop_id;
   flags_ = p->flags;
   name_ = p->name;

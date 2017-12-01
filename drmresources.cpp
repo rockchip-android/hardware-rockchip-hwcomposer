@@ -1141,32 +1141,54 @@ bool DrmResources::is_hdr_panel_support_st2084(DrmConnector *conn) const {
 	struct hdr_static_metadata* blob_data;
 	drmModePropertyBlobPtr blob;
 	bool bSupport = false;
-    drmModePropertyPtr hdr_panel_prop = conn->hdr_panel_property().get_raw_property();
+  drmModeObjectPropertiesPtr props;
 
-    if (drm_property_type_is(hdr_panel_prop, DRM_MODE_PROP_BLOB))
-    {
-        ALOGE("%s:line=%d,is not blob",__FUNCTION__,__LINE__);
+  props = drmModeObjectGetProperties(fd(), conn->id(), DRM_MODE_OBJECT_CONNECTOR);
+  if (!props) {
+    ALOGE("Failed to get properties for %d/%x", conn->id(), DRM_MODE_OBJECT_CONNECTOR);
+    return false;
+  }
+
+  bool found = false;
+  int value;
+  for (int i = 0; !found && (size_t)i < props->count_props; ++i) {
+    drmModePropertyPtr p = drmModeGetProperty(fd(), props->props[i]);
+    if (p && !strcmp(p->name, "HDR_PANEL_METADATA")) {
+
+      if (!drm_property_type_is(p, DRM_MODE_PROP_BLOB))
+      {
+          ALOGE("%s:line=%d,is not blob",__FUNCTION__,__LINE__);
+          drmModeFreeProperty(p);
+          drmModeFreeObjectProperties(props);
+          return false;
+      }
+
+      if (!p->count_blobs)
+        value = props->prop_values[i];
+      else
+        value = p->blob_ids[0];
+      blob = drmModeGetPropertyBlob(fd(), value);
+      if (!blob) {
+        ALOGE("%s:line=%d, blob is null",__FUNCTION__,__LINE__);
+        drmModeFreeProperty(p);
+        drmModeFreeObjectProperties(props);
         return false;
+      }
+
+      blob_data = (struct hdr_static_metadata*)blob->data;
+
+      bSupport = blob_data->eotf & (1 << SMPTE_ST2084);
+
+      drmModeFreePropertyBlob(blob);
+
+      found = true;
     }
+    drmModeFreeProperty(p);
+  }
 
-	blob = drmModeGetPropertyBlob(fd(), hdr_panel_prop->blob_ids[0]);
-	if (!blob) {
-		ALOGE("%s:line=%d, blob is null",__FUNCTION__,__LINE__);
-		return false;
-	}
+  drmModeFreeObjectProperties(props);
 
-	blob_data = (struct hdr_static_metadata*)blob->data;
-
-	bSupport = blob_data->eotf & (1 << SMPTE_ST2084);
-
-	drmModeFreePropertyBlob(blob);
-
-	return bSupport;
-}
-
-bool DrmResources::is_hdmi_support_hdr(DrmConnector *conn) const
-{
-    return conn->hdr_metadata_property().id() && is_hdr_panel_support_st2084(conn);
+  return bSupport;
 }
 
 bool DrmResources::is_plane_support_hdr2sdr(DrmCrtc *crtc) const

@@ -1068,7 +1068,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector,
 
             if(hd->isHdr)
             {
-                if(connector && !ctx->drm.is_hdmi_support_hdr(connector)
+                if(connector && !connector->is_hdmi_support_hdr()
                     && crtc && !ctx->drm.is_plane_support_hdr2sdr(crtc))
                 {
                     ALOGD_IF(log_level(DBG_DEBUG), "layer is hdr video,go to GPU GLES at line=%d", __LINE__);
@@ -1545,7 +1545,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                 if(usage & HDRUSAGE)
                 {
                     isHdr = true;
-                    if(hd->isHdr != isHdr && ctx->drm.is_hdmi_support_hdr(connector))
+                    if(hd->isHdr != isHdr && connector->is_hdmi_support_hdr())
                     {
                         uint32_t android_colorspace = hwc_get_layer_colorspace(layer);
                         struct hdr_static_metadata hdr_metadata;
@@ -1632,7 +1632,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
         }
 #endif
 
-        if(!hd->isHdr && ctx->drm.is_hdmi_support_hdr(connector))
+        if(!hd->isHdr && connector->is_hdmi_support_hdr())
         {
             uint32_t android_colorspace = 0;
             struct hdr_static_metadata hdr_metadata;

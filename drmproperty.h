@@ -49,8 +49,6 @@ class DrmProperty {
 
   void set_feature(const char* pcFeature)const;
 
-  drmModePropertyPtr get_raw_property()const { return p_; }
-
  private:
   class DrmPropertyEnum {
    public:
@@ -72,7 +70,6 @@ class DrmProperty {
   std::vector<uint64_t> values_;
   std::vector<DrmPropertyEnum> enums_;
   std::vector<uint32_t> blob_ids_;
-  drmModePropertyPtr p_;
 };
 }
 

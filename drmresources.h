@@ -118,7 +118,6 @@ class DrmResources {
   }
 #endif
   bool is_hdr_panel_support_st2084(DrmConnector *conn) const;
-  bool is_hdmi_support_hdr(DrmConnector *conn) const;
   bool is_plane_support_hdr2sdr(DrmCrtc *conn) const;
 
  private:
