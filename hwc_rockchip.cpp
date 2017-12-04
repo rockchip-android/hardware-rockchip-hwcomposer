@@ -1644,6 +1644,12 @@ static bool try_mix_policy(DrmResources* drm, DrmCrtc *crtc, bool is_interlaced,
         return false;
     }
 
+    for(auto i = layers.begin(); i != layers.end();i++)
+    {
+        if((*i).raw_sf_layer->compositionType == HWC_MIX)
+            (*i).raw_sf_layer->compositionType = HWC_FRAMEBUFFER;
+    }
+
     /*************************mix down*************************
      many layers
     -----------+----------+------+------+----+------+-------------+--------------------------------+------------------------+------
@@ -1870,7 +1876,7 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
     if(bAllMatch)
         goto AllMatch;
 
-    if( layers.size() < 2 || iPlaneSize < 4)
+    if( layers.size() < 2 /*|| iPlaneSize < 4*/)
     {
         ALOGD_IF(log_level(DBG_DEBUG), "%s:line=%d fail match iPlaneSize=%d, layer size=%d",__FUNCTION__,__LINE__,iPlaneSize,(int)layers.size());
         goto FailMatch;
@@ -1888,14 +1894,14 @@ bool mix_policy(DrmResources* drm, DrmCrtc *crtc, hwc_drm_display_t *hd,
           GLES | 70b34c9080 | 0000 | 0000 | 00 | 0105 | RGBA_8888   |    0.0,    0.0, 2400.0,   84.0 |    0, 1516, 2400, 1600 | taskbar
           GLES | 711ec5a900 | 0000 | 0002 | 00 | 0105 | RGBA_8888   |    0.0,    0.0,   39.0,   49.0 | 1136, 1194, 1175, 1243 | Sprite
     ************************************************************/
-    if(hd->isVideo)
+   // if(hd->isVideo)
     {
         if(hd->mixMode != HWC_MIX_UP)
             hd->mixMode = HWC_MIX_UP;
         if((int)layers.size() < 4)
             layer_indices.first = layers.size() - 2;
         else
-            layer_indices.first = 3;
+            layer_indices.first = iPlaneSize - 1;
         layer_indices.second = layers.size() - 1;
         ALOGD_IF(log_level(DBG_DEBUG), "%s:mix up for video (%d,%d)",__FUNCTION__,layer_indices.first, layer_indices.second);
         bAllMatch = try_mix_policy(drm, crtc,hd->is_interlaced,  layers, tmp_layers, iPlaneSize, composition_planes,
@@ -1968,7 +1974,7 @@ AllMatch:
     {
         float scale_factor = vop_band_width(hd, layers);
         float head_factor = 0.0, tail_factor = 0.0;
-        if(scale_factor > 3.3)
+        if(scale_factor > 4)
         {
             ALOGD_IF(log_level(DBG_DEBUG), "scale_factor=%f is so big",scale_factor);
             if(layers.size() >= 4)

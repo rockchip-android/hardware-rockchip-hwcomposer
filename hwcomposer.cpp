@@ -1011,12 +1011,13 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector,
             return true;
         }
 
+#if 0
         if (layer->flags & HWC_SKIP_LAYER)
         {
             ALOGD_IF(log_level(DBG_DEBUG),"layer is skipped,go to GPU GLES at line=%d", __LINE__);
             return true;
         }
-
+#endif
         if(
 #if RK_RGA
             !ctx->drm.isSupportRkRga() && layer->transform
@@ -1690,7 +1691,7 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
     int index = 0;
     for (int j = 0; j < num_layers; j++) {
       hwc_layer_1_t *sf_layer = &display_contents[i]->hwLayers[j];
-      if(sf_layer->compositionType != HWC_FRAMEBUFFER_TARGET && sf_layer->handle == NULL)
+      if(!(sf_layer->flags & HWC_SKIP_LAYER) && sf_layer->compositionType != HWC_FRAMEBUFFER_TARGET && sf_layer->handle == NULL)
         continue;
       if(sf_layer->compositionType == HWC_NODRAW)
         continue;
