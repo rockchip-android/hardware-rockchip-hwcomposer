@@ -1004,6 +1004,17 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector,
         src_w = (int)(layer->sourceCropf.right - layer->sourceCropf.left);
         src_h = (int)(layer->sourceCropf.bottom - layer->sourceCropf.top);
 
+	if((layer->transform == HWC_TRANSFORM_ROT_90) || (layer->transform == HWC_TRANSFORM_ROT_270))
+	{
+		src_h = ALIGN_DOWN(src_h, 8);
+		src_w = ALIGN_DOWN(src_w, 2);
+	}
+	else
+	{
+		src_w = ALIGN_DOWN(src_w, 8);
+		src_h = ALIGN_DOWN(src_h, 2);
+	}
+
         if(src_w <= 0 || src_h <= 0)
         {
             ALOGD_IF(log_level(DBG_DEBUG),"layer src sourceCropf(%f,%f,%f,%f) is invalid,go to GPU GLES at line=%d",

@@ -614,7 +614,8 @@ DrmRgaBuffer &rgaBuffer, DrmDisplayComposition *display_comp, DrmHwcLayer &layer
     }
     dst_w = dst_r - dst_l;
     dst_h = dst_b - dst_t;
-
+    int dst_raw_w = dst_w;
+    int dst_raw_h = dst_h;
     dst_w = ALIGN_DOWN(dst_w, 8);
     dst_h = ALIGN_DOWN(dst_h, 2);
 #else
