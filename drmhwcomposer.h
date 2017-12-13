@@ -28,7 +28,7 @@
 #include "hwc_debug.h"
 
 /*hwc version*/
-#define GHWC_VERSION                    "0.35"
+#define GHWC_VERSION                    "0.36"
 
 /* hdr usage */
 #define HDRUSAGE                                       0x3000000
