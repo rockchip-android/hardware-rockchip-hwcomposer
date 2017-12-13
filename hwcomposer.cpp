@@ -1015,7 +1015,7 @@ static bool is_use_gles_comp(struct hwc_context_t *ctx, DrmConnector *connector,
 		src_h = ALIGN_DOWN(src_h, 2);
 	}
 
-        if(src_w <= 0 || src_h <= 0)
+        if(hd->isVideo && (layer->transform != 0)  && (src_w <= 0 || src_h <= 0))
         {
             ALOGD_IF(log_level(DBG_DEBUG),"layer src sourceCropf(%f,%f,%f,%f) is invalid,go to GPU GLES at line=%d",
                     layer->sourceCropf.left,layer->sourceCropf.top,layer->sourceCropf.right,layer->sourceCropf.bottom, __LINE__);
