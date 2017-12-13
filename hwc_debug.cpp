@@ -155,6 +155,7 @@ void dump_layer(const gralloc_module_t *gralloc, bool bDump, hwc_layer_1_t *laye
     size_t i;
   std::ostringstream out;
   int format;
+  char layername[100];
 
   if (!log_level(DBG_VERBOSE))
     return;
@@ -172,7 +173,13 @@ void dump_layer(const gralloc_module_t *gralloc, bool bDump, hwc_layer_1_t *laye
 #else
             format = hwc_get_handle_format(gralloc, layer->handle);
 #endif
-            out << "layer[" << index << "]=" << layer->LayerName
+
+#ifdef USE_HWC2
+                hwc_get_handle_layername(gralloc, layer->handle, layername, 100);
+                out << "layer[" << index << "]=" << layername
+#else
+                out << "layer[" << index << "]=" << layer->LayerName
+#endif
                 << "\n\tlayer=" << layer
                 << ",type=" << layer->compositionType
                 << ",hints=" << layer->compositionType
