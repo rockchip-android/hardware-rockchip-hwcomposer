@@ -116,6 +116,8 @@ void DrmResources::init_white_modes(void)
     PARSE(vsync_end);
     PARSE(vscan);
     PARSE(vrefresh);
+    PARSE(htotal);
+    PARSE(vtotal);
     PARSE_HEX(flags);
 
     DrmMode mode(&m);
@@ -130,7 +132,9 @@ bool DrmResources::mode_verify(const DrmMode &m) {
     return true;
 
   for (const DrmMode &mode : white_modes_) {
-    if(mode.h_display() == m.h_display() && mode.v_display() == m.v_display())
+    if (mode.h_display() == m.h_display() && mode.v_display() == m.v_display() &&
+	mode.h_total() == m.h_total() && mode.v_total() == m.v_total() &&
+	mode.clock() == m.clock() && mode.flags() == m.flags())
       return true;
   }
   return false;
