@@ -1639,12 +1639,13 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
             }
          }
     }
-
+#if RK_INVALID_REFRESH
     if(ctx->mOneWinOpt && force_not_invalid_refresh && hd->rel_xres >= 3840 && hd->rel_xres != hd->framebuffer_width)
     {
        ALOGD_IF(log_level(DBG_DEBUG),"disable static timer");
        ctx->mOneWinOpt = false;
     }
+#endif
 
     //Switch hdr mode
     if(hd->isHdr != isHdr)
