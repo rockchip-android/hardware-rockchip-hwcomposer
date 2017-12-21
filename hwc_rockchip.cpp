@@ -809,9 +809,9 @@ uint32_t hwc_get_layer_colorspace(hwc_layer_1_t *layer)
 #define CONTAIN_VALUE(value) ((colorspace & value) == value)
 uint32_t colorspace_convert_to_linux(uint32_t colorspace)
 {
-    if(CONTAIN_VALUE(HAL_DATASPACE_TRANSFER_SRGB))
+    if(CONTAIN_VALUE(HAL_DATASPACE_STANDARD_BT2020))
     {
-        return V4L2_COLORSPACE_SRGB;
+        return V4L2_COLORSPACE_BT2020;
     }
     else if(CONTAIN_VALUE(HAL_DATASPACE_V0_JFIF))
     {
@@ -825,9 +825,9 @@ uint32_t colorspace_convert_to_linux(uint32_t colorspace)
     {
         return V4L2_COLORSPACE_REC709;
     }
-    else if(CONTAIN_VALUE(HAL_DATASPACE_STANDARD_BT2020))
+    else if(CONTAIN_VALUE(HAL_DATASPACE_TRANSFER_SRGB))
     {
-        return V4L2_COLORSPACE_BT2020;
+        return V4L2_COLORSPACE_SRGB;
     }
     else
     {
