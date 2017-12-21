@@ -162,12 +162,16 @@ int DrmPlane::Init() {
     rotation_property_.value(&rotate);
     b_rotate_ = rotate;
 
-    eotf_property_.set_feature("hdr2sdr");
-    eotf_property_.value(&hdr2sdr);
+    feature_property_.set_feature("hdr2sdr");
+    feature_property_.value(&hdr2sdr);
     b_hdr2sdr_ = hdr2sdr;
+	if(b_hdr2sdr_)
+		{
+		ALOGD("zxl b_hdr2sdr_ is support");
+	}
 
-    eotf_property_.set_feature("sdr2hdr");
-    eotf_property_.value(&sdr2hdr);
+    feature_property_.set_feature("sdr2hdr");
+    feature_property_.value(&sdr2hdr);
     b_sdr2hdr_ = sdr2hdr;
 
   return 0;

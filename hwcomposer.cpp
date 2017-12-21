@@ -752,7 +752,10 @@ int DrmHwcLayer::InitFromHwcLayer(struct hwc_context_t *ctx, int display, hwc_la
         }
 
         if((android_colorspace & HAL_DATASPACE_TRANSFER_ST2084) == HAL_DATASPACE_TRANSFER_ST2084)
+        {
+            ALOGD_IF(log_level(DBG_VERBOSE),"%s:line=%d has st2084",__FUNCTION__,__LINE__);
             eotf = SMPTE_ST2084;
+        }
         else
         {
             //ALOGE("Unknow etof %d",eotf);
@@ -1582,10 +1585,10 @@ static int hwc_prepare(hwc_composer_device_1_t *dev, size_t num_displays,
                     {
                         uint32_t android_colorspace = hwc_get_layer_colorspace(layer);
                         struct hdr_static_metadata hdr_metadata;
-
                         memset(&hdr_metadata, 0, sizeof(hdr_metadata));
                         if((android_colorspace & HAL_DATASPACE_TRANSFER_ST2084) == HAL_DATASPACE_TRANSFER_ST2084)
                         {
+                            ALOGD_IF(log_level(DBG_VERBOSE),"%s:line=%d has st2084",__FUNCTION__,__LINE__);
                             hdr_metadata.eotf = SMPTE_ST2084;
                         }
                         else

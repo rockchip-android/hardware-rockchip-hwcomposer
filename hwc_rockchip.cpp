@@ -791,9 +791,9 @@ uint32_t hwc_get_layer_colorspace(hwc_layer_1_t *layer)
     uint32_t colorspace = (layer->reserved[0]) | (layer->reserved[1] << 8) |
                             (layer->reserved[2] <<  16) | (layer->reserved[3] << 24);
 
-     ALOGD_IF(log_level(DBG_VERBOSE),"%s: reserved[0]=0x%x,reserved[1]=0x%x,reserved[2]=0x%x,reserved[3]=0x%x",__FUNCTION__,
+     ALOGD_IF(log_level(DBG_VERBOSE),"%s: reserved[0]=0x%x,reserved[1]=0x%x,reserved[2]=0x%x,reserved[3]=0x%x colorspace=0x%x",__FUNCTION__,
             layer->reserved[0],layer->reserved[1],
-            layer->reserved[2],layer->reserved[3]);
+            layer->reserved[2],layer->reserved[3],colorspace);
 
     return colorspace;
 }
