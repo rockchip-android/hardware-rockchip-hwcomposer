@@ -164,15 +164,23 @@ class DrmHotplugHandler : public DrmEventHandler {
       ALOGI("%s event @%" PRIu64 " for connector %u\n",
             cur_state == DRM_MODE_CONNECTED ? "Plug" : "Unplug", timestamp_us,
             conn->id());
-
       if (cur_state == DRM_MODE_CONNECTED) {
-        if (conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT)
-          extend = conn.get();
-        else if (conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT)
-          primary = conn.get();
+        /*
+         * if connector is only one , only to use primary. by libin
+         */
+        if (drm_->connectors().size() == 1){
+            primary = conn.get();
+            ALOGI("connectors_.size()=%u only primary\n",(uint32_t)drm_->connectors().size());
+        }else{
+            if (conn->possible_displays() & HWC_DISPLAY_EXTERNAL_BIT){
+              extend = conn.get();
+            }
+            else if (conn->possible_displays() & HWC_DISPLAY_PRIMARY_BIT){
+              primary = conn.get();
+            }
+        }
       }
     }
-
     /*
      * status changed?
      */
